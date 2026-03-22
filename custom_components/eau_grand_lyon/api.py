@@ -407,7 +407,10 @@ class EauGrandLyonApi:
         """Enrichit les entrées mensuelles brutes avec labels lisibles."""
         result = []
         for e in raw_entries:
-            mois_idx = int(e["mois"]) - 1  # API returns 1-12, convert to 0-11 for MONTHS_FR
+            mois_raw = int(e["mois"])
+            if not (1 <= mois_raw <= 12):
+                continue  # Skip invalid month values from API (e.g. mois=0)
+            mois_idx = mois_raw - 1  # API returns 1-12, convert to 0-11 for MONTHS_FR
             annee = int(e["annee"])
             result.append({
                 "mois_index": mois_idx,
