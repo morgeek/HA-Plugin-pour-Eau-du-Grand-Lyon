@@ -15,7 +15,30 @@ Cette intégration vous permet de surveiller votre utilisation de l'eau et les i
 - **Statut du Contrat** : Statut de votre contrat eau
 - **Date d'Échéance** : Prochaine date d'échéance de paiement
 
+### Capteurs de coût
+- **Coût Mensuel** : Coût estimé pour le mois en cours (configurable)
+- **Coût Annuel** : Coût estimé pour les 12 derniers mois (configurable)
+- Tarif configurable directement depuis l'interface Home Assistant (défaut : 5,20 €/m³, tarif indicatif Grand Lyon 2024 - à adapter selon votre facture)
+
+### Détection des mois manquants
+- L'attribut `mois_manquants` sur l'index cumulatif liste les trous dans l'historique (compteur remplacé, données API absentes...)
+
+### Consommations journalières
+- L'intégration tente automatiquement 2 endpoints API possibles
+- Si votre compteur est compatible Téléo/TIC, les capteurs "7 jours" et "30 jours" deviennent disponibles
+- Sinon, ils restent silencieux (aucune erreur)
+
 Elle inclut également un bouton pour déclencher manuellement une mise à jour des données.
+
+### Dashboard Lovelace
+- Template prêt à importer : `lovelace/dashboard.yaml`
+- Graphique historique sur 24 mois, comparaison N-1, coûts, alerte conditionnelle
+- Vue journalière si les données sont disponibles
+
+### Automatisations
+- Template d'automatisation : `lovelace/automation_refresh.yaml`
+- Rafraîchissement quotidien à 6h du matin
+- Alerte de dépassement de consommation paramétrable
 
 ## Prérequis
 
