@@ -94,7 +94,7 @@ class _EauGrandLyonBase(CoordinatorEntity[EauGrandLyonCoordinator], SensorEntity
         return DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry.entry_id}_{self._contract_ref}")},
             name="Eau du Grand Lyon",
-            manufacturer="Morgeek & Claude",
+            manufacturer="Morgeek",
             model=", ".join(model_parts) or "Compteur eau",
             serial_number=numero_compteur,
             configuration_url="https://agence.eaudugrandlyon.com",
@@ -405,7 +405,7 @@ class EauGrandLyonAlertesSensor(CoordinatorEntity[EauGrandLyonCoordinator], Sens
         return DeviceInfo(
             identifiers={(DOMAIN, self._entry.entry_id)},
             name="Eau du Grand Lyon",
-            manufacturer="Morgeek & Claude",
+            manufacturer="Morgeek",
         )
 
     @property
