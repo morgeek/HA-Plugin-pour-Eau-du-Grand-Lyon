@@ -56,9 +56,6 @@ Une fois configuré, les capteurs apparaîtront dans votre tableau de bord Home 
 - **Aucune donnée** : Les données eau sont mises à jour mensuellement. Si aucune donnée n'apparaît, vérifiez le statut de votre contrat.
 - **Erreurs** : Vérifiez les journaux Home Assistant pour tout message d'erreur lié à l'intégration.
 
-## Contribution
-
-Les contributions sont les bienvenues ! N'hésitez pas à soumettre des problèmes ou des demandes de tirage sur le [dépôt GitHub](https://github.com/morgeek/ha-eau-grand-lyon).
 
 ## Licence
 
