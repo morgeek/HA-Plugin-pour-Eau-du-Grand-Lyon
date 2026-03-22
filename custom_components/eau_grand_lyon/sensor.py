@@ -57,6 +57,7 @@ async def async_setup_entry(
     # ── Sensors globaux ───────────────────────────────────────────────
     entities.append(EauGrandLyonAlertesSensor(coordinator, entry))
     entities.append(EauGrandLyonLastUpdateSensor(coordinator, entry))
+    entities.append(EauGrandLyonHealthSensor(coordinator, entry))
 
     async_add_entities(entities, update_before_add=True)
 
@@ -566,4 +567,37 @@ class EauGrandLyonLastUpdateSensor(
         return {
             "dernière_erreur": data.get("last_error"),
             "type_erreur": data.get("last_error_type"),
+        }
+
+
+class EauGrandLyonHealthSensor(CoordinatorEntity[EauGrandLyonCoordinator], SensorEntity):
+    """Statut global de l'intégration (API/connexion)."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:heart-pulse"
+    _attr_name = "Statut API"
+
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_api_status"
+
+    @property
+    def native_value(self) -> str:
+        data = self.coordinator.data or {}
+        last_error = data.get("last_error")
+
+        if last_error:
+            return "KO"
+        if data.get("last_update_success_time"):
+            return "OK"
+        return "INCONNU"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data or {}
+        return {
+            "last_update_success_time": data.get("last_update_success_time"),
+            "last_error": data.get("last_error"),
+            "last_error_type": data.get("last_error_type"),
         }

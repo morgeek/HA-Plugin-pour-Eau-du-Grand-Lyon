@@ -14,6 +14,7 @@ Cette intégration vous permet de surveiller votre utilisation de l'eau et les i
 - **Solde du Compte** : Solde actuel de votre compte eau (en €)
 - **Statut du Contrat** : Statut de votre contrat eau
 - **Date d'Échéance** : Prochaine date d'échéance de paiement
+- **Statut API** : OK / KO / INCONNU, avec attributs `last_error` et `last_error_type`
 
 ### Capteurs de coût
 - **Coût Mensuel** : Coût estimé pour le mois en cours (configurable)
