@@ -33,7 +33,7 @@ Cette intégration vous permet de surveiller votre utilisation de l'eau et les i
 
 ### Option 2 : Installation Manuelle
 
-1. Téléchargez la dernière version depuis le [dépôt GitHub](https://github.com/morgeek/ha-eau-grand-lyon).
+1. Téléchargez la dernière version depuis le [dépôt GitHub](https://github.com/morgeek/eau-grand-lyon_component).
 2. Extrayez le contenu du dossier `custom_components/eau_grand_lyon/` dans le répertoire `custom_components/` de votre Home Assistant.
 3. Redémarrez Home Assistant.
 
