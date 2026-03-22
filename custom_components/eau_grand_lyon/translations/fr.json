@@ -12,7 +12,10 @@
     },
     "error": {
       "invalid_auth": "Identifiants incorrects. Vérifiez votre email et mot de passe.",
-      "cannot_connect": "Impossible de se connecter au serveur. Vérifiez votre réseau."
+      "cannot_connect": "Impossible de se connecter au serveur. Vérifiez votre réseau.",
+      "waf_blocked": "La requête a été bloquée par le pare-feu web. Augmentez l'intervalle de mise à jour ou patientez.",
+      "api_error": "Erreur côté API. Vérifiez le statut du service Eau du Grand Lyon.",
+      "unknown": "Erreur inconnue. Consultez les logs Home Assistant pour plus de détails."
     },
     "abort": {
       "already_configured": "Ce compte est déjà configuré."

@@ -10,7 +10,13 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
 
-from .api import AuthenticationError, EauGrandLyonApi
+from .api import (
+    AuthenticationError,
+    ApiError,
+    EauGrandLyonApi,
+    NetworkError,
+    WafBlockedError,
+)
 from .const import (
     CONF_EMAIL,
     CONF_PASSWORD,
@@ -64,15 +70,24 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             async with aiohttp.ClientSession(cookie_jar=jar) as session:
                 api = EauGrandLyonApi(session, email, password)
                 try:
-                    await api.authenticate()
-                except AuthenticationError as err:
-                    _LOGGER.warning("Auth échouée: %s", err)
-                    errors["base"] = "invalid_auth"
-                except Exception as err:  # noqa: BLE001
-                    _LOGGER.exception("Erreur inattendue: %s", err)
-                    errors["base"] = "cannot_connect"
-                else:
-                    await self.async_set_unique_id(email.lower())
+                await api.authenticate()
+            except AuthenticationError as err:
+                _LOGGER.warning("Auth échouée: %s", err)
+                errors["base"] = "invalid_auth"
+            except WafBlockedError as err:
+                _LOGGER.warning("Blocage WAF: %s", err)
+                errors["base"] = "waf_blocked"
+            except NetworkError as err:
+                _LOGGER.warning("Erreur réseau: %s", err)
+                errors["base"] = "cannot_connect"
+            except ApiError as err:
+                _LOGGER.warning("Erreur API: %s", err)
+                errors["base"] = "api_error"
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.exception("Erreur inattendue: %s", err)
+                errors["base"] = "unknown"
+            else:
+                await self.async_set_unique_id(email.lower())
                     self._abort_if_unique_id_configured()
                     return self.async_create_entry(
                         title=f"Eau du Grand Lyon ({email})",
