@@ -53,7 +53,7 @@ Elle inclut également un bouton pour déclencher manuellement une mise à jour 
 2. Extrayez le contenu du dossier `custom_components/eau_grand_lyon/` dans le répertoire `custom_components/` de votre Home Assistant.
 3. Redémarrez Home Assistant.
 
-### Option 2 : HACS dispo dans prochaine version
+### Option 2 : HACS dispo mais non testé
 
 1. Assurez-vous d'avoir [HACS](https://hacs.xyz/) installé dans votre instance Home Assistant.
 2. Allez dans "Intégrations" et recherchez "Eau du Grand Lyon".
