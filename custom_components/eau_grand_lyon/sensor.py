@@ -227,7 +227,7 @@ class EauGrandLyonConsommationAnnuelleSensor(_EauGrandLyonBase):
     """Consommation totale des 12 derniers mois (m³)."""
 
     _attr_device_class = SensorDeviceClass.WATER
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "m³"
     _attr_icon = "mdi:water-outline"
     _attr_name = "Consommation annuelle (12 mois)"
@@ -371,7 +371,7 @@ class EauGrandLyonCoutAnnuelSensor(_EauGrandLyonBase):
     """Coût estimé des 12 derniers mois (€)."""
 
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "EUR"
     _attr_icon = "mdi:currency-eur"
     _attr_name = "Coût estimé annuel (12 mois)"
@@ -442,6 +442,10 @@ class EauGrandLyonEconomieSensor(_EauGrandLyonBase):
     _attr_icon = "mdi:trending-down"
     _attr_name = "Économie vs N-1"
 
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_economie"
+
     @property
     def native_value(self) -> float | None:
         c = self._contract
@@ -472,6 +476,10 @@ class EauGrandLyonLeakAlertSensor(_EauGrandLyonBase, BinarySensorEntity):
 
     _attr_device_class = "problem"
     _attr_name = "Alerte fuite possible"
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_leak_alert"
 
     @property
     def is_on(self) -> bool:
@@ -617,7 +625,7 @@ class EauGrandLyonEnergyWaterSensor(_EauGrandLyonBase):
         return {
             "device_class": "water",
             "state_class": "total_increasing",
-            "last_reset": c.get("date_reset_conso", "2024-01-01"),
+            "last_reset": c.get("date_reset_conso", f"{datetime.now().year}-01-01"),
             "note": "Sensor optimisé pour le tableau de bord Énergie HA",
         }
 
@@ -648,7 +656,7 @@ class EauGrandLyonEnergyCostSensor(_EauGrandLyonBase):
         return {
             "device_class": "monetary",
             "state_class": "total_increasing",
-            "last_reset": c.get("date_reset_cout", "2024-01-01"),
+            "last_reset": c.get("date_reset_cout", f"{datetime.now().year}-01-01"),
             "tarif_eur_m3": c.get("tarif_m3"),
             "note": "Sensor optimisé pour le tableau de bord Énergie HA",
         }

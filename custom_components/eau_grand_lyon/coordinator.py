@@ -119,6 +119,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         try:
             stored = await self._store.async_load()
             if stored:
+                # Deserialize last_update_success_time from ISO string back to datetime
+                ts = stored.get("last_update_success_time")
+                if isinstance(ts, str):
+                    try:
+                        stored["last_update_success_time"] = datetime.fromisoformat(ts)
+                    except ValueError:
+                        stored["last_update_success_time"] = None
                 self.data = stored
                 _LOGGER.debug("Données persistantes chargées")
         except Exception as err:
@@ -127,7 +134,12 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
     async def _save_persistent_data(self) -> None:
         """Sauvegarde les données persistantes."""
         try:
-            await self._store.async_save(self.data)
+            # Serialize datetime objects to ISO strings for JSON storage
+            data_to_save = {**(self.data or {})}
+            ts = data_to_save.get("last_update_success_time")
+            if isinstance(ts, datetime):
+                data_to_save["last_update_success_time"] = ts.isoformat()
+            await self._store.async_save(data_to_save)
             _LOGGER.debug("Données persistantes sauvegardées")
         except Exception as err:
             _LOGGER.warning("Erreur sauvegarde données persistantes: %s", err)
@@ -236,16 +248,19 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
 
     async def _fetch_all_data(self) -> dict:
         """Effectue tous les appels API et construit le dictionnaire de données."""
-        await self.api.authenticate()
-
         raw_contracts = await self.api.get_contracts()
         _LOGGER.debug("%d contrat(s) trouvé(s)", len(raw_contracts))
 
         alertes = await self.api.get_alertes()
         nb_alertes = len(alertes)
 
-        options = self._entry.options or {}
-        tarif_m3 = float(self._entry.data.get(CONF_TARIF_M3, DEFAULT_TARIF_M3))
+        # Read tarif from options (updatable) first, fall back to initial config data
+        opts = self._entry.options or {}
+        tarif_m3 = float(
+            opts[CONF_TARIF_M3]
+            if CONF_TARIF_M3 in opts
+            else self._entry.data.get(CONF_TARIF_M3, DEFAULT_TARIF_M3)
+        )
 
         contracts_data: dict[str, dict] = {}
 

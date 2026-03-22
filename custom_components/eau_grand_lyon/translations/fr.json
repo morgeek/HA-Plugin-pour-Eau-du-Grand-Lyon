@@ -26,9 +26,10 @@
     "step": {
       "init": {
         "title": "Options Eau du Grand Lyon",
-        "description": "Configurez l'intervalle de mise à jour. Tarif par défaut : {tarif_default} €/m³",
+        "description": "Configurez l'intervalle de mise à jour et le tarif au m³.",
         "data": {
-          "update_interval_hours": "Fréquence de mise à jour"
+          "update_interval_hours": "Fréquence de mise à jour",
+          "tarif_m3": "Tarif au m³ (€)"
         }
       }
     }

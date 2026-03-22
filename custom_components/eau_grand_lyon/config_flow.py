@@ -125,6 +125,11 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
 
         opts = self._config_entry.options or {}
         current_interval = int(opts.get(CONF_UPDATE_INTERVAL_HOURS, DEFAULT_UPDATE_INTERVAL_HOURS))
+        current_tarif = float(
+            opts[CONF_TARIF_M3]
+            if CONF_TARIF_M3 in opts
+            else self._config_entry.data.get(CONF_TARIF_M3, DEFAULT_TARIF_M3)
+        )
 
         options_schema = vol.Schema(
             {
@@ -132,13 +137,14 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_UPDATE_INTERVAL_HOURS,
                     default=current_interval,
                 ): vol.In(_INTERVAL_OPTIONS),
+                vol.Optional(
+                    CONF_TARIF_M3,
+                    default=current_tarif,
+                ): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=30.0)),
             }
         )
 
         return self.async_show_form(
             step_id="init",
             data_schema=options_schema,
-            description_placeholders={
-                "tarif_default": str(DEFAULT_TARIF_M3),
-            },
         )
