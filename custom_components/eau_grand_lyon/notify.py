@@ -4,7 +4,8 @@
 import logging
 from typing import Any
 
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.service import ServiceCall
 
 from .const import DOMAIN
 
