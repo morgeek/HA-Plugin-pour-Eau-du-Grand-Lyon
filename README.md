@@ -51,9 +51,11 @@ Pour activer l'intégration Energy :
 3. Les statistiques se généreront automatiquement
 
 ### Notifications Avancées
-- **Pushover/Telegram intégrés** : Notifications push personnalisées avec priorité
-- **Alertes vocales Google Home/Alexa** : Annonces vocales pour les situations critiques
-- **Alertes intelligentes automatiques** : Détection automatique de fuites, consommation élevée, etc.
+- **Pushover/Telegram intégrés** : Notifications push personnalisées avec priorité *(temporairement désactivé)*
+- **Alertes vocales Google Home/Alexa** : Annonces vocales pour les situations critiques *(temporairement désactivé)*
+- **Alertes intelligentes automatiques** : Détection automatique de fuites, consommation élevée, etc. *(temporairement désactivé)*
+
+⚠️ **Note** : Les fonctionnalités de notifications sont temporairement désactivées en raison d'un problème d'import. Elles seront réactivées dans une future mise à jour.
 - **Résumé quotidien** : Rapport automatique de consommation
 
 Pour activer les notifications :
