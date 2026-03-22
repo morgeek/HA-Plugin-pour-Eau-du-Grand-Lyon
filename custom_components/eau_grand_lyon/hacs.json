@@ -1,0 +1,6 @@
+{
+  "name": "Eau du Grand Lyon",
+  "content_in_root": false,
+  "render_readme": true,
+  "homeassistant": "2023.6.0"
+}

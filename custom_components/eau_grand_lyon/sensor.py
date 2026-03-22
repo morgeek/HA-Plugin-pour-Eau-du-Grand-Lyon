@@ -33,6 +33,8 @@ async def async_setup_entry(
     entities: list[SensorEntity] = []
 
     for ref, contract in (coordinator.data or {}).get("contracts", {}).items():
+        # ── Tableau de bord Énergie HA ────────────────────────────────
+        entities.append(EauGrandLyonIndexSensor(coordinator, entry, ref))
         # ── Consommations ─────────────────────────────────────────────
         entities.append(
             EauGrandLyonConsommationSensor(coordinator, entry, ref, "courant")
@@ -97,6 +99,56 @@ class _EauGrandLyonBase(CoordinatorEntity[EauGrandLyonCoordinator], SensorEntity
             serial_number=numero_compteur,
             configuration_url="https://agence.eaudugrandlyon.com",
         )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Index cumulatif — Tableau de bord Énergie HA
+# ══════════════════════════════════════════════════════════════════════
+
+class EauGrandLyonIndexSensor(_EauGrandLyonBase):
+    """Index cumulatif de consommation d'eau (somme de tous les mois disponibles).
+
+    Ce sensor a state_class=TOTAL_INCREASING, ce qui permet de l'ajouter
+    directement dans le tableau de bord Énergie de Home Assistant (section Eau).
+    La valeur augmente chaque mois quand de nouvelles données sont publiées.
+    L'écart mensuel est calculé automatiquement par HA pour les graphiques.
+    """
+
+    _attr_device_class = SensorDeviceClass.WATER
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = "m³"
+    _attr_icon = "mdi:water-pump"
+    _attr_name = "Index cumulatif"
+    _attr_suggested_display_precision = 1
+
+    def __init__(
+        self,
+        coordinator: EauGrandLyonCoordinator,
+        entry: ConfigEntry,
+        contract_ref: str,
+    ) -> None:
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_index_cumulatif"
+
+    @property
+    def native_value(self) -> float | None:
+        consos = self._contract.get("consommations", [])
+        if not consos:
+            return None
+        return round(sum(e["consommation_m3"] for e in consos), 1)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        consos = self._contract.get("consommations", [])
+        return {
+            "premier_relevé": consos[0]["label"] if consos else None,
+            "dernier_relevé": consos[-1]["label"] if consos else None,
+            "nb_mois_inclus": len(consos),
+            "note": (
+                "Somme cumulée des relevés disponibles via l'API. "
+                "Utilisez ce sensor dans Énergie → Eau."
+            ),
+        }
 
 
 # ══════════════════════════════════════════════════════════════════════
