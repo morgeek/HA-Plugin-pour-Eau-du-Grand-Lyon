@@ -5,3 +5,4 @@ tests/test_coordinator.py
 tests/__pycache__/__init__.cpython-310.pyc
 tests/__pycache__/conftest.cpython-310-pytest-9.0.3.pyc
 tests/__pycache__/test_api.cpython-310-pytest-9.0.3.pyc
+.DS_Store
