@@ -12,3 +12,27 @@ update_now:
     Force une synchronisation immédiate avec les serveurs Eau du Grand Lyon,
     en ignorant l'intervalle de mise à jour configuré (mais en respectant
     toujours le rate-limiting de 30s).
+
+export_data:
+  name: Exporter les données
+  description: >
+    Exporte l'historique des consommations (mensuelles et journalières)
+    vers un fichier CSV local.
+  fields:
+    path:
+      name: Chemin du fichier
+      description: Chemin complet du fichier CSV (ex. /config/exports/eau.csv)
+      example: "/config/exports/ma_conso_eau.csv"
+      default: "/config/exports/eau_grand_lyon_history.csv"
+
+download_latest_invoice:
+  name: Télécharger la dernière facture
+  description: >
+    Télécharge le PDF de la dernière facture disponible et l'enregistre
+    localement.
+  fields:
+    path:
+      name: Chemin de destination
+      description: Chemin complet du fichier PDF (ex. /config/www/facture.pdf)
+      example: "/config/www/eau_grand_lyon/derniere_facture.pdf"
+      default: "/config/www/eau_grand_lyon/latest_invoice.pdf"

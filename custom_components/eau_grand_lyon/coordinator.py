@@ -21,7 +21,7 @@ from .api import (
     NetworkError,
     WafBlockedError,
 )
-from .repairs import async_check_drought_issue
+from .repairs import async_check_drought_issue, async_check_long_outage_issue
 from .const import (
     CONF_EMAIL,
     CONF_EXPERIMENTAL,
@@ -244,6 +244,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                 data["offline_since"]   = None
                 self._last_good_data = data
                 await self._save_persistent_data()
+                async_check_long_outage_issue(self.hass, 0)
                 return data
 
             except WafBlockedError as err:
@@ -288,6 +289,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                 last_err_type,
                 cache.get("last_update_success_time", "inconnu"),
             )
+            days_offline = (datetime.now(timezone.utc) - offline_since).days
+            async_check_long_outage_issue(self.hass, days_offline)
+
             return {
                 **cache,
                 "offline_mode":    True,

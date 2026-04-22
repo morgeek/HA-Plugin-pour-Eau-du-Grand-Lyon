@@ -10,14 +10,13 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
 
 Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
 
-### 🧠 Intelligence Avancée & Écologie
-- **Eco-Score (A-G)** : Analyse de performance basée sur le nombre d'habitants et les barèmes nationaux.
-- **Empreinte Carbone (CO₂e)** : Calcul de l'impact écologique de votre consommation (kg CO₂e).
-- **Prédictions Fin de Mois** : Estimation du volume et du coût final pour le mois en cours.
-- **Tendance vs N-1** : Comparaison en pourcentage par rapport à la même période l'année précédente.
-- **Eco-Benchmark** : Comparaison de votre usage face à la moyenne régionale lyonnaise.
-- **Eco-Coach (IA)** : Sensor de conseil personnalisé qui vous aide à réduire votre consommation quotidiennement.
-- **Entartrage Virtuel** : Estimation de l'accumulation de calcaire (en grammes) basée sur la dureté de l'eau configurée.
+### 🧠 Intelligence Avancée & Coaching "Platinum"
+- **Eco-Coach (IA) 💎** : Sensor de conseil personnalisé qui analyse vos habitudes pour vous aider à réduire votre consommation quotidiennement.
+- **Eco-Score (A-G)** : Note de performance environnementale basée sur le nombre d'habitants et les barèmes nationaux.
+- **Entartrage Virtuel** : Estimation exclusive de l'accumulation de calcaire (en grammes) basée sur la dureté de l'eau configurée, pour anticiper l'entretien de vos appareils.
+- **Empreinte Carbone (CO₂e)** : Calcul automatique de l'impact écologique de votre consommation d'eau (kg CO₂e).
+- **Prédictions Fin de Mois** : Algorithmes prédictifs pour estimer le volume et le coût final de votre facture avant même de la recevoir.
+- **Tendance vs N-1** : Comparaison intelligente avec la même période de l'année précédente pour détecter les dérives.
 
 ### 🛡️ Sécurité & Alertes
 - **Détection Fuite Temps Réel (Téléo)** : Basé sur les alertes officielles du compteur.

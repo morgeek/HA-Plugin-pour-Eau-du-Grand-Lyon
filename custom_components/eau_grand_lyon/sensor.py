@@ -1133,6 +1133,7 @@ class EauGrandLyonDroughtSensor(_EauGrandLyonGlobalBase):
 class EauGrandLyonLimescaleSensor(_EauGrandLyonBase):
     """Estimation de l'accumulation de calcaire (g)."""
 
+    _attr_device_class = SensorDeviceClass.WEIGHT
     _attr_state_class  = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "g"
     _attr_icon = "mdi:shimmer"

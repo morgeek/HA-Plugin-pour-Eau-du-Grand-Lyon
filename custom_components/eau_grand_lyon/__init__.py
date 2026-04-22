@@ -140,7 +140,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Nettoyage des services si plus aucune entry active
     if not hass.data.get(DOMAIN):
-        for service_name in ("clear_cache", "update_now", "export_data"):
+        for service_name in ("clear_cache", "update_now", "export_data", "download_latest_invoice"):
             if hass.services.has_service(DOMAIN, service_name):
                 hass.services.async_remove(DOMAIN, service_name)
         hass.data.pop(DOMAIN, None)
