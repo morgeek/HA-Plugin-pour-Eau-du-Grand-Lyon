@@ -110,6 +110,34 @@ views:
           - entity: button.eau_du_grand_lyon_forcer_la_mise_a_jour
             name: Forcer la mise à jour
 
+      # ── [EXPÉRIMENTAL] Données API 2026 ───────────────────────────
+      - type: conditional
+        conditions:
+          - entity: sensor.eau_du_grand_lyon_derniere_facture_eur_ttc
+            state_not: unavailable
+        card:
+          type: entities
+          title: "🧪 Fonctions Expérimentales (2026)"
+          entities:
+            - entity: sensor.eau_du_grand_lyon_derniere_facture_eur_ttc
+              name: Dernière facture
+            - type: attribute
+              entity: sensor.eau_du_grand_lyon_derniere_facture_eur_ttc
+              attribute: date_édition
+              name: Éditée le
+              icon: mdi:calendar-edit
+            - type: attribute
+              entity: sensor.eau_du_grand_lyon_derniere_facture_eur_ttc
+              attribute: statut_paiement
+              name: Statut paiement
+              icon: mdi:cash-check
+            - entity: sensor.eau_du_grand_lyon_fuite_estimee_30_jours
+              name: Fuite estimée (30j)
+          footer:
+            type: markdown
+            content: >
+              *Note : Données issues des nouveaux endpoints 2026.*
+
       # ── Alerte statut API KO ─────────────────────────────────────
       - type: conditional
         conditions:
@@ -184,3 +212,6 @@ views:
           - sensor.eau_du_grand_lyon_fin_de_contrat
           - sensor.eau_du_grand_lyon_alertes_actives
           - sensor.eau_du_grand_lyon_derniere_mise_a_jour
+          - sensor.eau_du_grand_lyon_statut_api
+          - sensor.eau_du_grand_lyon_derniere_facture_eur_ttc
+          - sensor.eau_du_grand_lyon_fuite_estimee_30_jours

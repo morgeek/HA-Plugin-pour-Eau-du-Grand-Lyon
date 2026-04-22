@@ -55,6 +55,22 @@ views:
             - entity: sensor.eau_grand_lyon_conso_30j
 
       # ──────────────────────────────────────────────────────────────────────────
+      # Données Expérimentales (API 2026)
+      # ──────────────────────────────────────────────────────────────────────────
+
+      - type: conditional
+        conditions:
+          - entity: sensor.eau_grand_lyon_derniere_facture
+            state_not: "unavailable"
+        card:
+          type: entities
+          title: "🧪 Fonctions Expérimentales"
+          show_header_toggle: false
+          entities:
+            - entity: sensor.eau_grand_lyon_derniere_facture
+            - entity: sensor.eau_grand_lyon_fuite_estimee
+
+      # ──────────────────────────────────────────────────────────────────────────
       # Graphique historique
       # ──────────────────────────────────────────────────────────────────────────
 
