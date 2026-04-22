@@ -611,7 +611,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         drought_level = "Normal"
         current_month = datetime.now().month
         if 6 <= current_month <= 9: # Été
-            drought_level = "Vigilance" # Valeur par défaut en période estivale à Lyon
+            drought_level = "Vigilance" # Valeur par défaut
         
         # Vérification des issues de réparation (Sécheresse)
         async_check_drought_issue(self.hass, drought_level)
@@ -687,15 +687,15 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                 continue
 
             statistic_id = f"{DOMAIN}:water_{ref}"
-            metadata = StatisticMetaData(
-                has_mean=False,
-                has_sum=True,
-                mean_type=None,
-                name=f"Eau Grand Lyon - Compteur {ref}",
-                source=DOMAIN,
-                statistic_id=statistic_id,
-                unit_of_measurement="m³",
-            )
+            metadata: StatisticMetaData = {
+                "has_mean": False,
+                "has_sum": True,
+                "name": f"Eau Grand Lyon - Compteur {ref}",
+                "source": DOMAIN,
+                "statistic_id": statistic_id,
+                "unit_of_measurement": "m³",
+                "unit_class": "volume",
+            }
 
             stats: list[StatisticData] = []
             cumulative = 0.0

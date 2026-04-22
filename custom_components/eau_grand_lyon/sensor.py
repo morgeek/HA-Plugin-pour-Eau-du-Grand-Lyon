@@ -30,12 +30,13 @@ async def async_setup_entry(
 ) -> None:
     """Crée toutes les entités sensor après chargement de la config entry."""
     coordinator: EauGrandLyonCoordinator = hass.data[DOMAIN][entry.entry_id]
+    contracts = (coordinator.data or {}).get("contracts", {})
 
     entities: list[SensorEntity] = []
 
     experimental = bool((coordinator.data or {}).get("experimental_mode", False))
 
-    for ref, _contract in (coordinator.data or {}).get("contracts", {}).items():
+    for ref, _contract in contracts.items():
         # ── Tableau de bord Énergie HA ────────────────────────────────
         entities.append(EauGrandLyonIndexSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonEnergyWaterSensor(coordinator, entry, ref))
