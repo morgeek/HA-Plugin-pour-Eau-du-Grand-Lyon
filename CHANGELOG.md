@@ -19,6 +19,8 @@ et cette intégration adhère au [Versionnage Sémantique](https://semver.org/sp
 - **Détection Fuite Locale** : Analyse de pattern intelligente pour les compteurs non-Téléo.
 - **Index haute précision** : Alinement parfait avec le compteur physique via les données journalières.
 - **Traductions** : Support complet FR/EN.
+- **Robustesse** : Ajout d'un handler de migration de config (`async_migrate_entry`) pour les futures versions.
+- **Optimisation** : Import différé des diagnostics pour éviter les avertissements de "blocking call" au démarrage.
 
 ### Optimisé
 - **Appels API parallèles** : `asyncio.gather` pour les consommations mensuelles + journalières (2x plus rapide par contrat).

@@ -135,6 +135,8 @@ Une fois configuré, les capteurs apparaîtront dans votre tableau de bord Home 
 Merci @painteau pour le fix et @hufon pour le merge.
 - **Aucune donnée** : Les données eau sont mises à jour mensuellement. Si aucune donnée n'apparaît, vérifiez le statut de votre contrat.
 - **Erreurs** : Vérifiez les journaux Home Assistant pour tout message d'erreur lié à l'intégration.
+- **Réparations (Repairs)** : L'intégration utilise la plateforme native de Home Assistant pour signaler les problèmes critiques (ex. Alertes Sécheresse). Consultez l'onglet "Réparations" dans HA.
+- **Diagnostics** : En cas de bug, téléchargez l'export de diagnostic depuis la page de l'intégration pour obtenir des logs redactés et anonymisés.
 
 ### Erreur `Integration 'eau_grand_lyon' not found`
 
