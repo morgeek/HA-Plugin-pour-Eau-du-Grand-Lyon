@@ -108,7 +108,7 @@ Pour activer l'intégration Energy :
 
 Une fois installée, vous pouvez modifier les options (tarif au m³, intervalle de mise à jour, mode expérimental) en retournant dans **Appareils et services** > **Eau du Grand Lyon** > **Configurer**.
 
-L'intégration récupérera automatiquement les données toutes les 6 heures (car les données eau sont généralement mensuelles). Et on ne va pas tabasser leur serveur inutilement.
+L'intégration récupérera automatiquement les données toutes les **24 heures** par défaut (car les données eau sont généralement mensuelles). Cet intervalle est modifiable dans les options (6h, 12h, 24h, 48h). Et on ne va pas tabasser leur serveur inutilement.
 
 ![alt text](https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/blob/main/custom_components/eau_grand_lyon/HA-Eau-Grand-Lyon2.png)
 
