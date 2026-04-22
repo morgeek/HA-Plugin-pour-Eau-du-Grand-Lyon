@@ -32,6 +32,8 @@ views:
         title: 🧠 Intelligence & Prédictions
         show_header_toggle: false
         entities:
+          - entity: sensor.eau_du_grand_lyon_conseils_eco_coach
+            name: Eco-Coach (Conseil)
           - entity: sensor.eau_du_grand_lyon_tendance_vs_n_1
             name: Tendance vs N-1
           - entity: sensor.eau_du_grand_lyon_prediction_consommation_fin_de_mois
@@ -43,6 +45,21 @@ views:
             name: Eco-Score (Performance)
           - entity: sensor.eau_du_grand_lyon_empreinte_carbone
             name: Impact CO2 (kg CO2e)
+
+      # ── MAINTENANCE & CALCAIRE ───────────────────────────────────
+      - type: entities
+        title: 🧱 Entretien & Calcaire
+        show_header_toggle: false
+        entities:
+          - entity: sensor.eau_du_grand_lyon_accumulation_de_calcaire
+            name: Calcaire cumulé (est.)
+          - entity: binary_sensor.eau_du_grand_lyon_alerte_maintenance_calcaire
+            name: État maintenance
+          - type: attribute
+            entity: sensor.eau_du_grand_lyon_accumulation_de_calcaire
+            attribute: dureté_appliquée_fh
+            name: Dureté de l'eau (°fH)
+            icon: mdi:water-opacity
 
       # ── SÉCURITÉ & RESTRICTIONS ──────────────────────────────────
       - type: vertical-stack

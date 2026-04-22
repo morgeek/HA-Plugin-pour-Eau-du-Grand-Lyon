@@ -85,6 +85,11 @@ async def async_setup_entry(
     # Sensors régionaux
     entities.append(EauGrandLyonDroughtSensor(coordinator, entry))
 
+    # Coaching sensors
+    for ref in contracts:
+        entities.append(EauGrandLyonLimescaleSensor(coordinator, entry, ref))
+        entities.append(EauGrandLyonCoachingSensor(coordinator, entry, ref))
+
     async_add_entities(entities, update_before_add=False)
 
 
@@ -1118,6 +1123,66 @@ class EauGrandLyonDroughtSensor(_EauGrandLyonGlobalBase):
         if val == "Normal": return "mdi:water-check"
         if val == "Crise":  return "mdi:water-alert"
         return "mdi:water-remove"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# [COACHING] Entartrage & Conseils
+# ══════════════════════════════════════════════════════════════════════
+
+class EauGrandLyonLimescaleSensor(_EauGrandLyonBase):
+    """Estimation de l'accumulation de calcaire (g)."""
+
+    _attr_state_class  = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = "g"
+    _attr_icon = "mdi:shimmer"
+    _attr_name = "Accumulation de calcaire"
+    _attr_suggested_display_precision = 0
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_limescale"
+
+    @property
+    def native_value(self) -> float | None:
+        return self._contract.get("limescale_g")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "dureté_appliquée_fh": self._contract.get("hardness_fh"),
+            "note": "Basé sur le volume total et la dureté configurée.",
+        }
+
+
+class EauGrandLyonCoachingSensor(_EauGrandLyonBase):
+    """Conseils personnalisés basés sur l'analyse de consommation."""
+
+    _attr_icon = "mdi:account-voice"
+    _attr_name = "Conseils Eco-Coach"
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_coaching"
+
+    @property
+    def native_value(self) -> str:
+        c = self._contract
+        score = c.get("eco_score_grade", "Inconnu")
+        conso = c.get("consommation_mois_courant", 0)
+        trend = c.get("tendance_n1_pct", 0)
+        
+        if score == "A":
+            return "Excellent ! Votre consommation est exemplaire. Continuez ainsi."
+        if score == "B":
+            return "Bonne performance. Vous êtes sous la moyenne lyonnaise."
+        if trend > 20:
+            return "Attention : votre consommation a bondi de 20% par rapport à l'an dernier."
+        if c.get("local_leak_pattern"):
+            return "Alerte : Un flux constant est détecté. Vérifiez vos robinets ou chasses d'eau."
+        if score in ["F", "G"]:
+            return "Consommation élevée. Pensez à installer des mousseurs ou réduire la durée des douches."
+        
+        return "Consommation stable. Pensez à vérifier régulièrement l'absence de fuites."
 
 
 class EauGrandLyonCO2FootprintSensor(_EauGrandLyonBase):

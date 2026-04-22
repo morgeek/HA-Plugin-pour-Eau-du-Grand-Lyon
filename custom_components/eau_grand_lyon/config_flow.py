@@ -26,9 +26,13 @@ from .const import (
     CONF_PRICE_ENTITY,
     CONF_TARIF_M3,
     CONF_UPDATE_INTERVAL_HOURS,
+    CONF_HOUSEHOLD_SIZE,
+    CONF_WATER_HARDNESS,
     DEFAULT_EXPERIMENTAL,
+    DEFAULT_HOUSEHOLD_SIZE,
     DEFAULT_TARIF_M3,
     DEFAULT_UPDATE_INTERVAL_HOURS,
+    DEFAULT_WATER_HARDNESS,
     DOMAIN,
 )
 
@@ -181,6 +185,8 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
         )
         current_experimental = bool(opts.get(CONF_EXPERIMENTAL, DEFAULT_EXPERIMENTAL))
         current_price_entity = opts.get(CONF_PRICE_ENTITY, "")
+        current_household = int(opts.get(CONF_HOUSEHOLD_SIZE, DEFAULT_HOUSEHOLD_SIZE))
+        current_hardness = float(opts.get(CONF_WATER_HARDNESS, DEFAULT_WATER_HARDNESS))
 
         options_schema = vol.Schema(
             {
@@ -200,6 +206,14 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_EXPERIMENTAL,
                     default=current_experimental,
                 ): bool,
+                vol.Optional(
+                    CONF_HOUSEHOLD_SIZE,
+                    default=current_household,
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
+                vol.Optional(
+                    CONF_WATER_HARDNESS,
+                    default=current_hardness,
+                ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=100.0)),
             }
         )
 

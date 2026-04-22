@@ -29,9 +29,13 @@ from .const import (
     CONF_PRICE_ENTITY,
     CONF_TARIF_M3,
     CONF_UPDATE_INTERVAL_HOURS,
+    CONF_HOUSEHOLD_SIZE,
+    CONF_WATER_HARDNESS,
     DEFAULT_EXPERIMENTAL,
+    DEFAULT_HOUSEHOLD_SIZE,
     DEFAULT_TARIF_M3,
     DEFAULT_UPDATE_INTERVAL_HOURS,
+    DEFAULT_WATER_HARDNESS,
     DOMAIN,
 )
 
@@ -435,7 +439,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             # ── [ECO-SCORE] Analyse de performance ────────────────────────────
             eco_score = None
             eco_score_grade = "Inconnu"
-            nb_hab = _parse_nb_habitants(details.get("nombre_habitants", ""))
+            
+            # Priorité 1 : Option HA, Priorité 2 : API Grand Lyon, Priorité 3 : Default (2)
+            opt_hab = self._entry.options.get(CONF_HOUSEHOLD_SIZE)
+            api_hab = _parse_nb_habitants(details.get("nombre_habitants", ""))
+            nb_hab = int(opt_hab) if opt_hab is not None else (api_hab if api_hab > 0 else DEFAULT_HOUSEHOLD_SIZE)
             
             if conso_courant is not None and nb_hab > 0:
                 # Conso mensuelle moyenne par habitant
@@ -456,6 +464,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             if conso_courant is not None:
                 # Moyenne ADEME France : 0.52 kg CO2e / m3
                 co2_footprint = round(conso_courant * 0.52, 2)
+
 
             # ── [BILLING] Dates clés ──────────────────────────────────────────
             # Extraction des dates de facturation futures si disponibles
@@ -515,6 +524,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                             real_index = e["index_m3"]
                             break
 
+            # ── [LIMESCALE] Entartrage Virtuel ───────────────────────────────
+            hardness = float(self._entry.options.get(CONF_WATER_HARDNESS, DEFAULT_WATER_HARDNESS))
+            # Utilisation de l'index cumulatif (total volume historique)
+            idx_cumul = real_index if real_index is not None else sum(e["consommation_m3"] for e in consos)
+            limescale_g = round(idx_cumul * hardness * 10, 0)
+            limescale_alert = limescale_g > 100000 # Alerte arbitraire à 100kg de calcaire cumulé
+
             factures_contrat = [f for f in factures if f.get("contrat_id") == cid]
             derniere_facture = factures_contrat[0] if factures_contrat else None
 
@@ -566,6 +582,10 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                 # Billing
                 "next_payment_date":           next_payment_date,
                 "next_bill_date":              next_bill_date,
+                # Limescale
+                "limescale_g":                 limescale_g,
+                "limescale_alert":             limescale_alert,
+                "hardness_fh":                 hardness,
                 # Expérimental
                 "real_index":                  real_index,
                 "factures":                    factures_contrat,

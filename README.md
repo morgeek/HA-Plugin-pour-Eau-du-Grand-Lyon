@@ -16,6 +16,8 @@ Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
 - **Prédictions Fin de Mois** : Estimation du volume et du coût final pour le mois en cours.
 - **Tendance vs N-1** : Comparaison en pourcentage par rapport à la même période l'année précédente.
 - **Eco-Benchmark** : Comparaison de votre usage face à la moyenne régionale lyonnaise.
+- **Eco-Coach (IA)** : Sensor de conseil personnalisé qui vous aide à réduire votre consommation quotidiennement.
+- **Entartrage Virtuel** : Estimation de l'accumulation de calcaire (en grammes) basée sur la dureté de l'eau configurée.
 
 ### 🛡️ Sécurité & Alertes
 - **Détection Fuite Temps Réel (Téléo)** : Basé sur les alertes officielles du compteur.

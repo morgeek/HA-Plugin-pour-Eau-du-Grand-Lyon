@@ -26,3 +26,10 @@ DEFAULT_EXPERIMENTAL = False
 # Entité de prix dynamique (optionnel)
 CONF_PRICE_ENTITY = "price_entity"
 
+# Intelligence & Coaching
+CONF_HOUSEHOLD_SIZE = "household_size"
+DEFAULT_HOUSEHOLD_SIZE = 2
+
+CONF_WATER_HARDNESS = "water_hardness"
+DEFAULT_WATER_HARDNESS = 30.0  # °fH (Moyenne Lyon)
+

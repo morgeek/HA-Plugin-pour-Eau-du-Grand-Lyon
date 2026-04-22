@@ -35,6 +35,7 @@ async def async_setup_entry(
         entities.append(EauGrandLyonRealTimeLeakSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonLocalLeakSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonBatterySensor(coordinator, entry, ref))
+        entities.append(EauGrandLyonLimescaleAlertSensor(coordinator, entry, ref))
 
     async_add_entities(entities, update_before_add=True)
 
@@ -180,3 +181,27 @@ class EauGrandLyonBatterySensor(_EauGrandLyonBinaryBase):
     def is_on(self) -> bool:
         """True si la batterie est faible."""
         return self._contract.get("battery_ok") is False
+
+
+class EauGrandLyonLimescaleAlertSensor(_EauGrandLyonBinaryBase):
+    """Alerte accumulation excessive de calcaire."""
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_name = "Alerte maintenance calcaire"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_limescale_alert"
+
+    @property
+    def is_on(self) -> bool:
+        """True si le calcaire cumulé dépasse 100kg."""
+        return self._contract.get("limescale_alert", False)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "seuil_maintenance": "100 kg de calcaire cumulé",
+            "note": "Alerte indicative pour entretien chauffe-eau ou adoucisseur.",
+        }
