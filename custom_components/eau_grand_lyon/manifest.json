@@ -1,7 +1,7 @@
 {
   "domain": "eau_grand_lyon",
   "name": "Eau du Grand Lyon",
-  "version": "2.2.5",
+  "version": "2.3.0",
   "config_flow": true,
   "documentation": "https://github.com/morgeek/ha-eau-grand-lyon",
   "issue_tracker": "https://github.com/morgeek/ha-eau-grand-lyon/issues",

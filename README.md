@@ -10,34 +10,26 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
 
 Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
 
-## Fonctionnalités
-Cette intégration vous permet de surveiller votre utilisation de l'eau et les informations de compte du service des eaux de Grand Lyon. Elle fournit les capteurs suivants :
+### 🧠 Intelligence Avancée & Écologie
+- **Eco-Score (A-G)** : Analyse de performance basée sur le nombre d'habitants et les barèmes nationaux.
+- **Empreinte Carbone (CO₂e)** : Calcul de l'impact écologique de votre consommation (kg CO₂e).
+- **Prédictions Fin de Mois** : Estimation du volume et du coût final pour le mois en cours.
+- **Tendance vs N-1** : Comparaison en pourcentage par rapport à la même période l'année précédente.
+- **Eco-Benchmark** : Comparaison de votre usage face à la moyenne régionale lyonnaise.
 
-- **Consommation Actuelle** : Consommation d'eau pour le mois en cours (en m³)
-- **Consommation Précédente** : Consommation d'eau pour le mois précédent (en m³)
-- **Consommation Annuelle** : Consommation totale d'eau pour l'année en cours (en m³)
-- **Solde du Compte** : Solde actuel de votre compte eau (en €)
-- **Statut du Contrat** : Statut de votre contrat eau
-- **Date d'Échéance** : Prochaine date d'échéance de paiement
-- **Dernière facture** : Montant de la dernière facture émise (expérimental)
+### 🛡️ Sécurité & Alertes
+- **Détection Fuite Temps Réel (Téléo)** : Basé sur les alertes officielles du compteur.
+- **Détection Fuite Locale (Pattern)** : Analyse intelligente du flux constant (idéal pour compteurs legacy).
+- **Mode Vacances** : Switch de surveillance renforcée (alerte immédiate pour toute consommation > 1L).
+- **Suivi Sécheresse (69)** : Sensor dédié aux restrictions préfectorales du Rhône.
+- **Repairs HA** : Intégration des alertes sécheresse critiques directement dans le tableau de bord "Réparations" de Home Assistant.
 
-### Capteurs de coût
-- **Coût Mensuel** : Coût estimé pour le mois en cours (configurable)
-- **Coût Annuel** : Coût estimé pour les 12 derniers mois (configurable)
-- **Économie vs N-1** : Économie réalisée par rapport à l'année précédente (€)
-- **Alerte Fuite Possible** : Détection de surconsommation anormale (binaire)
-- Tarif configurable directement depuis l'interface Home Assistant (défaut : 5,20 €/m³, tarif indicatif Grand Lyon 2024 - à adapter selon votre facture)
-
-### Détection des mois manquants
-- L'attribut `mois_manquants` sur l'index cumulatif liste les trous dans l'historique (compteur remplacé, données API absentes...)
-
-### Consommations journalières
-- L'intégration tente automatiquement 2 endpoints API possibles si un jour cela est disponible...
-- Si compteur est compatible Téléo/TIC, les capteurs "7 jours" et "30 jours" deviennent disponibles.
-- **En mode expérimental**, des données supplémentaires comme le **Volume de fuite estimé**, le **Débit minimal** et l'**Index réel** sont récupérées pour les compteurs récents.
-- Sinon, ils restent silencieux (aucune erreur).
-
-Inclut également un bouton pour déclencher manuellement une mise à jour des données.
+### 🛠️ Services Pro & Utilitaires
+- **Export CSV** : Service `export_data` pour sauvegarder tout votre historique en local.
+- **Téléchargement Facture PDF** : Service `download_latest_invoice` pour récupérer votre facture officielle.
+- **Santé Hardware** : Diagnostic du niveau de signal et de la pile du module Téléo.
+- **Calendrier des Échéances** : Entité calendrier avec dates de paiement et factures prévues.
+- **Blueprints d'Automation** : Modèles prêts à l'emploi pour les alertes fuite et budget.
 
 ### Mode hors-ligne
 Si l'API Eau du Grand Lyon est indisponible (coupure réseau, maintenance, blocage WAF), l'intégration bascule automatiquement en **mode hors-ligne** :
@@ -79,9 +71,11 @@ Pour activer l'intégration Energy :
 2. Ajoutez la configuration dans `configuration.yaml` ou via l'interface Énergie
 3. Les statistiques se généreront automatiquement
 
-### Notifications Avancées
-
-> ⚠️ **Non disponible dans cette version** — les notifications Pushover/Telegram et automatisations intelligentes ne sont pas encore implémentées. 
+### Notifications Avancées & Blueprints
+L'intégration inclut désormais des **Blueprints** (modèles d'automatisation) pour configurer en un clic :
+- **Alerte Fuite Actionnable** : Notification sur mobile avec boutons "Rafraîchir" et "Voir Dashboard".
+- **Alerte Budget** : Notification si la prédiction de fin de mois dépasse un seuil choisi.
+- **Alerte Sécheresse** : Notification automatique dès que le département du Rhône change de niveau de restriction.
 
 ## Prérequis
 - Home Assistant (`2024.1.0` ou ultérieure)

@@ -1,0 +1,38 @@
+blueprint:
+  name: Alerte Budget Eau Grand Lyon
+  description: Notifie si le coût mensuel prédit dépasse un certain seuil.
+  domain: automation
+  input:
+    prediction_sensor:
+      name: Capteur de prédiction
+      description: Choisissez le capteur de prédiction de coût (mensuel ou global).
+      selector:
+        entity:
+          domain: sensor
+          device_class: monetary
+    threshold:
+      name: Seuil d'alerte (€)
+      description: Montant à partir duquel vous souhaitez être alerté.
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 500
+          unit_of_measurement: "€"
+          mode: box
+    notify_device:
+      name: Appareil de notification
+      selector:
+        action: {}
+
+trigger:
+  - platform: numeric_state
+    entity_id: !input prediction_sensor
+    above: !input threshold
+
+action:
+  - service: !input notify_device
+    data:
+      title: "💰 Alerte Budget Eau"
+      message: >
+        Attention ! Votre facture d'eau prévue pour ce mois est estimée à {{ states(trigger.entity_id) }} €, ce qui dépasse votre seuil de !input threshold €.

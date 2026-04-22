@@ -23,3 +23,6 @@ DEFAULT_TARIF_M3 = 5.20
 CONF_EXPERIMENTAL = "experimental_api"
 DEFAULT_EXPERIMENTAL = False
 
+# Entité de prix dynamique (optionnel)
+CONF_PRICE_ENTITY = "price_entity"
+

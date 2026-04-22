@@ -2,5 +2,10 @@
   "name": "Eau du Grand Lyon",
   "content_in_root": false,
   "render_readme": true,
-  "homeassistant": "2024.1.0"
+  "homeassistant": "2024.1.0",
+  "country": ["FR"],
+  "manifest": "custom_components/eau_grand_lyon/manifest.json",
+  "iot_class": "cloud_polling",
+  "integration_type": "service",
+  "hacs": "1.0.0"
 }

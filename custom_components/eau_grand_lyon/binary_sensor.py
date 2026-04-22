@@ -9,6 +9,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -28,21 +29,22 @@ async def async_setup_entry(
     """Crée les binary sensors Eau du Grand Lyon."""
     coordinator: EauGrandLyonCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    entities = [
-        EauGrandLyonLeakAlertSensor(coordinator, entry, ref)
-        for ref in (coordinator.data or {}).get("contracts", {})
-    ]
+    entities: list[BinarySensorEntity] = []
+    for ref in (coordinator.data or {}).get("contracts", {}):
+        entities.append(EauGrandLyonLeakAlertSensor(coordinator, entry, ref))
+        entities.append(EauGrandLyonRealTimeLeakSensor(coordinator, entry, ref))
+        entities.append(EauGrandLyonLocalLeakSensor(coordinator, entry, ref))
+        entities.append(EauGrandLyonBatterySensor(coordinator, entry, ref))
+
     async_add_entities(entities, update_before_add=True)
 
 
-class EauGrandLyonLeakAlertSensor(
+class _EauGrandLyonBinaryBase(
     CoordinatorEntity[EauGrandLyonCoordinator], BinarySensorEntity
 ):
-    """Alerte possible fuite basée sur surconsommation mensuelle."""
+    """Base pour les binary sensors Eau du Grand Lyon."""
 
     _attr_has_entity_name = True
-    _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    _attr_name = "Alerte fuite possible"
 
     def __init__(
         self,
@@ -53,7 +55,6 @@ class EauGrandLyonLeakAlertSensor(
         super().__init__(coordinator)
         self._contract_ref = contract_ref
         self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_leak_alert"
 
     @property
     def _contract(self) -> dict:
@@ -79,6 +80,17 @@ class EauGrandLyonLeakAlertSensor(
             configuration_url="https://agence.eaudugrandlyon.com",
         )
 
+
+class EauGrandLyonLeakAlertSensor(_EauGrandLyonBinaryBase):
+    """Alerte possible fuite basée sur surconsommation mensuelle."""
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_name = "Alerte fuite possible"
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_leak_alert"
+
     @property
     def is_on(self) -> bool:
         c = self._contract
@@ -96,3 +108,75 @@ class EauGrandLyonLeakAlertSensor(
             "consommation_precedent_m3": c.get("consommation_mois_precedent"),
             "seuil_alerte": "Consommation actuelle > 2x précédente",
         }
+
+
+class EauGrandLyonRealTimeLeakSensor(_EauGrandLyonBinaryBase):
+    """Alerte fuite en temps réel basée sur les données journalières (Téléo)."""
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_name = "Détection fuite (Téléo)"
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_real_time_leak"
+
+    @property
+    def available(self) -> bool:
+        """Disponible uniquement si le mode expérimental est actif et données présentes."""
+        return (
+            super().available
+            and (self.coordinator.data or {}).get("experimental_mode")
+            and self._contract.get("fuite_estime_30j_m3") is not None
+        )
+
+    @property
+    def is_on(self) -> bool:
+        val = self._contract.get("fuite_estime_30j_m3")
+        return val is not None and val > 0
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "volume_fuite_30j_m3": self._contract.get("fuite_estime_30j_m3"),
+            "note": "Basé sur l'indicateur 'volumeFuiteEstime' de l'API Grand Lyon",
+        }
+
+
+class EauGrandLyonLocalLeakSensor(_EauGrandLyonBinaryBase):
+    """Alerte fuite basée sur une analyse de pattern locale (conso constante)."""
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_name = "Alerte fuite (Pattern local)"
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_local_leak_pattern"
+
+    @property
+    def is_on(self) -> bool:
+        return self._contract.get("local_leak_pattern", False)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "méthode": "Analyse de pattern (flux constant > 0)",
+            "note": "Détecté localement par l'intégration si la consommation ne tombe jamais à 0 sur 24h.",
+        }
+
+
+class EauGrandLyonBatterySensor(_EauGrandLyonBinaryBase):
+    """État de la pile du module Téléo."""
+
+    _attr_device_class = BinarySensorDeviceClass.BATTERY
+    _attr_name = "Batterie module Téléo"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_battery_low"
+
+    @property
+    def is_on(self) -> bool:
+        """True si la batterie est faible."""
+        return self._contract.get("battery_ok") is False

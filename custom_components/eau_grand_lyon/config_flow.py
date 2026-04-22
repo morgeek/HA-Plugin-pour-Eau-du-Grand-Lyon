@@ -10,6 +10,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 
 from .api import (
     AuthenticationError,
@@ -22,6 +23,7 @@ from .const import (
     CONF_EMAIL,
     CONF_EXPERIMENTAL,
     CONF_PASSWORD,
+    CONF_PRICE_ENTITY,
     CONF_TARIF_M3,
     CONF_UPDATE_INTERVAL_HOURS,
     DEFAULT_EXPERIMENTAL,
@@ -68,7 +70,31 @@ _INTERVAL_OPTIONS = {
 class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Flux de configuration de l'intégration Eau du Grand Lyon."""
 
-    VERSION = 1
+    VERSION = 2
+
+    @staticmethod
+    async def async_migrate_entry(
+        hass: HomeAssistant, config_entry: ConfigEntry  # noqa: ARG004
+    ) -> bool:
+        """Migre les anciennes config entries vers le schéma courant.
+
+        VERSION 1 → 2 :
+        - Aucune modification de données nécessaire pour l'instant.
+        - Ce scaffold existe pour permettre des migrations futures sans
+          casser les installations existantes.
+        """
+        _LOGGER.debug(
+            "Migration config entry %s de v%s vers v%s",
+            config_entry.entry_id,
+            config_entry.version,
+            EauGrandLyonConfigFlow.VERSION,
+        )
+        # Ajouter des migrations ici quand nécessaire :
+        # if config_entry.version == 1:
+        #     new_data = {**config_entry.data, "new_field": "default"}
+        #     hass.config_entries.async_update_entry(config_entry, data=new_data)
+        config_entry.version = EauGrandLyonConfigFlow.VERSION
+        return True
 
     @staticmethod
     def async_get_options_flow(
@@ -154,6 +180,7 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
             else self._config_entry.data.get(CONF_TARIF_M3, DEFAULT_TARIF_M3)
         )
         current_experimental = bool(opts.get(CONF_EXPERIMENTAL, DEFAULT_EXPERIMENTAL))
+        current_price_entity = opts.get(CONF_PRICE_ENTITY, "")
 
         options_schema = vol.Schema(
             {
@@ -165,6 +192,10 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_TARIF_M3,
                     default=current_tarif,
                 ): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=30.0)),
+                vol.Optional(
+                    CONF_PRICE_ENTITY,
+                    default=current_price_entity,
+                ): str,
                 vol.Optional(
                     CONF_EXPERIMENTAL,
                     default=current_experimental,

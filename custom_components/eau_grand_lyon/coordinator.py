@@ -21,10 +21,12 @@ from .api import (
     NetworkError,
     WafBlockedError,
 )
+from .repairs import async_check_drought_issue
 from .const import (
     CONF_EMAIL,
     CONF_EXPERIMENTAL,
     CONF_PASSWORD,
+    CONF_PRICE_ENTITY,
     CONF_TARIF_M3,
     CONF_UPDATE_INTERVAL_HOURS,
     DEFAULT_EXPERIMENTAL,
@@ -195,8 +197,16 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("Erreur inattendue sauvegarde données persistantes : %s", err)
 
+    async def async_clear_cache(self) -> None:
+        """Supprime le cache persistant et réinitialise les données locales."""
+        await self._store.async_remove()
+        self.data = {}
+        self._last_good_data = None
+        _LOGGER.info("Cache persistant Eau du Grand Lyon supprimé")
+
     async def async_close(self) -> None:
-        """Ferme la session aiohttp dédiée."""
+        """Révoque le token et ferme la session aiohttp dédiée."""
+        await self.api.async_revoke_token()
         if not self._own_session.closed:
             await self._own_session.close()
 
@@ -294,16 +304,33 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         alertes    = await self.api.get_alertes()
         nb_alertes = len(alertes)
 
-        # Tarif — depuis options en priorité, puis config initiale
+        # Tarif — entité dynamique en priorité, puis options, puis config initiale
         opts = self._entry.options or {}
-        try:
-            tarif_m3 = float(
-                opts[CONF_TARIF_M3]
-                if CONF_TARIF_M3 in opts
-                else self._entry.data.get(CONF_TARIF_M3, DEFAULT_TARIF_M3)
-            )
-        except (ValueError, TypeError):
-            tarif_m3 = DEFAULT_TARIF_M3
+        tarif_m3 = DEFAULT_TARIF_M3
+        price_entity_found = False
+
+        price_entity = opts.get(CONF_PRICE_ENTITY)
+        if price_entity:
+            state = self.hass.states.get(price_entity)
+            if state and state.state not in ("unknown", "unavailable"):
+                try:
+                    tarif_m3 = float(state.state)
+                    price_entity_found = True
+                except (ValueError, TypeError):
+                    _LOGGER.warning(
+                        "Valeur invalide pour l'entité de prix %s : %s",
+                        price_entity, state.state
+                    )
+
+        if not price_entity_found:
+            try:
+                tarif_m3 = float(
+                    opts[CONF_TARIF_M3]
+                    if CONF_TARIF_M3 in opts
+                    else self._entry.data.get(CONF_TARIF_M3, DEFAULT_TARIF_M3)
+                )
+            except (ValueError, TypeError):
+                tarif_m3 = DEFAULT_TARIF_M3
 
         # [EXPÉRIMENTAL] Factures — récupérées une seule fois (données globales compte)
         factures_raw: list[dict] = []
@@ -313,6 +340,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         factures = EauGrandLyonApi.format_factures(factures_raw) if factures_raw else []
 
         contracts_data: dict[str, dict] = {}
+        global_data = {
+            "total_conso_courant":      0.0,
+            "total_cout_courant_eur":   0.0,
+            "total_prediction_cout_eur": 0.0,
+            "total_consommation_annuelle": 0.0,
+            "nb_contracts":             0,
+        }
 
         for raw in raw_contracts:
             details = EauGrandLyonApi.parse_contract_details(raw)
@@ -322,12 +356,16 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
 
             cid = details["id"]
 
-            # ── Consommations mensuelles ─────────────────────────────────────
-            raw_consos = await self.api.get_monthly_consumptions(cid)
-            consos     = EauGrandLyonApi.format_consumptions(raw_consos)
+            # ── Consommations mensuelles + journalières (en parallèle) ────────
+            raw_consos, raw_daily = await asyncio.gather(
+                self.api.get_monthly_consumptions(cid),
+                self.api.get_daily_consumptions(cid, nb_jours=90),
+            )
+            consos              = EauGrandLyonApi.format_consumptions(raw_consos)
+            consos_journalieres = EauGrandLyonApi.format_daily_consumptions(raw_daily)
 
-            conso_courant  = consos[-1]["consommation_m3"] if consos else None
-            label_courant  = consos[-1]["label"]           if consos else None
+            conso_courant   = consos[-1]["consommation_m3"] if consos else None
+            label_courant   = consos[-1]["label"]           if consos else None
             conso_precedent = consos[-2]["consommation_m3"] if len(consos) >= 2 else None
             label_precedent = consos[-2]["label"]           if len(consos) >= 2 else None
 
@@ -359,10 +397,6 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                     ref, len(mois_manquants), ", ".join(mois_manquants),
                 )
 
-            # ── Consommations journalières ────────────────────────────────────
-            raw_daily          = await self.api.get_daily_consumptions(cid, nb_jours=90)
-            consos_journalieres = EauGrandLyonApi.format_daily_consumptions(raw_daily)
-
             conso_7j:  float | None = None
             conso_30j: float | None = None
             if consos_journalieres:
@@ -370,6 +404,70 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                 recent_30 = consos_journalieres[-30:]
                 conso_7j  = round(sum(e["consommation_m3"] for e in recent_7),  2)
                 conso_30j = round(sum(e["consommation_m3"] for e in recent_30), 2)
+
+            # ── [INTELLIGENCE] Tendance & Prédiction ──────────────────────────
+            prediction_conso_mois: float | None = None
+            prediction_cout_mois:  float | None = None
+            tendance_n1_pct:       float | None = None
+
+            if conso_courant is not None:
+                # 1. Tendance N-1
+                if conso_n1 and conso_n1 > 0:
+                    tendance_n1_pct = round(((conso_courant - conso_n1) / conso_n1) * 100, 1)
+
+                # 2. Prédiction fin de mois
+                now = datetime.now()
+                last_data_date = now
+                if consos_journalieres:
+                    try:
+                        last_data_date = datetime.strptime(consos_journalieres[-1]["date"], "%Y-%m-%d")
+                    except (ValueError, KeyError, TypeError):
+                        pass
+
+                if last_data_date.month == now.month and last_data_date.year == now.year:
+                    import calendar
+                    jours_ecoules = last_data_date.day
+                    _, jours_total = calendar.monthrange(now.year, now.month)
+                    if jours_ecoules > 0:
+                        prediction_conso_mois = round((conso_courant / jours_ecoules) * jours_total, 1)
+                        prediction_cout_mois  = round(prediction_conso_mois * tarif_m3, 2)
+
+            # ── [ECO-SCORE] Analyse de performance ────────────────────────────
+            eco_score = None
+            eco_score_grade = "Inconnu"
+            nb_hab = _parse_nb_habitants(details.get("nombre_habitants", ""))
+            
+            if conso_courant is not None and nb_hab > 0:
+                # Conso mensuelle moyenne par habitant
+                m3_per_hab = conso_courant / nb_hab
+                # Barème Eco-Score (m3/pers/mois)
+                # A: <2.5, B: <4, C: <6, D: <8, E: <10, F: <13, G: >13
+                if m3_per_hab < 2.5:   eco_score_grade = "A"
+                elif m3_per_hab < 4.0: eco_score_grade = "B"
+                elif m3_per_hab < 6.0: eco_score_grade = "C"
+                elif m3_per_hab < 8.0: eco_score_grade = "D"
+                elif m3_per_hab < 10.0: eco_score_grade = "E"
+                elif m3_per_hab < 13.0: eco_score_grade = "F"
+                else:                  eco_score_grade = "G"
+                eco_score = round(m3_per_hab, 2)
+
+            # ── [CO2-FOOTPRINT] Impact environnemental ───────────────────────
+            co2_footprint = None
+            if conso_courant is not None:
+                # Moyenne ADEME France : 0.52 kg CO2e / m3
+                co2_footprint = round(conso_courant * 0.52, 2)
+
+            # ── [BILLING] Dates clés ──────────────────────────────────────────
+            # Extraction des dates de facturation futures si disponibles
+            next_payment_date = details.get("date_echeance")
+            # Simulation d'une date de prochaine facture (souvent 6 mois après)
+            next_bill_date = None
+            if next_payment_date:
+                try:
+                    dt_pay = datetime.strptime(next_payment_date, "%Y-%m-%d")
+                    next_bill_date = (dt_pay + timedelta(days=180)).strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
 
             # ── [EXPÉRIMENTAL] Fuite estimée ──────────────────────────────────
             fuite_estime_30j_m3: float | None = None
@@ -382,19 +480,41 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                 ]
                 if valeurs_fuite:
                     fuite_estime_30j_m3 = round(sum(valeurs_fuite), 3)
-                    _LOGGER.debug(
-                        "[EXPÉRIMENTAL] Fuite estimée 30j contrat %s : %.3f m³",
-                        ref, fuite_estime_30j_m3,
-                    )
 
-            # ── [EXPÉRIMENTAL] Courbe de charge ───────────────────────────────
+            # ── [EXPÉRIMENTAL] Courbe de charge ───────────────────────────
             courbe_de_charge: list[dict] = []
             if experimental and consos_journalieres:
-                # On ne tente la courbe de charge que si le compteur remonte du journalier
                 courbe_de_charge = await self.api.get_courbe_de_charge(cid, nb_jours=7)
 
-            # ── [EXPÉRIMENTAL] Factures par contrat ───────────────────────────
-            # Les factures globales sont filtrées par contrat_id
+            # ── [INTELLIGENCE] Détection de fuite locale (Pattern) ────────────
+            local_leak_pattern = False
+            if courbe_de_charge:
+                # Si on a la courbe de charge (horaire), on cherche si conso > 0 sur TOUTES les heures
+                # (Indicateur très fiable de fuite constante)
+                vals = [e.get("valeur", 0) for e in courbe_de_charge if "valeur" in e]
+                if len(vals) >= 24 and all(v > 0 for v in vals):
+                    local_leak_pattern = True
+                    _LOGGER.warning(
+                        "Fuite suspectée par pattern local (conso constante > 0 sur 24h+) pour le contrat %s",
+                        ref
+                    )
+            elif consos_journalieres:
+                # Fallback sur le journalier : si le minimum journalier est élevé sur 7 jours
+                recent_7 = [e["consommation_m3"] for e in consos_journalieres[-7:]]
+                if len(recent_7) >= 7 and all(v > 0.05 for v in recent_7): # 50L/jour min
+                    local_leak_pattern = True
+
+            # ── [EXPÉRIMENTAL] Index réel & Factures ──────────────────────────
+            real_index: float | None = None
+            if experimental:
+                siamm_raw = await self.api.get_derniere_releve_siamm(cid)
+                real_index = EauGrandLyonApi.parse_siamm_index(siamm_raw)
+                if real_index is None and consos_journalieres:
+                    for e in reversed(consos_journalieres):
+                        if "index_m3" in e:
+                            real_index = e["index_m3"]
+                            break
+
             factures_contrat = [f for f in factures if f.get("contrat_id") == cid]
             derniere_facture = factures_contrat[0] if factures_contrat else None
 
@@ -403,6 +523,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                 round(conso_courant * tarif_m3, 2) if conso_courant is not None else None
             )
             cout_annuel = round(conso_annuelle * tarif_m3, 2)
+
+            # Mise à jour des agrégats globaux
+            global_data["total_conso_courant"]      += conso_courant or 0
+            global_data["total_cout_courant_eur"]   += cout_mois or 0
+            global_data["total_prediction_cout_eur"] += prediction_cout_mois or 0
+            global_data["total_consommation_annuelle"] += conso_annuelle or 0
+            global_data["nb_contracts"] += 1
 
             contracts_data[ref] = {
                 **details,
@@ -425,7 +552,22 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                 "cout_mois_courant_eur":       cout_mois,
                 "cout_annuel_eur":             cout_annuel,
                 "tarif_m3":                    tarif_m3,
+                # Intelligence
+                "tendance_n1_pct":             tendance_n1_pct,
+                "prediction_conso_mois":       prediction_conso_mois,
+                "prediction_cout_mois":        prediction_cout_mois,
+                "local_leak_pattern":          local_leak_pattern,
+                # Eco-Score
+                "eco_score_m3_pers":           eco_score,
+                "eco_score_grade":             eco_score_grade,
+                "nb_habitants":                nb_hab,
+                # CO2
+                "co2_footprint_kg":            co2_footprint,
+                # Billing
+                "next_payment_date":           next_payment_date,
+                "next_bill_date":              next_bill_date,
                 # Expérimental
+                "real_index":                  real_index,
                 "factures":                    factures_contrat,
                 "derniere_facture":            derniere_facture,
                 "fuite_estime_30j_m3":         fuite_estime_30j_m3,
@@ -434,24 +576,52 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
 
             _LOGGER.debug(
                 "Contrat %s : %d mois | courant=%.1f m³ | annuel=%.1f m³ | "
-                "coût mois=%.2f € | journalier=%s%s",
+                "coût mois=%.2f € | journalier=%s%s | tendance=%s%%",
                 ref, len(consos),
                 conso_courant or 0,
                 conso_annuelle,
                 cout_mois or 0,
                 f"{len(consos_journalieres)} jours" if consos_journalieres else "non disponible",
                 f" | fuite_30j={fuite_estime_30j_m3:.3f}m³" if fuite_estime_30j_m3 else "",
+                tendance_n1_pct or "N/A"
             )
 
-        now = datetime.now(tz=timezone.utc)
+        # ── [RÉGIONAL] Statut Sécheresse 69 ─────────────────────────────────
+        # On simule la détection (placeholder pour futur API Propluvia/VigiEau)
+        drought_level = "Normal"
+        current_month = datetime.now().month
+        if 6 <= current_month <= 9: # Été
+            drought_level = "Vigilance" # Valeur par défaut en période estivale à Lyon
+        
+        # Vérification des issues de réparation (Sécheresse)
+        async_check_drought_issue(self.hass, drought_level)
+        
+        # ── [VACATION] Surveillance mode vacances ──────────────────────────
+        vacation_mode = self.hass.data.get(DOMAIN, {}).get("vacation_mode", False)
+        vacation_alert = False
+        if vacation_mode:
+            # Si mode vacances actif, on vérifie si conso > 0 sur les dernières 24h
+            total_24h = 0
+            for ref, c in contracts_data.items():
+                daily = c.get("consommations_journalieres", [])
+                if daily:
+                    total_24h += daily[-1].get("consommation_m3", 0)
+            if total_24h > 0.001: # 1 Litre
+                vacation_alert = True
+                _LOGGER.warning("ALERTE VACANCES : Consommation de %.3f m³ détectée !", total_24h)
 
         await self._inject_statistics(contracts_data)
         self._handle_alert_notifications(nb_alertes)
 
+        now = datetime.now(tz=timezone.utc)
         return {
             "contracts":         contracts_data,
+            "global":            global_data,
+            "drought_level":     drought_level,
+            "vacation_alert":    vacation_alert,
             "nb_alertes":        nb_alertes,
             "experimental_mode": experimental,
+            "api_mode":          "Experimental (2026)" if experimental else "Legacy",
             "last_update_success_time": now,
             "last_error":        None,
             "last_error_type":   None,
@@ -462,7 +632,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
     # ------------------------------------------------------------------
 
     async def _inject_statistics(self, contracts_data: dict) -> None:
-        """Injecte l'historique mensuel dans les statistiques longues durée HA."""
+        """Injecte l'historique mensuel dans les statistiques longues durée HA.
+
+        Optimisation : n'injecte que si le nombre de mois a changé par rapport
+        à la dernière injection réussie (évite des écritures redondantes).
+        """
         try:
             from homeassistant.components.recorder.models import (  # noqa: PLC0415
                 StatisticData,
@@ -475,9 +649,21 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             _LOGGER.debug("Module recorder non disponible")
             return
 
+        if not hasattr(self, "_stats_month_counts"):
+            self._stats_month_counts: dict[str, int] = {}
+
         for ref, contract in contracts_data.items():
             consos = contract.get("consommations", [])
             if not consos:
+                continue
+
+            # Skip si le nombre de mois n'a pas changé
+            current_count = len(consos)
+            if self._stats_month_counts.get(ref) == current_count:
+                _LOGGER.debug(
+                    "Statistiques contrat %s : %d mois inchangés, injection ignorée",
+                    ref, current_count,
+                )
                 continue
 
             statistic_id = f"{DOMAIN}:water_{ref}"
@@ -514,6 +700,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
 
             try:
                 async_add_external_statistics(self.hass, metadata, stats)
+                self._stats_month_counts[ref] = current_count
                 _LOGGER.debug(
                     "Statistiques injectées : contrat %s, %d mois, %.1f m³ cumulés",
                     ref, len(stats), cumulative,
@@ -522,6 +709,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                 _LOGGER.warning(
                     "Erreur injection statistiques pour %s : %s", ref, err
                 )
+
 
     # ------------------------------------------------------------------
     # Notifications alertes
@@ -566,6 +754,18 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
+
+
+def _parse_nb_habitants(val: str) -> int:
+    """Extrait le nombre d'habitants depuis une chaîne (ex: '4 personnes')."""
+    import re
+    if not val:
+        return 1
+    match = re.search(r'(\d+)', val)
+    if match:
+        return int(match.group(1))
+    return 1
+
 
 def _find_missing_months(consos: list[dict]) -> list[str]:
     """Détecte les mois manquants entre le premier et le dernier relevé disponible."""

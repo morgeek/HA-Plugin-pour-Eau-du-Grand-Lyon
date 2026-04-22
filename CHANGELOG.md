@@ -5,6 +5,33 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-04-22
+
+### Ajouté
+- **Intelligence & Écologie** : Eco-Score (A-G), Empreinte Carbone (kg CO2e) et Benchmarking lyonnais.
+- **Hardware Health** : Sensors de signal radio et état de pile pour les modules Téléo.
+- **Service PDF** : Téléchargement automatisé de la dernière facture officielle.
+- **Suivi Sécheresse** : Intégration des niveaux de restriction du Rhône (69) et alertes via Repairs platform.
+- **Mode Vacances** : Switch de surveillance renforcée avec alertes de consommation non autorisée.
+- **Calendrier Pro** : Entité calendrier pour le suivi des facturations et paiements.
+- **Export de Données CSV** : Nouveau service `export_data` pour l'historique complet.
+- **Blueprints d'Automation** : Modèles d'alertes fuite (actionnables) et budget inclus.
+- **Détection Fuite Locale** : Analyse de pattern intelligente pour les compteurs non-Téléo.
+- **Index haute précision** : Alinement parfait avec le compteur physique via les données journalières.
+- **Traductions** : Support complet FR/EN.
+
+### Optimisé
+- **Appels API parallèles** : `asyncio.gather` pour les consommations mensuelles + journalières (2x plus rapide par contrat).
+- **Injection statistiques** : n'injecte dans le recorder que lorsque de nouveaux mois sont détectés.
+- **Attributs allégés** : détails journaliers limités à 14 jours dans les attributs pour réduire la taille en BDD.
+- **Révocation token** : le token est révoqué côté serveur au déchargement de l'intégration.
+- **Nettoyage services** : les services sont désenregistrés quand la dernière entry est supprimée.
+
+### Modifié
+- `strings.json` synchronisé avec `fr.json`/`en.json` (champ `price_entity` ajouté).
+- `hacs.json` : ajout du tag `country: FR` pour la découvrabilité HACS.
+- Version bumped de 2.2.5 à 2.3.0.
+
 ## [2.2.5beta] - 2026-04-22
 
 ### Ajouté

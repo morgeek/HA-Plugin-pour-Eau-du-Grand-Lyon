@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════
 #  Dashboard "Eau du Grand Lyon" — Lovelace YAML
-#  Version : 2.2.5beta
+#  Version : 2.3.0
 #
 #  Installation :
 #  1. Remplacez XXXXXXXX par votre référence contrat (visible dans
@@ -107,8 +107,37 @@ views:
             name: Dernière mise à jour
           - entity: sensor.eau_du_grand_lyon_statut_api
             name: Statut API
+          - type: attribute
+            entity: sensor.eau_du_grand_lyon_statut_api
+            attribute: api_mode
+            name: Mode API
+            icon: mdi:api
           - entity: button.eau_du_grand_lyon_forcer_la_mise_a_jour
             name: Forcer la mise à jour
+
+      # ── Détection de fuite (Téléo / expérimental) ──────────────────
+      - type: conditional
+        conditions:
+          - entity: binary_sensor.eau_du_grand_lyon_detection_fuite_teleo
+            state_not: unavailable
+        card:
+          type: entity
+          entity: binary_sensor.eau_du_grand_lyon_detection_fuite_teleo
+          name: Détection fuite (Téléo)
+          icon: mdi:water-alert
+
+      # ── Mode hors-ligne ────────────────────────────────────────────
+      - type: conditional
+        conditions:
+          - entity: sensor.eau_du_grand_lyon_statut_api
+            state: "HORS-LIGNE"
+        card:
+          type: markdown
+          content: >
+            ## 📡 Mode hors-ligne
+            L'API est indisponible. Les données affichées proviennent du
+            cache local.
+            - Hors-ligne depuis : `{{ state_attr('sensor.eau_du_grand_lyon_statut_api', 'offline_since') }}`
 
       # ── [EXPÉRIMENTAL] Données API 2026 ───────────────────────────
       - type: conditional
@@ -215,3 +244,4 @@ views:
           - sensor.eau_du_grand_lyon_statut_api
           - sensor.eau_du_grand_lyon_derniere_facture_eur_ttc
           - sensor.eau_du_grand_lyon_fuite_estimee_30_jours
+          - binary_sensor.eau_du_grand_lyon_detection_fuite_teleo

@@ -1,0 +1,37 @@
+blueprint:
+  name: Alerte Fuite Eau Grand Lyon
+  description: Notifie via mobile lorsqu'une fuite est détectée par l'intégration Eau du Grand Lyon.
+  domain: automation
+  input:
+    leak_sensor:
+      name: Capteur de fuite
+      description: Choisissez le capteur de fuite (Legacy, Téléo ou Pattern local).
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: problem
+    notify_device:
+      name: Appareil de notification
+      description: Service de notification mobile (ex. notify.mobile_app_iphone).
+      selector:
+        action: {}
+
+trigger:
+  - platform: state
+    entity_id: !input leak_sensor
+    to: "on"
+
+action:
+  - service: !input notify_device
+    data:
+      title: "🚰 Fuite d'eau détectée !"
+      message: >
+        Une fuite potentielle a été détectée sur votre contrat Eau du Grand Lyon (Capteur: {{ state_attr(trigger.entity_id, 'friendly_name') }}). 
+        Vérifiez vos installations.
+      data:
+        actions:
+          - action: "URI"
+            title: "📊 Voir Dashboard"
+            uri: "/lovelace-eau"
+          - action: "REFRESH"
+            title: "🔄 Rafraîchir"

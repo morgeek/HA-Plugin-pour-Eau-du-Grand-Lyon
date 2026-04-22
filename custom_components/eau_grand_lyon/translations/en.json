@@ -1,0 +1,49 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Eau du Grand Lyon",
+        "description": "Enter your credentials for the customer portal {site_url}",
+        "data": {
+          "email": "Email",
+          "password": "Password",
+          "tarif_m3": "Price per m³ (€)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Incorrect credentials. Please check your email and password.",
+      "cannot_connect": "Unable to connect to the server. Check your network.",
+      "waf_blocked": "Request blocked by web firewall. Increase update interval or wait.",
+      "api_error": "API error. Check the status of the Eau du Grand Lyon service.",
+      "unknown": "Unknown error. Check Home Assistant logs for details."
+    },
+    "abort": {
+      "already_configured": "This account is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Eau du Grand Lyon Options",
+        "description": "Configure update interval, price per m³, and experimental mode.",
+        "data": {
+          "update_interval_hours": "Update frequency",
+          "tarif_m3": "Static price per m³ (€)",
+          "price_entity": "Dynamic price entity (sensor)",
+          "experimental_api": "⚗️ Experimental mode (2026 API endpoints)"
+        },
+        "data_description": {
+          "price_entity": "Optional: Select an entity (e.g. sensor.water_price) to use as the current price instead of the static value.",
+          "experimental_api": "Enables new /rest/produits/ endpoints discovered in the 2026 Angular bundle: real invoices, daily estimated leaks, load curves. Automatic fallback to old endpoints is always active."
+        }
+      }
+    }
+  },
+  "issues": {
+    "drought_alert": {
+      "title": "Drought Alert: Level {level}",
+      "description": "The Rhône department is currently at the **{level}** restriction level. Water usage restrictions (watering, car washing, etc.) apply. Check the prefecture's website for more details."
+    }
+  }
+}

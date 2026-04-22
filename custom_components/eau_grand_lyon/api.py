@@ -317,6 +317,28 @@ class EauGrandLyonApi:
         _LOGGER.debug("Authentification réussie pour %s", self._email)
         return self._access_token
 
+    async def async_revoke_token(self) -> None:
+        """Révoque l'access token auprès du serveur (best-effort).
+
+        Appelé lors du déchargement de l'intégration pour éviter les sessions
+        orphelines côté serveur. Ne lève jamais d'exception.
+        """
+        if not self._access_token:
+            return
+        try:
+            async with self._session.post(
+                _TOKEN_REVOKE_URL,
+                data={"token": self._access_token},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            ) as resp:
+                _LOGGER.debug(
+                    "Révocation token → HTTP %s", resp.status
+                )
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("Échec révocation token (best-effort, ignoré)")
+        finally:
+            self._access_token = None
+
     # ------------------------------------------------------------------
     # Transport HTTP interne
     # ------------------------------------------------------------------
@@ -697,6 +719,14 @@ class EauGrandLyonApi:
     # Helpers de formatage
     # ------------------------------------------------------------------
 
+    async def get_invoice_pdf(self, invoice_ref: str) -> bytes:
+        """[EXPÉRIMENTAL] Télécharge le PDF d'une facture."""
+        url = f"{BASE_URL}/rest/produits/factures/{invoice_ref}/document"
+        async with self._session.get(url, headers=self._headers) as resp:
+            if resp.status != 200:
+                raise NetworkError(f"Erreur téléchargement PDF ({resp.status})")
+            return await resp.read()
+
     @staticmethod
     def format_consumptions(raw_entries: list[dict]) -> list[dict]:
         """Enrichit les entrées mensuelles brutes avec labels lisibles."""
@@ -816,11 +846,29 @@ class EauGrandLyonApi:
 
         eds     = raw.get("espaceDeLivraison") or {}
         ref_pds = eds.get("reference", "")
+        
+        # Hardware Health (Téléo)
+        point_releve = raw.get("pointDeReleve") or {}
+        compteur     = point_releve.get("compteur") or {}
+        module       = point_releve.get("moduleRadio") or {}
+        
+        signal_pct = None
+        if "niveauSignal" in module:
+            try:
+                signal_pct = float(module["niveauSignal"])
+            except (ValueError, TypeError):
+                pass
+        
+        battery_ok = None
+        if "etatPile" in module:
+            battery_ok = module["etatPile"] == "OK"
 
         return {
             "id":               raw.get("id", ""),
             "reference":        ref,
             "statut":           statut,
+            "signal_pct":       signal_pct,
+            "battery_ok":       battery_ok,
             "date_effet":       date_effet,
             "date_echeance":    date_echeance,
             "solde_eur":        solde_eur,
@@ -831,3 +879,20 @@ class EauGrandLyonApi:
             "nombre_habitants": nombre_habitants,
             "reference_pds":    ref_pds,
         }
+
+    @staticmethod
+    def parse_siamm_index(data: dict) -> float | None:
+        """[EXPÉRIMENTAL] Extrait l'index (m³) de la relève SIAMM brute.
+
+        Parcourt grandeursPhysiques à la recherche du code 'VOLUME'.
+        """
+        if not data or not isinstance(data, dict):
+            return None
+        for gp in data.get("grandeursPhysiques", []):
+            modele = gp.get("modeleGrandeurPhysique") or {}
+            if modele.get("code") == "VOLUME":
+                try:
+                    return float(gp.get("valeur", 0))
+                except (ValueError, TypeError):
+                    pass
+        return None

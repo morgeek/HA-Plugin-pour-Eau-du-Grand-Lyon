@@ -1,0 +1,14 @@
+# ── Services Eau du Grand Lyon ─────────────────────────────────────────
+
+clear_cache:
+  name: Effacer le cache local
+  description: >
+    Supprime le cache persistant (historique et consommations enregistrées)
+    et réinitialise les capteurs. Utile en cas de corruption de données.
+
+update_now:
+  name: Mettre à jour maintenant
+  description: >
+    Force une synchronisation immédiate avec les serveurs Eau du Grand Lyon,
+    en ignorant l'intervalle de mise à jour configuré (mais en respectant
+    toujours le rate-limiting de 30s).
