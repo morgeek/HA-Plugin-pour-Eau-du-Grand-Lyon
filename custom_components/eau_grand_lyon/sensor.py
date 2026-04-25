@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
+    SensorEntityDescription,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -18,7 +19,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .__init__ import EauGrandLyonConfigEntry
+from .coordinator import EauGrandLyonCoordinator
+
+if TYPE_CHECKING:
+    from . import EauGrandLyonConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 

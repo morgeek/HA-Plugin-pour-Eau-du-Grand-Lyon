@@ -443,10 +443,9 @@ class TestAsyncSetupEntry:
     async def test_creates_standard_sensors_per_contract(self):
         coord = _make_coordinator(experimental=False)
         entry = _make_entry()
+        entry.runtime_data = coord  # pattern HA moderne (entry.runtime_data)
 
         hass = MagicMock()
-        hass.data = {"eau_grand_lyon": {"entry1": coord}}
-
         added = []
         async_add = MagicMock(side_effect=lambda entities, **kw: added.extend(entities))
 
@@ -464,8 +463,8 @@ class TestAsyncSetupEntry:
     async def test_no_experimental_sensors_in_legacy_mode(self):
         coord = _make_coordinator(experimental=False)
         entry = _make_entry()
+        entry.runtime_data = coord
         hass  = MagicMock()
-        hass.data = {"eau_grand_lyon": {"entry1": coord}}
 
         added = []
         async_add = MagicMock(side_effect=lambda entities, **kw: added.extend(entities))
@@ -479,8 +478,8 @@ class TestAsyncSetupEntry:
     async def test_experimental_sensors_added_in_experimental_mode(self):
         coord = _make_coordinator(experimental=True)
         entry = _make_entry()
+        entry.runtime_data = coord
         hass  = MagicMock()
-        hass.data = {"eau_grand_lyon": {"entry1": coord}}
 
         added = []
         async_add = MagicMock(side_effect=lambda entities, **kw: added.extend(entities))
@@ -500,10 +499,11 @@ class TestAsyncSetupEntry:
             },
             "nb_alertes": 0,
             "experimental_mode": False,
+            "global": {"nb_contracts": 2},
         }
         entry = _make_entry()
+        entry.runtime_data = coord
         hass  = MagicMock()
-        hass.data = {"eau_grand_lyon": {"entry1": coord}}
 
         added = []
         async_add = MagicMock(side_effect=lambda entities, **kw: added.extend(entities))

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -16,7 +16,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .__init__ import EauGrandLyonConfigEntry
+from .coordinator import EauGrandLyonCoordinator
+
+if TYPE_CHECKING:
+    from . import EauGrandLyonConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
