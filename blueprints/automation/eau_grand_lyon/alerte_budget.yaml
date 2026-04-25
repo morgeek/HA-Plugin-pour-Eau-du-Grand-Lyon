@@ -1,0 +1,83 @@
+blueprint:
+  name: "💶 Eau Grand Lyon — Alerte Dépassement Budget"
+  description: >
+    Envoie une notification quand la prédiction de coût mensuel (ou le coût réel
+    avec abonnement) dépasse un seuil configurable. Idéal pour surveiller sa
+    facture eau en temps réel.
+  domain: automation
+  source_url: https://github.com/Morgeek/eau_grand_lyon
+  input:
+    sensor_cout:
+      name: Capteur de coût à surveiller
+      description: >
+        Choisissez le capteur de coût :
+        - **Prédiction coût mois** : estimation fin de mois
+        - **Coût réel mensuel (avec abonnement)** : coût total incluant l'abonnement
+        - **Coût mois courant** : part variable uniquement
+      selector:
+        entity:
+          integration: eau_grand_lyon
+          domain: sensor
+    seuil_eur:
+      name: Seuil d'alerte (€)
+      description: "Montant en euros au-delà duquel la notification est envoyée"
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 500
+          step: 1
+          unit_of_measurement: "€"
+    service_notification:
+      name: Service de notification
+      description: "Nom du service de notification (ex: notify.mobile_app_iphone)"
+      selector:
+        select:
+          custom_value: true
+          options: []
+    notification_cooldown:
+      name: Délai entre notifications (heures)
+      description: "Évite le spam de notifications lors d'un même dépassement"
+      default: 24
+      selector:
+        number:
+          min: 1
+          max: 168
+          unit_of_measurement: "heures"
+
+variables:
+  sensor_entity: !input sensor_cout
+  seuil: !input seuil_eur
+  valeur_actuelle: "{{ states(sensor_entity) | float(0) }}"
+
+trigger:
+  - platform: numeric_state
+    entity_id: !input sensor_cout
+    above: !input seuil_eur
+
+condition:
+  - condition: template
+    value_template: "{{ states(sensor_entity) | float(0) > seuil }}"
+
+action:
+  - service: !input service_notification
+    data:
+      title: "💶 Budget Eau dépassé"
+      message: >
+        ⚠️ Votre prédiction de coût eau dépasse le seuil de {{ seuil }} €.
+
+        💰 Valeur actuelle : {{ valeur_actuelle | round(2) }} €
+        🎯 Seuil configuré : {{ seuil }} €
+        📅 {{ now().strftime('%d/%m/%Y') }}
+
+        Consultez votre tableau de bord Eau du Grand Lyon pour analyser
+        votre consommation.
+      data:
+        tag: eau_grand_lyon_budget
+        actions:
+          - action: URI
+            title: "🌐 Espace client"
+            uri: https://agence.eaudugrandlyon.com
+
+mode: single
+max_exceeded: silent

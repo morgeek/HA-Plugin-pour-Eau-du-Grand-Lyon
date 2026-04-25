@@ -40,6 +40,9 @@ async def async_setup_entry(
         entities.append(EauGrandLyonBatterySensor(coordinator, entry, ref))
         entities.append(EauGrandLyonLimescaleAlertSensor(coordinator, entry, ref))
 
+    # [FEAT 3] Coupure/Travaux planifiés — capteur global
+    entities.append(EauGrandLyonOutageSensor(coordinator, entry))
+
     async_add_entities(entities, update_before_add=True)
 
 
@@ -208,3 +211,78 @@ class EauGrandLyonLimescaleAlertSensor(_EauGrandLyonBinaryBase):
             "seuil_maintenance": "100 kg de calcaire cumulé",
             "note": "Alerte indicative pour entretien chauffe-eau ou adoucisseur.",
         }
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Feat 3 — Capteur global : Interruption / Travaux planifiés
+# ══════════════════════════════════════════════════════════════════════
+
+class EauGrandLyonOutageSensor(
+    CoordinatorEntity[EauGrandLyonCoordinator], BinarySensorEntity
+):
+    """True si une interruption de service est active ou prévue dans les 48h."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_icon = "mdi:pipe-wrench"
+    translation_key = "outage_alert"
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_outage_alert"
+
+    @property
+    def is_on(self) -> bool:
+        """True si une interruption est imminente (dans les 48h) ou en cours."""
+        from datetime import date, timedelta
+        interruptions = (self.coordinator.data or {}).get("interruptions", [])
+        if not interruptions:
+            return False
+        today = date.today()
+        horizon = today + timedelta(hours=48)
+        for inter in interruptions:
+            debut_str = inter.get("date_debut")
+            fin_str   = inter.get("date_fin")
+            try:
+                debut = date.fromisoformat(debut_str) if debut_str else None
+                fin   = date.fromisoformat(fin_str)   if fin_str   else debut
+            except (ValueError, TypeError):
+                continue
+            if debut is None:
+                continue
+            # En cours ou dans les 48h
+            if debut <= horizon and (fin is None or fin >= today):
+                return True
+        return False
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        interruptions = (self.coordinator.data or {}).get("interruptions", [])
+        prochaine = (self.coordinator.data or {}).get("prochaine_coupure") or {}
+        return {
+            "nb_interruptions":     len(interruptions),
+            "prochaine_date":       prochaine.get("date_debut"),
+            "prochaine_fin":        prochaine.get("date_fin"),
+            "prochaine_titre":      prochaine.get("titre"),
+            "prochaine_type":       prochaine.get("type"),
+            "toutes": [
+                {
+                    "titre":      i.get("titre"),
+                    "date_debut": i.get("date_debut"),
+                    "date_fin":   i.get("date_fin"),
+                    "type":       i.get("type"),
+                }
+                for i in interruptions[:10]
+            ],
+        }
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry.entry_id)},
+            name="Eau du Grand Lyon",
+            manufacturer="Morgeek",
+            configuration_url="https://agence.eaudugrandlyon.com",
+        )

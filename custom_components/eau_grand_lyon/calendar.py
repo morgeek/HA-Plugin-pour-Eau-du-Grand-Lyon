@@ -42,7 +42,9 @@ class EauGrandLyonCalendar(CalendarEntity):
         self, hass: HomeAssistant, start_date: datetime, end_date: datetime
     ) -> list[CalendarEvent]:
         events = []
-        for ref, contract in (self.coordinator.data or {}).get("contracts", {}).items():
+        data = self.coordinator.data or {}
+
+        for ref, contract in data.get("contracts", {}).items():
             # Date de paiement
             pay_date = contract.get("next_payment_date")
             if pay_date:
@@ -64,6 +66,28 @@ class EauGrandLyonCalendar(CalendarEntity):
                     end=dt + timedelta(days=1),
                     description="Date estimée de la prochaine facture",
                 ))
+
+        # [FEAT 3] Interruptions de service / travaux
+        for inter in data.get("interruptions", []):
+            try:
+                debut_str = inter.get("date_debut")
+                fin_str   = inter.get("date_fin") or debut_str
+                if not debut_str:
+                    continue
+                debut = datetime.strptime(debut_str, "%Y-%m-%d")
+                fin   = datetime.strptime(fin_str,   "%Y-%m-%d") + timedelta(days=1)
+                type_label = inter.get("type", "TRAVAUX")
+                emoji = "🚧" if "TRAVAUX" in type_label else "🔴"
+                events.append(CalendarEvent(
+                    summary=f"{emoji} {inter.get('titre', 'Interruption eau')}",
+                    start=debut,
+                    end=fin,
+                    description=inter.get("description") or f"Interruption type : {type_label}",
+                    location="Eau du Grand Lyon",
+                ))
+            except (ValueError, TypeError):
+                continue
+
         return events
 
     @property

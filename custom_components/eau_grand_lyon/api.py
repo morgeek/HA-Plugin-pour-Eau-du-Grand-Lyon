@@ -732,6 +732,69 @@ class EauGrandLyonApi:
         except aiohttp.ClientError as err:
             raise NetworkError(f"Erreur réseau lors du téléchargement PDF: {err}") from err
 
+    async def get_water_quality(self) -> dict:
+        """Récupère la qualité de l'eau depuis l'Open Data de la Métropole de Lyon.
+
+        Source : data.grandlyon.com (sans authentification).
+        Retourne un dict avec les clés : durete_fh, nitrates_mgl, chlore_mgl,
+        turbidite_ntu, commune, date_analyse. Chaque valeur est None si indisponible.
+
+        Ce service est best-effort : en cas d'échec, retourne un dict de None sans planter.
+        """
+        _OPENDATA_URL = (
+            "https://data.grandlyon.com/fr/datapusher/ws/grandlyon"
+            "/eau_eau.eauqualite/json/?maxfeatures=1&start=1"
+            "&fields=commune,durete,nitrates,chloreresiduel,turbidite,dateanalyse"
+        )
+        empty: dict = {
+            "durete_fh": None,
+            "nitrates_mgl": None,
+            "chlore_mgl": None,
+            "turbidite_ntu": None,
+            "commune": None,
+            "date_analyse": None,
+            "source": "Open Data Métropole de Lyon",
+        }
+        try:
+            async with self._session.get(
+                _OPENDATA_URL,
+                headers={"Accept": "application/json"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status != 200:
+                    _LOGGER.debug("[OPEN DATA] Qualité eau → HTTP %s", resp.status)
+                    return empty
+                data = json.loads(await resp.text())
+
+            values = data.get("values", [])
+            if not values:
+                _LOGGER.debug("[OPEN DATA] Qualité eau → réponse vide")
+                return empty
+
+            row = values[0]
+
+            def _safe_float(val: object) -> float | None:
+                try:
+                    return float(val) if val is not None else None
+                except (ValueError, TypeError):
+                    return None
+
+            return {
+                "durete_fh":     _safe_float(row.get("durete")),
+                "nitrates_mgl":  _safe_float(row.get("nitrates")),
+                "chlore_mgl":    _safe_float(row.get("chloreresiduel")),
+                "turbidite_ntu": _safe_float(row.get("turbidite")),
+                "commune":       row.get("commune"),
+                "date_analyse":  (row.get("dateanalyse") or "")[:10] or None,
+                "source":        "Open Data Métropole de Lyon",
+            }
+        except aiohttp.ClientError as err:
+            _LOGGER.debug("[OPEN DATA] Erreur réseau qualité eau : %s", err)
+            return empty
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("[OPEN DATA] Erreur inattendue qualité eau : %s", err)
+            return empty
+
 
     @staticmethod
     def format_consumptions(raw_entries: list[dict]) -> list[dict]:

@@ -47,11 +47,13 @@ from .const import (
     CONF_UPDATE_INTERVAL_HOURS,
     CONF_HOUSEHOLD_SIZE,
     CONF_WATER_HARDNESS,
+    CONF_SUBSCRIPTION_ANNUAL,
     DEFAULT_EXPERIMENTAL,
     DEFAULT_HOUSEHOLD_SIZE,
     DEFAULT_TARIF_M3,
     DEFAULT_UPDATE_INTERVAL_HOURS,
     DEFAULT_WATER_HARDNESS,
+    DEFAULT_SUBSCRIPTION_ANNUAL,
     DOMAIN,
 )
 
@@ -329,6 +331,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
 
         alertes    = await self.api.get_alertes()
         nb_alertes = len(alertes)
+        interruptions = _parse_outage_alertes(alertes)
+        prochaine_coupure = interruptions[0] if interruptions else None
+
+        # Qualité de l'eau (Open Data Métropole Lyon) — best-effort, sans auth
+        water_quality = await self.api.get_water_quality()
 
         tarif_m3 = self._calculate_tarif_m3()
 
@@ -372,16 +379,19 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         self._handle_alert_notifications(nb_alertes)
 
         return {
-            "contracts":         contracts_data,
-            "global":            global_data,
-            "drought_level":     drought_level,
-            "vacation_alert":    vacation_alert,
-            "nb_alertes":        nb_alertes,
-            "experimental_mode": experimental,
-            "api_mode":          "Experimental (2026)" if experimental else "Legacy",
+            "contracts":           contracts_data,
+            "global":             global_data,
+            "drought_level":      drought_level,
+            "vacation_alert":     vacation_alert,
+            "nb_alertes":         nb_alertes,
+            "interruptions":      interruptions,
+            "prochaine_coupure":  prochaine_coupure,
+            "water_quality":      water_quality,
+            "experimental_mode":  experimental,
+            "api_mode":           "Experimental (2026)" if experimental else "Legacy",
             "last_update_success_time": datetime.now(tz=timezone.utc),
-            "last_error":        None,
-            "last_error_type":   None,
+            "last_error":         None,
+            "last_error_type":    None,
         }
 
     def _calculate_tarif_m3(self) -> float:
@@ -460,6 +470,33 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         if experimental and consos_journalieres:
             courbe_de_charge = await self.api.get_courbe_de_charge(cid, nb_jours=7)
 
+        # ── [HORAIRE] Analyse de la courbe de charge ──────────────────
+        consommation_derniere_heure_m3: float | None = None
+        heure_pic: str | None = None
+        debit_moyen_m3h: float | None = None
+        if courbe_de_charge:
+            raw_vals = []
+            for e in courbe_de_charge:
+                v = e.get("valeur") or e.get("consommation") or 0
+                try:
+                    raw_vals.append(float(v))
+                except (ValueError, TypeError):
+                    raw_vals.append(0.0)
+            if raw_vals:
+                last_e = courbe_de_charge[-1]
+                consommation_derniere_heure_m3 = raw_vals[-1]
+                max_idx = raw_vals.index(max(raw_vals))
+                try:
+                    peak_dt = datetime.fromisoformat(
+                        courbe_de_charge[max_idx].get("date", "")
+                    )
+                    heure_pic = peak_dt.strftime("%H:%M")
+                except (ValueError, TypeError, AttributeError):
+                    heure_pic = None
+                non_zero = [v for v in raw_vals if v > 0]
+                if non_zero:
+                    debit_moyen_m3h = round(sum(non_zero) / len(non_zero), 4)
+
         # ── [INTELLIGENCE] Détection de fuite locale (Pattern) ────────────
         local_leak_pattern = self._detect_local_leak(courbe_de_charge, consos_journalieres, ref)
 
@@ -493,6 +530,10 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             "cout_mois_courant_eur":       round(conso_courant * tarif_m3, 2) if conso_courant is not None else None,
             "cout_annuel_eur":             round(conso_annuelle * tarif_m3, 2),
             "tarif_m3":                    tarif_m3,
+            # Coût réel = variable (conso × tarif) + fixe (abonnement proratisé)
+            "cout_reel_mois":              self._get_real_monthly_cost(conso_courant, tarif_m3),
+            "cout_reel_annuel":            self._get_real_annual_cost(conso_annuelle, tarif_m3),
+            "subscription_annual":         float(self._entry.options.get(CONF_SUBSCRIPTION_ANNUAL, DEFAULT_SUBSCRIPTION_ANNUAL)),
             "tendance_n1_pct":             tendance_n1_pct,
             "prediction_conso_mois":       prediction_conso_mois,
             "prediction_cout_mois":        prediction_cout_mois,
@@ -511,6 +552,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             "derniere_facture":            derniere_facture,
             "fuite_estime_30j_m3":         fuite_estime_30j_m3,
             "courbe_de_charge":            courbe_de_charge,
+            # [HORAIRE] Données infra-journalières (compteur Téléo uniquement)
+            "consommation_derniere_heure_m3": consommation_derniere_heure_m3,
+            "heure_pic":                   heure_pic,
+            "debit_moyen_m3h":             debit_moyen_m3h,
+            # [HARDWARE] État du module Téléo — parsé depuis pointDeReleve
+            "signal_pct":                  details.get("signal_pct"),
+            "battery_ok":                  details.get("battery_ok"),
         }
 
     def _get_consumption_n1(self, consos: list[dict]) -> tuple[float | None, str | None]:
@@ -622,6 +670,19 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         """Détermine le niveau de sécheresse simulé."""
         current_month = datetime.now().month
         return "Vigilance" if 6 <= current_month <= 9 else "Normal"
+
+    def _get_real_monthly_cost(self, conso_courant: float | None, tarif_m3: float) -> float | None:
+        """Calcule le coût mensuel réel = variable (conso × tarif) + part fixe (abonnement/12)."""
+        sub = float(self._entry.options.get(CONF_SUBSCRIPTION_ANNUAL, DEFAULT_SUBSCRIPTION_ANNUAL))
+        if conso_courant is None and sub == 0.0:
+            return None
+        variable = (conso_courant * tarif_m3) if conso_courant is not None else 0.0
+        return round(variable + (sub / 12.0), 2)
+
+    def _get_real_annual_cost(self, conso_annuelle: float, tarif_m3: float) -> float:
+        """Calcule le coût annuel réel = variable + abonnement annuel complet."""
+        sub = float(self._entry.options.get(CONF_SUBSCRIPTION_ANNUAL, DEFAULT_SUBSCRIPTION_ANNUAL))
+        return round((conso_annuelle * tarif_m3) + sub, 2)
 
     def _check_vacation_alert(self, contracts_data: dict) -> bool:
         """Vérifie si une alerte vacances doit être levée."""
@@ -772,3 +833,45 @@ def _find_missing_months(consos: list[dict]) -> list[str]:
 
     return missing
 
+
+def _parse_outage_alertes(alertes: list[dict]) -> list[dict]:
+    """Extrait les interruptions de service (travaux, coupures) depuis la liste d'alertes.
+
+    Filtre les alertes de type travaux/coupure et les normalise pour le calendrier
+    et le binary_sensor. Retourne une liste triée par date de début (la plus proche en tête).
+    """
+    interruptions: list[dict] = []
+
+    for alerte in alertes:
+        try:
+            info   = alerte.get("infosAlarme") or alerte
+            modele = alerte.get("modeleAction") or {}
+            type_alerte = (
+                (info.get("type") or {}).get("libelle", "")
+                or str(info.get("typeCode", ""))
+            ).upper()
+            libelle_modele = str(modele.get("libelle", "")).upper()
+
+            is_outage = any(
+                k in (type_alerte + " " + libelle_modele)
+                for k in ("TRAVAUX", "COUPURE", "INTERRUPT", "MAINTENANCE")
+            )
+            if not is_outage:
+                continue
+
+            date_debut_raw = info.get("dateDebut") or alerte.get("dateDebut") or ""
+            date_fin_raw   = info.get("dateFin")   or alerte.get("dateFin")   or ""
+
+            interruptions.append({
+                "titre":       info.get("libelle") or modele.get("libelle") or "Interruption service eau",
+                "date_debut":  date_debut_raw[:10] if date_debut_raw else None,
+                "date_fin":    date_fin_raw[:10]   if date_fin_raw   else None,
+                "type":        type_alerte or "TRAVAUX",
+                "description": info.get("description") or alerte.get("description") or "",
+                "reference":   str(alerte.get("id") or ""),
+            })
+        except Exception:  # noqa: BLE001
+            continue
+
+    interruptions.sort(key=lambda x: x.get("date_debut") or "9999-99-99")
+    return interruptions

@@ -76,6 +76,14 @@ async def async_setup_entry(
         entities.append(EauGrandLyonEcoScoreSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonCO2FootprintSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonSignalSensor(coordinator, entry, ref))
+        # ── [FEAT 5] Coût réel avec abonnement ───────────────────────
+        entities.append(EauGrandLyonCoutReelMoisSensor(coordinator, entry, ref))
+        entities.append(EauGrandLyonCoutReelAnnuelSensor(coordinator, entry, ref))
+        # ── [FEAT 1] Données horaires (Téléo uniquement) ─────────────
+        if experimental:
+            entities.append(EauGrandLyonHourlyConsoSensor(coordinator, entry, ref))
+            entities.append(EauGrandLyonPeakHourSensor(coordinator, entry, ref))
+            entities.append(EauGrandLyonAvgFlowSensor(coordinator, entry, ref))
 
     # ── Sensors globaux ───────────────────────────────────────────────
     entities.append(EauGrandLyonAlertesSensor(coordinator, entry))
@@ -87,7 +95,7 @@ async def async_setup_entry(
         entities.append(EauGrandLyonGlobalConsoSensor(coordinator, entry))
         entities.append(EauGrandLyonGlobalCostSensor(coordinator, entry))
         entities.append(EauGrandLyonGlobalPredictionCostSensor(coordinator, entry))
-    
+
     # Sensors régionaux
     entities.append(EauGrandLyonDroughtSensor(coordinator, entry))
 
@@ -95,6 +103,14 @@ async def async_setup_entry(
     for ref in contracts:
         entities.append(EauGrandLyonLimescaleSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonCoachingSensor(coordinator, entry, ref))
+
+    # ── [FEAT 3] Prochaine interruption ───────────────────────────────
+    entities.append(EauGrandLyonNextOutageSensor(coordinator, entry))
+
+    # ── [FEAT 2] Qualité de l'eau (Open Data) ─────────────────────────
+    entities.append(EauGrandLyonWaterHardnessSensor(coordinator, entry))
+    entities.append(EauGrandLyonNitratesSensor(coordinator, entry))
+    entities.append(EauGrandLyonChloreSensor(coordinator, entry))
 
     async_add_entities(entities, update_before_add=False)
 
@@ -1243,3 +1259,307 @@ class EauGrandLyonSignalSensor(_EauGrandLyonBase):
         if val < 50:      return "mdi:signal-cellular-1"
         if val < 80:      return "mdi:signal-cellular-2"
         return "mdi:signal-cellular-3"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Feat 5 — Coût Réel avec Abonnement
+# ══════════════════════════════════════════════════════════════════════
+
+class EauGrandLyonCoutReelMoisSensor(_EauGrandLyonBase):
+    """Coût mensuel réel = part variable (conso × tarif) + part fixe (abonnement/12)."""
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = "EUR"
+    _attr_icon = "mdi:receipt-text-check"
+    translation_key = "cout_reel_mois"
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_cout_reel_mois"
+
+    @property
+    def native_value(self) -> float | None:
+        return self._contract.get("cout_reel_mois")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        c = self._contract
+        return {
+            "part_variable_eur": c.get("cout_mois_courant_eur"),
+            "part_fixe_eur":     round(c.get("subscription_annual", 0) / 12, 2),
+            "abonnement_annuel": c.get("subscription_annual"),
+            "tarif_eur_m3":      c.get("tarif_m3"),
+            "note": "Coût total = conso × tarif + abonnement mensuel proratisé",
+        }
+
+
+class EauGrandLyonCoutReelAnnuelSensor(_EauGrandLyonBase):
+    """Coût annuel réel = part variable (conso 12 mois × tarif) + abonnement annuel."""
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = "EUR"
+    _attr_icon = "mdi:receipt-text-outline"
+    translation_key = "cout_reel_annuel"
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_cout_reel_annuel"
+
+    @property
+    def native_value(self) -> float | None:
+        return self._contract.get("cout_reel_annuel")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        c = self._contract
+        return {
+            "part_variable_eur": c.get("cout_annuel_eur"),
+            "abonnement_annuel": c.get("subscription_annual"),
+            "consommation_m3":   c.get("consommation_annuelle"),
+            "tarif_eur_m3":      c.get("tarif_m3"),
+        }
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Feat 1 — Données Infra-Journalières (Courbe de Charge)
+# ══════════════════════════════════════════════════════════════════════
+
+class _EauGrandLyonHourlyBase(_EauGrandLyonBase):
+    """Base pour les sensors horaires — unavailable si courbe de charge absente."""
+
+    _attr_entity_registry_enabled_default = False  # Téléo uniquement
+
+    @property
+    def available(self) -> bool:
+        return (
+            super().available
+            and bool(self._contract.get("courbe_de_charge"))
+        )
+
+
+class EauGrandLyonHourlyConsoSensor(_EauGrandLyonHourlyBase):
+    """Consommation de la dernière heure (m³) — courbe de charge Téléo."""
+
+    _attr_device_class = SensorDeviceClass.WATER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "m³"
+    _attr_icon = "mdi:clock-time-four"
+    translation_key = "hourly_conso"
+    _attr_suggested_display_precision = 4
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_hourly_conso"
+
+    @property
+    def native_value(self) -> float | None:
+        return self._contract.get("consommation_derniere_heure_m3")
+
+
+class EauGrandLyonPeakHourSensor(_EauGrandLyonHourlyBase):
+    """Heure de pic de consommation sur les derniers 7 jours (HH:MM)."""
+
+    _attr_icon = "mdi:chart-timeline-variant-shimmer"
+    translation_key = "peak_hour"
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_peak_hour"
+
+    @property
+    def native_value(self) -> str | None:
+        return self._contract.get("heure_pic")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"note": "Calculé sur les 7 derniers jours de courbe de charge"}
+
+
+class EauGrandLyonAvgFlowSensor(_EauGrandLyonHourlyBase):
+    """Débit moyen (m³/h) calculé sur les plages actives de la courbe de charge."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "m³/h"
+    _attr_icon = "mdi:water-flow"
+    translation_key = "avg_flow"
+    _attr_suggested_display_precision = 4
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_avg_flow"
+
+    @property
+    def native_value(self) -> float | None:
+        return self._contract.get("debit_moyen_m3h")
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Feat 2 — Qualité de l'Eau (Open Data Métropole Lyon)
+# ══════════════════════════════════════════════════════════════════════
+
+class _EauGrandLyonWaterQualityBase(_EauGrandLyonGlobalBase):
+    """Base pour les sensors qualité eau — unavailable si Open Data indisponible."""
+
+    _attr_entity_registry_enabled_default = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def available(self) -> bool:
+        wq = (self.coordinator.data or {}).get("water_quality", {})
+        return super().available and self._quality_value(wq) is not None
+
+    def _quality_value(self, wq: dict) -> Any:
+        raise NotImplementedError
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        wq = (self.coordinator.data or {}).get("water_quality", {})
+        return {
+            "commune":       wq.get("commune"),
+            "date_analyse":  wq.get("date_analyse"),
+            "source":        wq.get("source"),
+        }
+
+
+class EauGrandLyonWaterHardnessSensor(_EauGrandLyonWaterQualityBase):
+    """Dureté réelle de l'eau distribuée (°fH) — Open Data Métropole Lyon."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "°fH"
+    _attr_icon = "mdi:water-opacity"
+    translation_key = "water_hardness_live"
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_water_hardness_live"
+
+    def _quality_value(self, wq: dict) -> float | None:
+        return wq.get("durete_fh")
+
+    @property
+    def native_value(self) -> float | None:
+        wq = (self.coordinator.data or {}).get("water_quality", {})
+        return self._quality_value(wq)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        wq = (self.coordinator.data or {}).get("water_quality", {})
+        base = super().extra_state_attributes
+        base["note"] = "Valeur mesurée sur le réseau — peut différer de votre robinet si adoucisseur"
+        base["turbidite_ntu"] = wq.get("turbidite_ntu")
+        return base
+
+
+class EauGrandLyonNitratesSensor(_EauGrandLyonWaterQualityBase):
+    """Concentration en nitrates dans l'eau distribuée (mg/L) — Open Data."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "mg/L"
+    _attr_icon = "mdi:flask"
+    translation_key = "nitrates"
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_nitrates"
+
+    def _quality_value(self, wq: dict) -> float | None:
+        return wq.get("nitrates_mgl")
+
+    @property
+    def native_value(self) -> float | None:
+        wq = (self.coordinator.data or {}).get("water_quality", {})
+        return self._quality_value(wq)
+
+    @property
+    def icon(self) -> str:
+        val = self.native_value
+        if val is None:   return "mdi:flask-outline"
+        if val < 10:      return "mdi:flask"
+        if val < 25:      return "mdi:flask-empty-outline"
+        if val < 50:      return "mdi:alert-circle-outline"
+        return "mdi:alert-circle"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        base = super().extra_state_attributes
+        base["seuil_oms_mgl"] = 50
+        base["note"] = "Seuil réglementaire européen : 50 mg/L"
+        return base
+
+
+class EauGrandLyonChloreSensor(_EauGrandLyonWaterQualityBase):
+    """Chlore résiduel dans l'eau distribuée (mg/L) — Open Data."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "mg/L"
+    _attr_icon = "mdi:water-plus"
+    translation_key = "chlore"
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_chlore"
+
+    def _quality_value(self, wq: dict) -> float | None:
+        return wq.get("chlore_mgl")
+
+    @property
+    def native_value(self) -> float | None:
+        wq = (self.coordinator.data or {}).get("water_quality", {})
+        return self._quality_value(wq)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        base = super().extra_state_attributes
+        base["note"] = "Chlore résiduel libre — garantit la potabilité jusqu'au robinet"
+        return base
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Feat 3 — Prochaine Interruption / Travaux
+# ══════════════════════════════════════════════════════════════════════
+
+class EauGrandLyonNextOutageSensor(_EauGrandLyonGlobalBase):
+    """Date de la prochaine interruption de service planifiée."""
+
+    _attr_device_class = SensorDeviceClass.DATE
+    _attr_icon = "mdi:pipe-wrench"
+    translation_key = "next_outage"
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_next_outage"
+
+    @property
+    def native_value(self):
+        from datetime import date
+        outage = (self.coordinator.data or {}).get("prochaine_coupure")
+        if not outage:
+            return None
+        try:
+            return date.fromisoformat(outage["date_debut"])
+        except (KeyError, ValueError, TypeError):
+            return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        outage = (self.coordinator.data or {}).get("prochaine_coupure") or {}
+        interruptions = (self.coordinator.data or {}).get("interruptions", [])
+        return {
+            "titre":              outage.get("titre"),
+            "type":               outage.get("type"),
+            "date_fin":           outage.get("date_fin"),
+            "description":        outage.get("description"),
+            "nb_interruptions":   len(interruptions),
+            "toutes_interruptions": [
+                {"titre": i.get("titre"), "date_debut": i.get("date_debut"), "type": i.get("type")}
+                for i in interruptions[:5]
+            ],
+        }

@@ -33,3 +33,9 @@ DEFAULT_HOUSEHOLD_SIZE = 2
 CONF_WATER_HARDNESS = "water_hardness"
 DEFAULT_WATER_HARDNESS = 30.0  # °fH (Moyenne Lyon)
 
+# Abonnement annuel fixe (hors consommation) pour calcul du coût réel
+# Comprend : part fixe abonnement eau + assainissement (hors consommation)
+# Valeur indicative Grand Lyon 2024 : ~180€/an — à ajuster selon votre facture
+CONF_SUBSCRIPTION_ANNUAL = "subscription_annual"
+DEFAULT_SUBSCRIPTION_ANNUAL = 0.0  # 0 = fonctionnement identique à avant
+

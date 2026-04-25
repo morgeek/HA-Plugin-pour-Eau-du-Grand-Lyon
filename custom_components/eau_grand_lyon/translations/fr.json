@@ -33,13 +33,15 @@
           "price_entity": "Entité de prix dynamique (sensor)",
           "experimental_api": "⚗️ Mode expérimental (nouveaux endpoints API 2026)",
           "household_size": "Nombre d'habitants du foyer",
-          "water_hardness": "Dureté de l'eau (°fH)"
+          "water_hardness": "Dureté de l'eau (°fH)",
+          "subscription_annual": "💶 Abonnement annuel fixe (€/an)"
         },
         "data_description": {
           "price_entity": "Optionnel : Sélectionnez une entité (ex. sensor.prix_eau) pour utiliser le prix actuel au lieu de la valeur statique.",
           "experimental_api": "Active les nouveaux endpoints /rest/produits/ découverts dans le bundle Angular 2026 : factures réelles, fuite estimée journalière, courbe de charge. Un fallback automatique sur les anciens endpoints est toujours actif. Désactivez si vous observez des erreurs inattendues.",
           "household_size": "Utilisé pour calculer l'Eco-Score et les conseils personnalisés de l'Eco-Coach.",
-          "water_hardness": "Dureté en degrés Français (°fH). Utilisé pour estimer l'entartrage de vos appareils. Si vous avez un adoucisseur, réglez sur la dureté de sortie (ex. 10-15 °fH)."
+          "water_hardness": "Dureté en degrés Français (°fH). Utilisé pour estimer l'entartrage de vos appareils. Si vous avez un adoucisseur, réglez sur la dureté de sortie (ex. 10-15 °fH).",
+          "subscription_annual": "Montant annuel de la partie fixe de votre abonnement eau (hors consommation). Visible sur votre facture annuelle. Ex : 180 €/an. Laissez à 0 pour conserver l'ancien comportement."
         }
       }
     }
@@ -52,6 +54,59 @@
     "long_outage": {
       "title": "Panne API prolongée (Eau du Grand Lyon)",
       "description": "L'intégration n'a pas pu se synchroniser avec le serveur depuis plus de 7 jours. \n\n**Actions recommandées :**\n1. Vérifiez que vos identifiants sont toujours valides sur le site officiel.\n2. Vérifiez si le site `agence.eaudugrandlyon.com` est en maintenance.\n3. Essayez de recharger l'intégration."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "water_index":        { "name": "Index compteur" },
+      "energy_water":       { "name": "Consommation (Énergie)" },
+      "energy_cost":        { "name": "Coût (Énergie)" },
+      "conso_courant":      { "name": "Consommation mois courant" },
+      "conso_precedent":    { "name": "Consommation mois précédent" },
+      "conso_annuelle":     { "name": "Consommation annuelle" },
+      "conso_7j":           { "name": "Consommation 7 jours" },
+      "conso_30j":          { "name": "Consommation 30 jours" },
+      "cout_mois":          { "name": "Coût mois courant" },
+      "cout_annuel":        { "name": "Coût annuel estimé" },
+      "cout_cumule":        { "name": "Coût cumulé (Année)" },
+      "economie":           { "name": "Économie potentielle" },
+      "solde":              { "name": "Solde du compte" },
+      "statut":             { "name": "Statut du contrat" },
+      "date_echeance":      { "name": "Fin de contrat" },
+      "derniere_facture":   { "name": "Dernière facture" },
+      "fuite_estimee":      { "name": "Fuite estimée (30j)" },
+      "trend":              { "name": "Tendance vs N-1" },
+      "prediction_conso":   { "name": "Prédiction consommation mois" },
+      "prediction_cost":    { "name": "Prédiction coût mois" },
+      "eco_score":          { "name": "Eco-Score (m³/pers/mois)" },
+      "co2_footprint":      { "name": "Empreinte CO2" },
+      "signal":             { "name": "Signal Téléo" },
+      "alertes":            { "name": "Nombre d'alertes" },
+      "last_update":        { "name": "Dernière mise à jour" },
+      "health":             { "name": "Santé de l'intégration" },
+      "global_conso":       { "name": "Consommation totale" },
+      "global_cost":        { "name": "Coût total" },
+      "global_prediction":  { "name": "Prédiction coût total" },
+      "drought":            { "name": "Niveau de sécheresse" },
+      "limescale":          { "name": "Calcaire cumulé" },
+      "coaching":           { "name": "Conseil Eco-Coach" },
+      "cout_reel_mois":     { "name": "Coût réel mensuel (avec abonnement)" },
+      "cout_reel_annuel":   { "name": "Coût réel annuel (avec abonnement)" },
+      "hourly_conso":       { "name": "Consommation dernière heure" },
+      "peak_hour":          { "name": "Heure de pic de consommation" },
+      "avg_flow":           { "name": "Débit moyen horaire" },
+      "water_hardness_live":{ "name": "Dureté de l'eau (Open Data)" },
+      "nitrates":           { "name": "Nitrates (Open Data)" },
+      "chlore":             { "name": "Chlore résiduel (Open Data)" },
+      "next_outage":        { "name": "Prochaine interruption de service" }
+    },
+    "binary_sensor": {
+      "leak_alert":       { "name": "Alerte fuite possible" },
+      "real_time_leak":   { "name": "Détection fuite (Téléo)" },
+      "local_leak":       { "name": "Alerte fuite (Pattern local)" },
+      "battery":          { "name": "Batterie module Téléo" },
+      "limescale_alert":  { "name": "Alerte maintenance calcaire" },
+      "outage_alert":     { "name": "Interruption de service (Travaux/Coupure)" }
     }
   },
   "services": {

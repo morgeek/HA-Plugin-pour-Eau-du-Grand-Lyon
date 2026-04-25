@@ -1,0 +1,83 @@
+blueprint:
+  name: "💧 Eau Grand Lyon — Alerte Fuite"
+  description: >
+    Envoie une notification personnalisée dès qu'une alerte fuite est détectée
+    par l'intégration Eau du Grand Lyon (surconsommation, pattern constant ou
+    fuite Téléo estimée). Compatible Companion App, Telegram, Pushover et tout
+    service de notification HA.
+  domain: automation
+  source_url: https://github.com/Morgeek/eau_grand_lyon
+  input:
+    sensor_fuite:
+      name: Capteur d'alerte fuite
+      description: >
+        Choisissez le binary_sensor de fuite à surveiller.
+        - **Alerte fuite possible** : surconsommation mensuelle ×2
+        - **Détection fuite (Téléo)** : volume fuite estimé (mode expérimental)
+        - **Alerte fuite (Pattern local)** : consommation constante 24h+
+      selector:
+        entity:
+          integration: eau_grand_lyon
+          domain: binary_sensor
+    service_notification:
+      name: Service de notification
+      description: "Nom du service de notification (ex: notify.mobile_app_iphone)"
+      selector:
+        select:
+          custom_value: true
+          options: []
+    titre_notification:
+      name: Titre de la notification
+      description: "Titre affiché dans la notification"
+      default: "💧 Alerte Fuite d'Eau"
+      selector:
+        text:
+    actions_supplementaires:
+      name: Actions supplémentaires (optionnel)
+      description: >
+        Actions à exécuter en plus de la notification (ex: fermer une vanne motorisée).
+      default: []
+      selector:
+        action:
+
+variables:
+  sensor_entity: !input sensor_fuite
+
+trigger:
+  - platform: state
+    entity_id: !input sensor_fuite
+    to: "on"
+    for:
+      minutes: 5
+
+condition:
+  - condition: state
+    entity_id: !input sensor_fuite
+    state: "on"
+
+action:
+  - service: !input service_notification
+    data:
+      title: !input titre_notification
+      message: >
+        ⚠️ Une alerte fuite a été détectée sur votre compteur Eau du Grand Lyon.
+
+        📊 Capteur : {{ state_attr(sensor_entity, 'friendly_name') }}
+        📅 Heure de détection : {{ now().strftime('%d/%m/%Y à %H:%M') }}
+
+        Vérifiez votre installation et consultez l'espace client sur
+        https://agence.eaudugrandlyon.com
+      data:
+        tag: eau_grand_lyon_fuite
+        actions:
+          - action: URI
+            title: "🌐 Espace client"
+            uri: https://agence.eaudugrandlyon.com
+          - action: URI
+            title: "🏠 Dashboard HA"
+            uri: homeassistant://navigate/lovelace/eau
+  - choose: []
+    default: !input actions_supplementaires
+
+mode: single
+max_exceeded: silent

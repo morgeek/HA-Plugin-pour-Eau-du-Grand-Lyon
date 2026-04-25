@@ -1,0 +1,87 @@
+blueprint:
+  name: "🚧 Eau Grand Lyon — Alerte Coupure / Travaux"
+  description: >
+    Envoie une notification quand une interruption de service (travaux, coupure)
+    est détectée ou imminente (dans les 48h). Basé sur le binary_sensor
+    "Interruption de service" de l'intégration Eau du Grand Lyon.
+  domain: automation
+  source_url: https://github.com/Morgeek/eau_grand_lyon
+  input:
+    binary_sensor_coupure:
+      name: Capteur d'interruption de service
+      description: >
+        Sélectionnez le binary_sensor "Interruption de service (Travaux/Coupure)"
+        créé par l'intégration Eau du Grand Lyon.
+      selector:
+        entity:
+          integration: eau_grand_lyon
+          domain: binary_sensor
+    sensor_date_coupure:
+      name: Capteur date prochaine interruption (optionnel)
+      description: >
+        Sélectionnez le sensor "Prochaine interruption de service" pour afficher
+        la date dans la notification. Laissez vide si non disponible.
+      default: ""
+      selector:
+        entity:
+          integration: eau_grand_lyon
+          domain: sensor
+    service_notification:
+      name: Service de notification
+      description: "Nom du service de notification (ex: notify.mobile_app_iphone)"
+      selector:
+        select:
+          custom_value: true
+          options: []
+    actions_preparation:
+      name: Actions de préparation (optionnel)
+      description: >
+        Actions à exécuter avant la coupure (ex: remplir une cuve de réserve,
+        activer un mode économie).
+      default: []
+      selector:
+        action:
+
+variables:
+  sensor_coupure: !input binary_sensor_coupure
+  sensor_date: !input sensor_date_coupure
+  titre_coupure: "{{ state_attr(sensor_coupure, 'prochaine_titre') or 'Interruption eau planifiée' }}"
+  date_debut: "{{ state_attr(sensor_coupure, 'prochaine_date') or 'date inconnue' }}"
+  date_fin: "{{ state_attr(sensor_coupure, 'prochaine_fin') or date_debut }}"
+  type_inter: "{{ state_attr(sensor_coupure, 'prochaine_type') or 'TRAVAUX' }}"
+
+trigger:
+  - platform: state
+    entity_id: !input binary_sensor_coupure
+    to: "on"
+
+condition:
+  - condition: state
+    entity_id: !input binary_sensor_coupure
+    state: "on"
+
+action:
+  - service: !input service_notification
+    data:
+      title: >
+        {% if 'TRAVAUX' in type_inter %}🚧{% else %}🔴{% endif %} Interruption eau prévue
+      message: >
+        Une interruption de service eau est prévue prochainement.
+
+        📋 {{ titre_coupure }}
+        📅 Début : {{ date_debut }}
+        📅 Fin prévue : {{ date_fin }}
+        🔧 Type : {{ type_inter }}
+
+        Pensez à faire vos réserves d'eau avant la coupure.
+      data:
+        tag: eau_grand_lyon_coupure
+        actions:
+          - action: URI
+            title: "🌐 Espace client"
+            uri: https://agence.eaudugrandlyon.com
+  - choose: []
+    default: !input actions_preparation
+
+mode: single
+max_exceeded: silent

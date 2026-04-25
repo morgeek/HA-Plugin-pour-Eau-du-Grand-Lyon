@@ -31,19 +31,80 @@
           "update_interval_hours": "Update frequency",
           "tarif_m3": "Static price per m³ (€)",
           "price_entity": "Dynamic price entity (sensor)",
-          "experimental_api": "⚗️ Experimental mode (2026 API endpoints)"
+          "experimental_api": "⚗️ Experimental mode (2026 API endpoints)",
+          "household_size": "Number of household occupants",
+          "water_hardness": "Water hardness (°fH)",
+          "subscription_annual": "💶 Annual fixed subscription (€/yr)"
         },
         "data_description": {
           "price_entity": "Optional: Select an entity (e.g. sensor.water_price) to use as the current price instead of the static value.",
-          "experimental_api": "Enables new /rest/produits/ endpoints discovered in the 2026 Angular bundle: real invoices, daily estimated leaks, load curves. Automatic fallback to old endpoints is always active."
+          "experimental_api": "Enables new /rest/produits/ endpoints discovered in the 2026 Angular bundle: real invoices, daily estimated leaks, load curves. Automatic fallback to old endpoints is always active.",
+          "subscription_annual": "Annual fixed subscription cost (excluding consumption). Visible on your annual invoice. Ex: 180 €/yr. Leave at 0 to keep previous behavior."
         }
       }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "water_index":        { "name": "Meter index" },
+      "energy_water":       { "name": "Consumption (Energy)" },
+      "energy_cost":        { "name": "Cost (Energy)" },
+      "conso_courant":      { "name": "Current month consumption" },
+      "conso_precedent":    { "name": "Previous month consumption" },
+      "conso_annuelle":     { "name": "Annual consumption" },
+      "conso_7j":           { "name": "7-day consumption" },
+      "conso_30j":          { "name": "30-day consumption" },
+      "cout_mois":          { "name": "Current month cost" },
+      "cout_annuel":        { "name": "Estimated annual cost" },
+      "cout_cumule":        { "name": "Cumulative cost (year)" },
+      "economie":           { "name": "Potential savings" },
+      "solde":              { "name": "Account balance" },
+      "statut":             { "name": "Contract status" },
+      "date_echeance":      { "name": "Contract end date" },
+      "derniere_facture":   { "name": "Latest invoice" },
+      "fuite_estimee":      { "name": "Estimated leak (30d)" },
+      "trend":              { "name": "Trend vs last year" },
+      "prediction_conso":   { "name": "Month consumption forecast" },
+      "prediction_cost":    { "name": "Month cost forecast" },
+      "eco_score":          { "name": "Eco-Score (m³/person/month)" },
+      "co2_footprint":      { "name": "CO2 footprint" },
+      "signal":             { "name": "Téléo signal" },
+      "alertes":            { "name": "Number of alerts" },
+      "last_update":        { "name": "Last update" },
+      "health":             { "name": "Integration health" },
+      "global_conso":       { "name": "Total consumption" },
+      "global_cost":        { "name": "Total cost" },
+      "global_prediction":  { "name": "Total cost forecast" },
+      "drought":            { "name": "Drought level" },
+      "limescale":          { "name": "Cumulative limescale" },
+      "coaching":           { "name": "Eco-Coach tip" },
+      "cout_reel_mois":     { "name": "Real monthly cost (with subscription)" },
+      "cout_reel_annuel":   { "name": "Real annual cost (with subscription)" },
+      "hourly_conso":       { "name": "Last hour consumption" },
+      "peak_hour":          { "name": "Peak consumption hour" },
+      "avg_flow":           { "name": "Average hourly flow" },
+      "water_hardness_live":{ "name": "Water hardness (Open Data)" },
+      "nitrates":           { "name": "Nitrates (Open Data)" },
+      "chlore":             { "name": "Residual chlorine (Open Data)" },
+      "next_outage":        { "name": "Next service interruption" }
+    },
+    "binary_sensor": {
+      "leak_alert":       { "name": "Possible leak alert" },
+      "real_time_leak":   { "name": "Real-time leak detection (Téléo)" },
+      "local_leak":       { "name": "Local leak pattern alert" },
+      "battery":          { "name": "Téléo module battery" },
+      "limescale_alert":  { "name": "Limescale maintenance alert" },
+      "outage_alert":     { "name": "Service interruption (Works/Outage)" }
     }
   },
   "issues": {
     "drought_alert": {
       "title": "Drought Alert: Level {level}",
       "description": "The Rhône department is currently at the **{level}** restriction level. Water usage restrictions (watering, car washing, etc.) apply. Check the prefecture's website for more details."
+    },
+    "long_outage": {
+      "title": "Prolonged API outage (Eau du Grand Lyon)",
+      "description": "The integration has not been able to synchronize with the server for more than 7 days. Please check your credentials and the official website status."
     }
   }
 }

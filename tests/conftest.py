@@ -30,6 +30,7 @@ def _make_ha_stubs() -> None:
         "homeassistant.components.repairs",
         "homeassistant.util",
         "homeassistant.util.dt",
+        "homeassistant.helpers.typing",
     ]
     for mod in mods:
         sys.modules[mod] = MagicMock()
