@@ -5,6 +5,31 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-04-26
+(Merci @hufon) pour le code !
+
+### Ajouté
+- **Hardening API 2026** : Refonte massive du parsing des données journalières pour supporter les variations de clés de l'API (`volume`, `quantite`, `valeur`, `consommation`) et les structures multi-postes.
+- **Consommation Moyenne (L/jour)** : Nouveau capteur calculant la moyenne glissante sur 7 jours, affichée en Litres pour une meilleure lisibilité.
+- **Bouton de Facturation** : Ajout d'un bouton physique dans l'interface pour déclencher le téléchargement de la dernière facture PDF (mode expérimental).
+- **Qualité de l'Eau (Open Data)** : Intégration automatisée avec le portail Open Data de la Métropole de Lyon (Dureté, Nitrates, Chlore, Turbidité).
+- **Capteur de Compatibilité** : Détection automatique du type de compteur (Téléo vs Standard) pour clarifier la disponibilité des données journalières.
+- **Calendrier Hardened** : Amélioration de la robustesse du calendrier face aux formats de dates exotiques et intégration des interruptions de service.
+- **Suivi Sécheresse & Repairs** : Gestion native des niveaux de vigilance sécheresse du Rhône avec intégration dans la plateforme Repairs de HA.
+- **Icônes Dynamiques** : Les capteurs (ex: Nitrates, Fuites) changent d'icône selon la sévérité des données.
+- **Courbe de Charge Horaire** : Support expérimental des données de consommation heure par heure pour les compteurs Téléo récents.
+- **Consommation d'Hier** : Nouveau capteur en Litres pour un suivi quotidien simplifié.
+- **Index Journalier Robuste** : Refonte du parsing de l'index avec support de 9 synonymes de clés et détection automatique des unités (L vs m³).
+
+### Corrigé
+- **Bug Économie Annuelle** : Correction de la formule de calcul du capteur d'économie qui comparait un mois à une année entière. Désormais, la comparaison se fait sur 12 mois vs 12 mois.
+- **Fallback 30 jours** : Si l'historique journalier de 90 jours échoue, l'intégration tente automatiquement un fallback sur 30 jours pour éviter de perdre les données.
+
+### Optimisé
+- **Vérification de Non-Régression** : Tests de parsing automatisés intégrés pour garantir la stabilité face aux changements côté serveur (gestion des mois indexés à 0, conversion L/m³ et normalisation de l'index).
+- **Performance Globale** : Consolidation du Rate Limiting et parallélisation des appels API pour une mise à jour plus rapide et discrète.
+- **Nettoyage Code** : Suppression des doublons et des fonctions legacy orphelines dans le coordinateur.
+
 ## [2.4.0] - 2026-04-25
 
 ### Ajouté

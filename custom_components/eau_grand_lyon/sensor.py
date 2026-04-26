@@ -55,7 +55,10 @@ async def async_setup_entry(
         )
         entities.append(EauGrandLyonConsommationAnnuelleSensor(coordinator, entry, ref))
         # ── Consommations journalières (si compteur compatible) ───────
+        entities.append(EauGrandLyonYesterdaySensor(coordinator, entry, ref))
+        entities.append(EauGrandLyonIndexJournalierSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonConso7JSensor(coordinator, entry, ref))
+        entities.append(EauGrandLyonConsoMoyenne7JSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonConso30JSensor(coordinator, entry, ref))
         # ── Coûts estimés ─────────────────────────────────────────────
         entities.append(EauGrandLyonCoutMoisSensor(coordinator, entry, ref))
@@ -66,6 +69,10 @@ async def async_setup_entry(
         entities.append(EauGrandLyonSoldeSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonStatutSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonDateEcheanceSensor(coordinator, entry, ref))
+        entities.append(EauGrandLyonProchaineFactureSensor(coordinator, entry, ref))
+        entities.append(EauGrandLyonProchaineReleveSensor(coordinator, entry, ref))
+        entities.append(EauGrandLyonConsoAnnuelleRefSensor(coordinator, entry, ref))
+        entities.append(EauGrandLyonCompatibilitySensor(coordinator, entry, ref))
         if experimental:
             entities.append(EauGrandLyonDerniereFactureSensor(coordinator, entry, ref))
             entities.append(EauGrandLyonFuiteEstimeeSensor(coordinator, entry, ref))
@@ -188,16 +195,7 @@ class EauGrandLyonIndexSensor(_EauGrandLyonBase):
 
     @property
     def native_value(self) -> float | None:
-        # Priorité à l'index réel (SIAMM/Téléo) si disponible
-        real = self._contract.get("real_index")
-        if real is not None:
-            return round(real, 1)
-
-        # Fallback : somme des consommations mensuelles
-        consos = self._contract.get("consommations", [])
-        if not consos:
-            return None
-        return round(sum(e["consommation_m3"] for e in consos), 1)
+        return self.coordinator.get_cumulative_index(self._contract_ref)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -210,6 +208,55 @@ class EauGrandLyonIndexSensor(_EauGrandLyonBase):
             "mois_manquants": manquants,
             "nb_mois_manquants": len(manquants),
             "note": "Somme cumulée — historique injecté dans les statistiques HA.",
+        }
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Index journalier (hufon) — dernier index connu depuis données Téléo
+# ══════════════════════════════════════════════════════════════════════
+
+class EauGrandLyonIndexJournalierSensor(_EauGrandLyonBase):
+    """Dernier index compteur connu depuis les données journalières Téléo (m³).
+
+    Inspiré du fork hufon/HA-Plugin-pour-Eau-du-Grand-Lyon.
+    N'est disponible que sur les compteurs communicants Téléo dont les données
+    journalières incluent un champ 'index'. L'entité passe unavailable si aucun
+    index n'est présent dans les données récupérées.
+    """
+
+    _attr_device_class = SensorDeviceClass.WATER
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = "m³"
+    _attr_icon = "mdi:counter"
+    translation_key = "index_journalier"
+    _attr_suggested_display_precision = 3
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_index_journalier"
+
+    @property
+    def available(self) -> bool:
+        """Disponible uniquement si un index journalier a été trouvé."""
+        if not self.coordinator.data:
+            return False
+        return self._contract.get("index_journalier_dernier") is not None
+
+    @property
+    def native_value(self) -> float | None:
+        return self._contract.get("index_journalier_dernier")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        c = self._contract
+        return {
+            "date_index":    c.get("index_journalier_dernier_date"),
+            "source_donnee": c.get("daily_source", "Inconnue"),
+            "nb_jours":      c.get("daily_nb_entries", 0),
+            "note": (
+                "Index lu dans les données journalières Téléo. "
+                "Unavailable si le compteur ne transmet pas l'index."
+            ),
         }
 
 
@@ -343,6 +390,42 @@ class _EauGrandLyonDailyBase(_EauGrandLyonBase):
         )
 
 
+class EauGrandLyonYesterdaySensor(_EauGrandLyonDailyBase):
+    """Consommation de la veille (dernier jour disponible) en Litres."""
+
+    _attr_device_class = SensorDeviceClass.WATER
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = "L"
+    _attr_icon = "mdi:water-sync"
+    translation_key = "conso_hier"
+    _attr_suggested_display_precision = 0
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_conso_hier"
+
+    @property
+    def native_value(self) -> float | None:
+        daily = self._contract.get("consommations_journalieres", [])
+        if not daily:
+            return None
+        # Prend le dernier jour disponible (souvent J-1 ou J-2)
+        last_val_m3 = daily[-1].get("consommation_m3")
+        if last_val_m3 is None:
+            return None
+        return round(last_val_m3 * 1000, 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        daily = self._contract.get("consommations_journalieres", [])
+        last_date = daily[-1].get("date") if daily else None
+        return {
+            "date_relevé": last_date,
+            "unité": "Litres",
+            "note": "Donnée de la veille (ou dernier jour connu par l'API)",
+        }
+
+
 class EauGrandLyonConso7JSensor(_EauGrandLyonDailyBase):
     """Consommation sur les 7 derniers jours (compteur Téléo/TIC uniquement)."""
 
@@ -366,6 +449,9 @@ class EauGrandLyonConso7JSensor(_EauGrandLyonDailyBase):
     def extra_state_attributes(self) -> dict[str, Any]:
         daily = self._contract.get("consommations_journalieres", [])
         return {
+            "source": self._contract.get("daily_source"),
+            "nb_entrées_total": self._contract.get("daily_nb_entries"),
+            "dernière_date_api": self._contract.get("daily_last_date"),
             "derniers_jours": [
                 {"date": e["date"], "consommation_m3": e["consommation_m3"]}
                 for e in daily[-7:]
@@ -398,11 +484,65 @@ class EauGrandLyonConso30JSensor(_EauGrandLyonDailyBase):
         # Attributs limités aux 14 derniers jours pour limiter le volume en BDD
         recent_14 = daily[-14:]
         return {
+            "source": self._contract.get("daily_source"),
+            "nb_entrées_total": self._contract.get("daily_nb_entries"),
+            "dernière_date_api": self._contract.get("daily_last_date"),
             "nb_jours_inclus": min(len(daily), 30),
             "derniers_jours": [
                 {"date": e["date"], "consommation_m3": e["consommation_m3"]}
                 for e in recent_14
             ],
+        }
+
+
+class EauGrandLyonCompatibilitySensor(_EauGrandLyonBase):
+    """Indique si le compteur est compatible avec la télé-relève (Téléo)."""
+
+    _attr_icon = "mdi:check-network"
+    translation_key = "compatibilite_compteur"
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_compatibility"
+
+    @property
+    def native_value(self) -> str:
+        if self._contract.get("teleo_compatible"):
+            return "Téléo (Télé-relève)"
+        return "Standard (Relève manuelle)"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "nb_entrées_journalières": self._contract.get("daily_nb_entries", 0),
+            "signal_pct": self._contract.get("signal_pct"),
+            "pile_ok": self._contract.get("battery_ok"),
+        }
+
+
+class EauGrandLyonConsoMoyenne7JSensor(_EauGrandLyonDailyBase):
+    """Consommation moyenne journalière sur 7 jours (L/jour)."""
+
+    _attr_device_class = SensorDeviceClass.WATER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "L"
+    _attr_icon = "mdi:water-plus"
+    translation_key = "conso_moyenne_7j"
+    _attr_suggested_display_precision = 0
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_conso_moyenne_7j"
+
+    @property
+    def native_value(self) -> float | None:
+        return self._contract.get("conso_moyenne_7j_litres")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "période": "7 derniers jours",
+            "unité": "Litres par jour",
         }
 
 
@@ -521,11 +661,11 @@ class EauGrandLyonEconomieSensor(_EauGrandLyonBase):
     @property
     def native_value(self) -> float | None:
         c = self._contract
-        conso_n1 = c.get("consommation_n1")
+        conso_n1_annuelle = c.get("consommation_annuelle_n1")
         conso_annuelle = c.get("consommation_annuelle")
         tarif = c.get("tarif_m3")
-        if conso_n1 and conso_annuelle and tarif:
-            economie = (conso_n1 - conso_annuelle) * tarif
+        if conso_n1_annuelle is not None and conso_annuelle is not None and tarif:
+            economie = (conso_n1_annuelle - conso_annuelle) * tarif
             return round(economie, 2)
         return None
 
@@ -533,9 +673,10 @@ class EauGrandLyonEconomieSensor(_EauGrandLyonBase):
     def extra_state_attributes(self) -> dict[str, Any]:
         c = self._contract
         return {
-            "consommation_n1_m3": c.get("consommation_n1"),
+            "consommation_n1_annuelle_m3": c.get("consommation_annuelle_n1"),
             "consommation_actuelle_m3": c.get("consommation_annuelle"),
             "tarif_eur_m3": c.get("tarif_m3"),
+            "note": "Comparaison basée sur les 12 derniers mois vs les 12 mois précédents.",
         }
 
 
@@ -634,6 +775,94 @@ class EauGrandLyonDateEcheanceSensor(_EauGrandLyonBase):
 
 
 # ══════════════════════════════════════════════════════════════════════
+# Prochaine facture (date réelle API)
+# ══════════════════════════════════════════════════════════════════════
+
+class EauGrandLyonProchaineFactureSensor(_EauGrandLyonBase):
+    """Date de la prochaine facture — issue de l'API /dateProchaineFacture."""
+
+    _attr_device_class = SensorDeviceClass.DATE
+    _attr_icon = "mdi:calendar-text"
+    translation_key = "prochaine_facture"
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_prochaine_facture"
+
+    @property
+    def native_value(self) -> date | None:
+        raw = self._contract.get("next_bill_date")
+        if raw:
+            try:
+                return date.fromisoformat(raw)
+            except ValueError:
+                return None
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "source": "API /dateProchaineFacture" if self._contract.get("next_bill_date") else "estimation",
+        }
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Prochain relevé compteur
+# ══════════════════════════════════════════════════════════════════════
+
+class EauGrandLyonProchaineReleveSensor(_EauGrandLyonBase):
+    """Date du prochain relevé compteur — issue de /pointDeService."""
+
+    _attr_device_class = SensorDeviceClass.DATE
+    _attr_icon = "mdi:counter"
+    translation_key = "prochaine_releve"
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_prochaine_releve"
+
+    @property
+    def native_value(self) -> date | None:
+        raw = self._contract.get("date_prochaine_releve")
+        if raw:
+            try:
+                return date.fromisoformat(raw)
+            except ValueError:
+                return None
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "mode_releve":          self._contract.get("pds_mode_releve"),
+            "communicabilite_amm":  self._contract.get("pds_communicabilite_amm"),
+        }
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Consommation annuelle de référence (profil contrat)
+# ══════════════════════════════════════════════════════════════════════
+
+class EauGrandLyonConsoAnnuelleRefSensor(_EauGrandLyonBase):
+    """Consommation annuelle de référence du profil contrat (m³/an)."""
+
+    _attr_device_class = SensorDeviceClass.WATER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "m³"
+    _attr_icon = "mdi:water-circle"
+    translation_key = "conso_annuelle_ref"
+    _attr_suggested_display_precision = 0
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_conso_annuelle_ref"
+
+    @property
+    def native_value(self) -> float | None:
+        return self._contract.get("conso_annuelle_ref_m3")
+
+
+# ══════════════════════════════════════════════════════════════════════
 # Tableau de bord Énergie HA
 # ══════════════════════════════════════════════════════════════════════
 
@@ -654,16 +883,7 @@ class EauGrandLyonEnergyWaterSensor(_EauGrandLyonBase):
 
     @property
     def native_value(self) -> float | None:
-        # Priorité à l'index réel (SIAMM/Téléo) si disponible
-        real = self._contract.get("real_index")
-        if real is not None:
-            return round(real, 1)
-
-        # Fallback : somme des consommations mensuelles
-        consos = self._contract.get("consommations", [])
-        if not consos:
-            return None
-        return round(sum(e["consommation_m3"] for e in consos), 1)
+        return self.coordinator.get_cumulative_index(self._contract_ref)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -697,16 +917,10 @@ class EauGrandLyonEnergyCostSensor(_EauGrandLyonBase):
         if not tarif:
             return None
 
-        # Priorité à l'index réel (SIAMM/Téléo) si disponible
-        real = self._contract.get("real_index")
-        if real is not None:
-            return round(real * tarif, 2)
-
-        # Fallback : somme des consommations mensuelles
-        consos = self._contract.get("consommations", [])
-        if not consos:
-            return None
-        return round(sum(e["consommation_m3"] for e in consos) * tarif, 2)
+        index = self.coordinator.get_cumulative_index(self._contract_ref)
+        if index is not None:
+            return round(index * tarif, 2)
+        return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

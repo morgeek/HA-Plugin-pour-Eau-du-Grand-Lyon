@@ -128,7 +128,23 @@
       "water_hardness_live": { "name": "Dureté de l'eau (Open Data)" },
       "nitrates": { "name": "Nitrates (Open Data)" },
       "chlore": { "name": "Chlore résiduel (Open Data)" },
-      "next_outage": { "name": "Prochaine interruption de service" }
+      "next_outage": { "name": "Prochaine interruption de service" },
+      "compatibilite_compteur": { "name": "Compatibilité compteur" },
+      "index_journalier": { "name": "Index journalier (Energy)" },
+      "conso_moyenne_7j": { "name": "Consommation moyenne (7j)" },
+      "conso_hier": { "name": "Consommation d'hier" },
+      "prochaine_facture": { "name": "Prochaine facture" },
+      "prochaine_releve": { "name": "Prochain relevé compteur" },
+      "conso_annuelle_ref": { "name": "Conso. annuelle de référence" }
+    },
+    "button": {
+      "download_invoice": { "name": "Télécharger la dernière facture" }
+    },
+    "switch": {
+      "vacation_mode": { "name": "Mode vacances" }
+    },
+    "calendar": {
+      "billing_events": { "name": "Échéances & Facturation" }
     },
     "binary_sensor": {
       "leak_alert": { "name": "Alerte fuite possible" },

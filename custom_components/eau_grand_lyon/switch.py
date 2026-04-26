@@ -27,7 +27,7 @@ class EauGrandLyonVacationSwitch(SwitchEntity):
     _attr_has_entity_name = True
     _attr_device_class = SwitchDeviceClass.SWITCH
     _attr_icon = "mdi:suitcase"
-    _attr_name = "Mode vacances"
+    translation_key = "vacation_mode"
 
     def __init__(self, coordinator: Any, entry: ConfigEntry) -> None:
         self.coordinator = coordinator

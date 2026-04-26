@@ -16,6 +16,19 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
 
 Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
 
+### 🚀 Hardening & Features Pack (v2.5.0)
+- **Hardening API 2026** : Parsing ultra-robuste des volumes journaliers (support multi-clés et structures API variées).
+- **Consommation Moyenne (L/j)** : Nouveau capteur glissant en **Litres** pour une vision plus concrète du quotidien.
+- **Capteur de Compatibilité** : Détection automatique Téléo vs Standard pour clarifier la disponibilité des données.
+- **Bouton Facture Direct** : Téléchargez votre dernière facture PDF en un clic depuis l'interface HA.
+- **Qualité de l'Eau Open Data** : Dureté, Nitrates et Chlore en temps réel via les données de la Métropole de Lyon, avec alertes sur les seuils sanitaires.
+- **Consommation d'Hier** : Suivez votre volume consommé la veille directement en Litres.
+- **Index Journalier (Energy)** : Nouveau capteur d'index cumulé haute précision, idéal pour le panneau Énergie de HA.
+- **Courbe de Charge Horaire** : Visualisez votre consommation heure par heure (compteurs Téléo compatibles).
+- **Stabilité Totale** : Mise en place de tests de non-régression et correction du bug de calcul de l'économie vs N-1.
+- **Correction Bug Économie** : Correction de la formule de calcul du capteur d'économie qui comparait un mois à une année entière (désormais : 12 mois vs 12 mois).
+- **Fallback 30 jours** : Si l'historique journalier de 90 jours échoue, l'intégration tente automatiquement un fallback sur 30 jours pour éviter de perdre les données.
+
 ### 🚀 Modernisation HA 2026 (v2.4.0)
 - **Pleine Conformité HA 2026** : Alignement total avec les standards de développement Home Assistant 2026.
 - **Internationalisation Native** : Support complet des `translation_key` pour une interface multilingue fluide.
@@ -25,16 +38,21 @@ Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
 ### 🧠 Intelligence Avancée & Coaching "Platinum"
 - **Eco-Coach (IA) 💎** : Sensor de conseil personnalisé qui analyse vos habitudes pour vous aider à réduire votre consommation quotidiennement.
 - **Eco-Score (A-G)** : Note de performance environnementale basée sur le nombre d'habitants et les barèmes nationaux.
-- **Entartrage Virtuel** : Estimation exclusive de l'accumulation de calcaire (en grammes) basée sur la dureté de l'eau configurée, pour anticiper l'entretien de vos appareils.
+- **Entartrage Virtuel** : Estimation exclusive de l'accumulation de calcaire (en grammes) basée sur la dureté de l'eau configurée.
 - **Empreinte Carbone (CO₂e)** : Calcul automatique de l'impact écologique de votre consommation d'eau (kg CO₂e).
-- **Prédictions Fin de Mois** : Algorithmes prédictifs pour estimer le volume et le coût final de votre facture avant même de la recevoir.
-- **Tendance vs N-1** : Comparaison intelligente avec la même période de l'année précédente pour détecter les dérives.
+- **Prédictions Fin de Mois** : Algorithmes prédictifs pour estimer le volume et le coût final de votre facture.
+- **Consommation Moyenne (L/jour) 💧** : Affiche votre consommation moyenne glissante sur 7 jours en **Litres**. Idéal pour comparer avec les moyennes nationales (env. 150L/pers/jour).
+- **Tendance vs N-1** : Comparaison intelligente avec la même période de l'année précédente (Annuelle vs Annuelle).
 
 ### 🛡️ Sécurité & Alertes
 - **Détection Fuite Temps Réel (Téléo)** : Basé sur les alertes officielles du compteur.
 - **Détection Fuite Locale (Pattern)** : Analyse intelligente du flux constant (idéal pour compteurs legacy).
 - **Mode Vacances** : Switch de surveillance renforcée (alerte immédiate pour toute consommation > 1L).
-- **Suivi Sécheresse (69)** : Sensor dédié aux restrictions préfectorales du Rhône.
+- **Suivi Sécheresse & Repairs** : Gestion native des niveaux de vigilance sécheresse du Rhône avec intégration dans la plateforme Repairs de HA.
+- **Icônes Dynamiques** : Les capteurs (ex: Nitrates, Fuites) changent d'icône selon la sévérité des données.
+- **Courbe de Charge Horaire** : Support expérimental des données de consommation heure par heure pour les compteurs Téléo récents.
+- **Consommation d'Hier** : Nouveau capteur dédié affichant la consommation du dernier jour connu en **Litres**.
+- **Index Journalier Robuste** : Amélioration du parsing de l'index journalier avec support de 9 synonymes de clés API (inspiré du travail de @hufon).
 - **Repairs HA** : Intégration des alertes sécheresse critiques directement dans le tableau de bord "Réparations" de Home Assistant.
 
 ### 🛠️ Services Pro & Utilitaires

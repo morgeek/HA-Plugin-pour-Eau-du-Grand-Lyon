@@ -156,7 +156,6 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             entry.data[CONF_PASSWORD],
             experimental=experimental,
         )
-        self._prev_nb_alertes: int = 0
         self._last_request_mono: float | None = None
         self._min_request_delay_s: float = 30.0  # rate limiting : 30 s min entre requêtes
 
@@ -334,8 +333,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         interruptions = _parse_outage_alertes(alertes)
         prochaine_coupure = interruptions[0] if interruptions else None
 
-        # Qualité de l'eau (Open Data Métropole Lyon) — best-effort, sans auth
-        water_quality = await self.api.get_water_quality()
+        # Qualité de l'eau (Open Data Métropole Lyon) + interventions planifiées — en parallèle
+        water_quality, interventions_planifiees = await asyncio.gather(
+            self.api.get_water_quality(),
+            self.api.get_interventions(),
+        )
 
         tarif_m3 = self._calculate_tarif_m3()
 
@@ -379,19 +381,20 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         self._handle_alert_notifications(nb_alertes)
 
         return {
-            "contracts":           contracts_data,
-            "global":             global_data,
-            "drought_level":      drought_level,
-            "vacation_alert":     vacation_alert,
-            "nb_alertes":         nb_alertes,
-            "interruptions":      interruptions,
-            "prochaine_coupure":  prochaine_coupure,
-            "water_quality":      water_quality,
-            "experimental_mode":  experimental,
-            "api_mode":           "Experimental (2026)" if experimental else "Legacy",
-            "last_update_success_time": datetime.now(tz=timezone.utc),
-            "last_error":         None,
-            "last_error_type":    None,
+            "contracts":                  contracts_data,
+            "global":                     global_data,
+            "drought_level":              drought_level,
+            "vacation_alert":             vacation_alert,
+            "nb_alertes":                 nb_alertes,
+            "interruptions":              interruptions,
+            "prochaine_coupure":          prochaine_coupure,
+            "interventions_planifiees":   interventions_planifiees,
+            "water_quality":              water_quality,
+            "experimental_mode":          experimental,
+            "api_mode":                   "Experimental (2026)" if experimental else "Legacy",
+            "last_update_success_time":   datetime.now(tz=timezone.utc),
+            "last_error":                 None,
+            "last_error_type":            None,
         }
 
     def _calculate_tarif_m3(self) -> float:
@@ -418,13 +421,15 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         ref = details["reference"]
         cid = details["id"]
 
-        # ── Consommations mensuelles + journalières (en parallèle) ────────
-        raw_consos, raw_daily = await asyncio.gather(
+        # ── Consommations mensuelles + journalières + données PdS (en parallèle) ──
+        raw_consos, raw_daily_data, date_prochaine_facture, pds_etendu = await asyncio.gather(
             self.api.get_monthly_consumptions(cid),
             self.api.get_daily_consumptions(cid, nb_jours=90),
+            self.api.get_date_prochaine_facture(cid),
+            self.api.get_point_de_service_etendu(cid),
         )
         consos              = EauGrandLyonApi.format_consumptions(raw_consos)
-        consos_journalieres = EauGrandLyonApi.format_daily_consumptions(raw_daily)
+        consos_journalieres = raw_daily_data["entries"]
 
         conso_courant   = consos[-1]["consommation_m3"] if consos else None
         label_courant   = consos[-1]["label"]           if consos else None
@@ -439,17 +444,35 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             sum(e["consommation_m3"] for e in consos if e.get("annee") == current_year), 1
         )
 
-        # Comparaison N-1
-        conso_n1, label_n1 = self._get_consumption_n1(consos)
+        # Comparaison N-1 (Mois vs Mois N-1)
+        conso_mois_n1, label_n1 = self._get_consumption_n1(consos)
+
+        # Consommation annuelle N-1 (Mois -24 à -13 pour comparaison annuelle)
+        last_24 = consos[-24:-12] if len(consos) >= 24 else []
+        conso_annuelle_n1 = round(sum(e["consommation_m3"] for e in last_24), 1) if last_24 else None
 
         # Détection des mois manquants
         mois_manquants = _find_missing_months(consos)
 
         conso_7j, conso_30j = self._calculate_daily_aggregates(consos_journalieres)
 
+        # ── Index journalier le plus récent (capteur EauGrandLyonIndexJournalierSensor) ──
+        # Extrait depuis les données journalières, disponible sur compteurs Téléo.
+        index_journalier_dernier: float | None = None
+        index_journalier_dernier_date: str | None = None
+        for e in reversed(consos_journalieres):
+            idx = e.get("index_m3")
+            if idx is not None:
+                try:
+                    index_journalier_dernier = float(idx)
+                    index_journalier_dernier_date = e.get("date")
+                except (ValueError, TypeError):
+                    pass
+                break
+
         # ── [INTELLIGENCE] Tendance & Prédiction ──────────────────────────
         prediction_conso_mois, prediction_cout_mois, tendance_n1_pct = self._calculate_intelligence(
-            conso_courant, conso_n1, consos_journalieres, tarif_m3
+            conso_courant, conso_mois_n1, consos_journalieres, tarif_m3
         )
 
         # ── [ECO-SCORE] Analyse de performance ────────────────────────────
@@ -460,7 +483,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
 
         # ── [BILLING] Dates clés ──────────────────────────────────────────
         next_payment_date = details.get("date_echeance")
-        next_bill_date = self._estimate_next_bill_date(next_payment_date)
+        # Utilise la date réelle de l'API si disponible, sinon estimation locale
+        next_bill_date = date_prochaine_facture or self._estimate_next_bill_date(next_payment_date)
+        # Date du prochain relevé compteur (endpoint /pointDeService)
+        date_prochaine_releve = pds_etendu.get("date_prochaine_releve")
+        conso_annuelle_ref_m3 = pds_etendu.get("conso_annuelle_ref_m3")
 
         # ── [EXPÉRIMENTAL] Fuite estimée ──────────────────────────────────
         fuite_estime_30j_m3 = self._calculate_experimental_leak(experimental, consos_journalieres)
@@ -521,11 +548,16 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             "label_mois_precedent":        label_precedent,
             "consommation_annuelle":       conso_annuelle,
             "consommation_cumulee_annee":  conso_cumulee_annee,
-            "consommation_n1":             conso_n1,
+            "consommation_n1":             conso_mois_n1,
+            "consommation_annuelle_n1":    conso_annuelle_n1,
             "label_n1":                    label_n1,
             "mois_manquants":              mois_manquants,
             "consommations_journalieres":  consos_journalieres,
+            "daily_source":                raw_daily_data.get("source"),
+            "daily_nb_entries":            raw_daily_data.get("nb_entries"),
+            "daily_last_date":             raw_daily_data.get("last_date"),
             "consommation_7j":             conso_7j,
+            "conso_moyenne_7j_litres":     round((conso_7j * 1000) / 7, 1) if conso_7j is not None else None,
             "consommation_30j":            conso_30j,
             "cout_mois_courant_eur":       round(conso_courant * tarif_m3, 2) if conso_courant is not None else None,
             "cout_annuel_eur":             round(conso_annuelle * tarif_m3, 2),
@@ -544,6 +576,10 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             "co2_footprint_kg":            co2_footprint,
             "next_payment_date":           next_payment_date,
             "next_bill_date":              next_bill_date,
+            "date_prochaine_releve":       date_prochaine_releve,
+            "conso_annuelle_ref_m3":       conso_annuelle_ref_m3,
+            "pds_mode_releve":             pds_etendu.get("mode_releve"),
+            "pds_communicabilite_amm":     pds_etendu.get("communicabilite_amm"),
             "limescale_g":                 limescale_g,
             "limescale_alert":             limescale_alert,
             "hardness_fh":                 hardness,
@@ -557,8 +593,12 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             "heure_pic":                   heure_pic,
             "debit_moyen_m3h":             debit_moyen_m3h,
             # [HARDWARE] État du module Téléo — parsé depuis pointDeReleve
+            "teleo_compatible":            details.get("teleo_compatible") or (raw_daily_data.get("nb_entries", 0) > 0),
             "signal_pct":                  details.get("signal_pct"),
             "battery_ok":                  details.get("battery_ok"),
+            # [INDEX JOURNALIER] Dernier index connu depuis données journalières (Téléo uniquement)
+            "index_journalier_dernier":    index_journalier_dernier,
+            "index_journalier_dernier_date": index_journalier_dernier_date,
         }
 
     def _get_consumption_n1(self, consos: list[dict]) -> tuple[float | None, str | None]:
@@ -796,6 +836,18 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
 
         self._prev_nb_alertes = nb_alertes
 
+    def get_cumulative_index(self, contract_ref: str) -> float | None:
+        """Récupère l'index cumulatif (index réel si dispo, sinon somme des consos)."""
+        if not self.data:
+            return None
+        contract = self.data.get("contracts", {}).get(contract_ref, {})
+        real = contract.get("real_index")
+        if real is not None:
+            return round(real, 1)
+        consos = contract.get("consommations", [])
+        if not consos:
+            return None
+        return round(sum(e["consommation_m3"] for e in consos), 1)
 
 # ------------------------------------------------------------------
 # Helpers

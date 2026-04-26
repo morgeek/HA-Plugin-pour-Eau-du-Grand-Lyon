@@ -1,25 +1,24 @@
 # Configuration du tableau de bord Énergie Home Assistant
-# pour l'intégration Eau du Grand Lyon
+# pour l'intégration Eau du Grand Lyon (v2.5.0)
 #
-# À ajouter dans configuration.yaml ou via l'interface
-# Configuration > Tableaux de bord > Énergie
+# À ajouter dans l'interface Home Assistant :
+# Paramètres > Tableaux de bord > Énergie > Eau
 
-# Sources d'énergie - Eau
-energy:
-  sources:
-    # Consommation d'eau (m³)
-    - type: grid
-      name: "Eau Grand Lyon"
-      entity_id: sensor.consommation_eau_energie
-      unit_of_measurement: m³
-      cost_adjustment_day: 0.0  # Coûts gérés séparément
+# Sources d'eau recommandées :
+# ------------------------------------------------------------------
 
-  # Coûts énergétiques - Eau
-  tariffs:
-    - name: "Tarif Eau"
-      entity_id: sensor.couts_eau_energie
-      unit_of_measurement: EUR
+# Option 1 (Recommandé pour compteurs Téléo/TIC) :
+# Utilise l'index journalier pour une précision optimale.
+# Entity ID : sensor.eau_du_grand_lyon_index_journalier_energy
 
-# Note: Remplacez 'sensor.consommation_eau_energie' et 'sensor.couts_eau_energie'
-# par les entity_id réels de vos sensors (désactivés par défaut).
-# Activez-les dans Configuration > Intégrations > Eau du Grand Lyon > Entités
+# Option 2 (Pour compteurs standards / relève manuelle) :
+# Utilise l'index cumulatif mensuel.
+# Entity ID : sensor.eau_du_grand_lyon_index_compteur
+
+# Coûts associés :
+# ------------------------------------------------------------------
+# Vous pouvez utiliser le capteur de coût Énergie dédié :
+# Entity ID : sensor.eau_du_grand_lyon_cout_energie
+
+# Note : Si ces capteurs sont grisés, assurez-vous de les avoir 
+# ACTIVÉS dans Paramètres > Appareils et services > Eau du Grand Lyon.

@@ -107,6 +107,74 @@ def _compute_code_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
+# ── Helpers détection format données journalières ─────────────────────────────
+
+def _detect_month_offset(entries: list[dict]) -> int:
+    """Détecte si le champ 'mois' est 0-indexed (JS) ou 1-indexed (Python/ISO).
+
+    Stratégie (inspirée du fork hufon) :
+    - On examine jusqu'à 30 entrées.
+    - On compte les entrées avec mois == 0 (impossible en 1-indexed → forcément 0-indexed)
+      et les entrées avec mois == 12 (impossible en 0-indexed → forcément 1-indexed).
+    - Si score_0indexed > score_1indexed → offset = 1 (on ajoute 1 pour obtenir 1-12).
+    - Sinon offset = 0 (mois déjà 1-indexed).
+
+    Retourne 1 (0-indexed) ou 0 (1-indexed, pas de correction nécessaire).
+    """
+    score_0indexed = 0  # preuves que mois est 0-indexed
+    score_1indexed = 0  # preuves que mois est 1-indexed
+
+    sample = entries[:30]
+    for e in sample:
+        m = e.get("mois")
+        if m is None:
+            continue
+        try:
+            m_int = int(m)
+        except (ValueError, TypeError):
+            continue
+        if m_int == 0:
+            score_0indexed += 3   # mois=0 ne peut exister qu'en 0-indexed
+        elif m_int == 12:
+            score_1indexed += 3   # mois=12 ne peut exister qu'en 1-indexed
+        elif 1 <= m_int <= 11:
+            # Ambigu — ne change pas les scores
+            pass
+
+    if score_0indexed > score_1indexed:
+        return 1   # 0-indexed → ajouter 1
+    return 0       # 1-indexed (ou ambigu → on ne touche pas)
+
+
+def _infer_unit_from_magnitude(entries: list[dict]) -> str:
+    """Infère l'unité (L ou M3) depuis la magnitude des valeurs de consommation.
+
+    Si l'API ne déclare pas l'unité explicitement :
+    - On calcule la médiane des valeurs non-nulles de consommation.
+    - Si la médiane est > 50 → probablement en Litres (1 pers ≈ 100-200 L/j).
+    - Sinon → probablement déjà en m³.
+
+    Retourne "L", "M3" ou "" (si impossible de déterminer).
+    """
+    values: list[float] = []
+    for e in entries[:50]:
+        v = e.get("consommation")
+        if v is None:
+            continue
+        try:
+            fv = float(v)
+            if fv > 0:
+                values.append(fv)
+        except (ValueError, TypeError):
+            continue
+
+    if not values:
+        return ""
+    values.sort()
+    median = values[len(values) // 2]
+    return "L" if median > 50 else "M3"
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 
 class EauGrandLyonApi:
@@ -347,57 +415,40 @@ class EauGrandLyonApi:
         if not self._access_token:
             await self.authenticate()
 
-    async def _do_get(self, url: str, params: dict | None = None) -> Any:
-        """GET authentifié sur URL complète, avec retry sur 401 (token expiré)."""
+    async def _request(self, method: str, url: str, **kwargs) -> Any:
+        """Exécute une requête authentifiée avec retry automatique sur 401."""
         await self._ensure_auth()
         headers = {"Authorization": f"Bearer {self._access_token}"}
+        
         try:
-            async with self._session.get(url, headers=headers, params=params) as resp:
+            async with self._session.request(method, url, headers=headers, **kwargs) as resp:
                 if resp.status == 401:
                     _LOGGER.debug("Token expiré, ré-authentification…")
                     await self.authenticate()
                     headers = {"Authorization": f"Bearer {self._access_token}"}
-                    async with self._session.get(url, headers=headers, params=params) as resp2:
+                    async with self._session.request(method, url, headers=headers, **kwargs) as resp2:
                         if resp2.status == 403:
-                            raise WafBlockedError(f"WAF 403 sur GET {url} (après ré-auth).")
+                            raise WafBlockedError(f"WAF 403 sur {method} {url} (après ré-auth).")
                         resp2.raise_for_status()
                         return json.loads(await resp2.text())
                 if resp.status == 403:
-                    raise WafBlockedError(f"WAF 403 sur GET {url}.")
+                    raise WafBlockedError(f"WAF 403 sur {method} {url}.")
                 resp.raise_for_status()
                 return json.loads(await resp.text())
         except (WafBlockedError, AuthenticationError):
             raise
         except aiohttp.ClientResponseError as err:
-            raise ApiError(f"HTTP {err.status} sur GET {url}: {err.message}") from err
+            raise ApiError(f"HTTP {err.status} sur {method} {url}: {err.message}") from err
         except aiohttp.ClientError as err:
-            raise NetworkError(f"Erreur réseau sur GET {url}: {err}") from err
+            raise NetworkError(f"Erreur réseau sur {method} {url}: {err}") from err
+
+    async def _do_get(self, url: str, params: dict | None = None) -> Any:
+        """GET authentifié sur URL complète, avec retry sur 401 (token expiré)."""
+        return await self._request("GET", url, params=params)
 
     async def _do_post(self, url: str, body: dict | None = None) -> Any:
         """POST authentifié sur URL complète, avec retry sur 401 (token expiré)."""
-        await self._ensure_auth()
-        headers = {"Authorization": f"Bearer {self._access_token}"}
-        try:
-            async with self._session.post(url, json=body or {}, headers=headers) as resp:
-                if resp.status == 401:
-                    _LOGGER.debug("Token expiré, ré-authentification…")
-                    await self.authenticate()
-                    headers = {"Authorization": f"Bearer {self._access_token}"}
-                    async with self._session.post(url, json=body or {}, headers=headers) as resp2:
-                        if resp2.status == 403:
-                            raise WafBlockedError(f"WAF 403 sur POST {url} (après ré-auth).")
-                        resp2.raise_for_status()
-                        return json.loads(await resp2.text())
-                if resp.status == 403:
-                    raise WafBlockedError(f"WAF 403 sur POST {url}.")
-                resp.raise_for_status()
-                return json.loads(await resp.text())
-        except (WafBlockedError, AuthenticationError):
-            raise
-        except aiohttp.ClientResponseError as err:
-            raise ApiError(f"HTTP {err.status} sur POST {url}: {err.message}") from err
-        except aiohttp.ClientError as err:
-            raise NetworkError(f"Erreur réseau sur POST {url}: {err}") from err
+        return await self._request("POST", url, json=body or {})
 
     # ── Raccourcis legacy (backward compat — conservés intacts) ──────────────
 
@@ -459,43 +510,80 @@ class EauGrandLyonApi:
 
     async def get_daily_consumptions(
         self, contract_id: str, nb_jours: int = 90
-    ) -> list[dict]:
-        """Récupère les consommations journalières (Téléo/TIC uniquement).
+    ) -> dict[str, Any]:
+        """Récupère les consommations journalières avec fallback et métadonnées.
 
-        Stratégie selon le mode :
-        - Expérimental : tente /rest/produits/contrats/{id}/consommationsJournalieres
-          avec params dateDebut/dateFin (format bundle 2026), puis fallback legacy.
-        - Legacy : deux patterns d'endpoints observés selon versions de l'API.
+        Stratégie :
+        1. Tente 90 jours (ou nb_jours passé).
+        2. Si échec ou 0 entrée, tente 30 jours (fallback automatique).
+        3. Tente mode expérimental puis legacy.
 
-        Retourne une liste vide si aucune donnée journalière n'est disponible.
+        Retourne un dict :
+        {
+            "entries":    list[dict],  # entrées formatées
+            "source":     str,         # source des données
+            "nb_entries": int,         # nombre d'entrées
+            "last_date":  str | None,  # date de la dernière entrée
+        }
         """
-        if self._experimental:
-            result = await self._get_daily_new(contract_id, nb_jours)
-            if result:
-                _LOGGER.debug(
-                    "[EXPÉRIMENTAL] Journalier OK pour contrat %s : %d entrées (nouveau endpoint)",
-                    contract_id, len(result),
-                )
-                return result
+        result = await self._fetch_daily_raw(contract_id, nb_jours)
+        
+        # Fallback 30 jours si 90 jours ne donne rien
+        if not result["entries"] and nb_jours > 30:
             _LOGGER.debug(
-                "[EXPÉRIMENTAL] Nouveau endpoint journalier indisponible pour contrat %s"
-                " — fallback legacy", contract_id,
+                "Zéro donnée journalière pour %s sur %d jours, tentative sur 30 jours...",
+                contract_id, nb_jours
             )
+            result = await self._fetch_daily_raw(contract_id, 30)
+            
+        return result
 
-        return await self._get_daily_legacy(contract_id, nb_jours)
+    async def _fetch_daily_raw(self, contract_id: str, nb_jours: int) -> dict[str, Any]:
+        """Implémentation interne de la récupération journalière.
+
+        Stratégie (indépendante du mode expérimental) :
+        1. Tente toujours le nouvel endpoint /rest/produits/…/consommationsJournalieres
+           → confirmé HTTP 200 en production (browser inspection 2026-04-26).
+        2. Si le nouvel endpoint échoue (404, erreur), fallback sur les anciens endpoints legacy.
+
+        Le mode expérimental ne change pas la logique journalière — il est conservé pour
+        d'autres fonctionnalités (factures, courbe de charge, etc.).
+        """
+        entries: list[dict] = []
+        source = "Aucune"
+
+        # Étape 1 : Nouvel endpoint (toujours tenté — /rest/produits/ sans /application/)
+        entries = await self._get_daily_new(contract_id, nb_jours)
+        if entries:
+            source = "Produits (2026)"
+
+        # Étape 2 : Fallback legacy si le nouvel endpoint n'a rien retourné
+        if not entries:
+            entries, source = await self._get_daily_legacy(contract_id, nb_jours)
+
+        last_date = entries[-1].get("date") if entries else None
+
+        return {
+            "entries":    self.format_daily_consumptions(entries, contract_id),
+            "source":     source,
+            "nb_entries": len(entries),
+            "last_date":  last_date,
+        }
 
     async def _get_daily_new(self, contract_id: str, nb_jours: int) -> list[dict]:
-        """Nouvel endpoint journalier avec dateDebut/dateFin (bundle Angular 2026).
+        """Endpoint /rest/produits/…/consommationsJournalieres (confirmé HTTP 200 en prod).
 
-        GET /rest/produits/contrats/{id}/consommationsJournalieres
-            ?dateDebut=YYYY-MM-DDTHH:MM:SS.000Z&dateFin=YYYY-MM-DDTHH:MM:SS.000Z
+        La page Angular envoie systématiquement une plage de 2 ans. On fait de même
+        pour maximiser les chances d'obtenir des données, puis on filtre côté client
+        pour ne garder que les nb_jours derniers jours si l'appelant le souhaite.
 
-        Champs supplémentaires par rapport au legacy (si compteur compatible) :
-          volumeFuiteEstime, debitMin, index
+        Réponse attendue : {"postes": [{"data": [{annee, mois(0-idx), jour, consommation, …}]}],
+                            "unites": {"consommation": "L", "index": "m3"}}
         """
         try:
             date_fin = datetime.now(timezone.utc)
-            date_debut = date_fin - timedelta(days=nb_jours)
+            # Plage 2 ans — conforme à l'appel observé dans le browser (2026-04-26)
+            date_debut = date_fin.replace(year=date_fin.year - 2)
             params = {
                 "dateDebut": date_debut.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
                 "dateFin":   date_fin.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
@@ -503,88 +591,78 @@ class EauGrandLyonApi:
             data = await self._get_produits(
                 f"contrats/{contract_id}/consommationsJournalieres", params
             )
-            entries: list[dict] = []
-            if isinstance(data, dict) and "postes" in data:
-                for poste in data["postes"]:
-                    entries.extend(poste.get("data", []))
-            elif isinstance(data, list):
-                entries = data
+            entries = self._parse_daily_response(data)
 
             if entries:
                 entries.sort(key=lambda x: x.get("date", ""))
+                _LOGGER.debug(
+                    "Données journalières /rest/produits/ OK contrat %s : %d entrées",
+                    contract_id, len(entries),
+                )
             return entries
 
         except ApiError as err:
             if "404" in str(err):
                 _LOGGER.debug(
-                    "[EXPÉRIMENTAL] Endpoint journalier /rest/produits/ → 404 (contrat %s)",
+                    "Endpoint /rest/produits/…/consommationsJournalieres → 404 (contrat %s)",
                     contract_id,
                 )
             else:
                 _LOGGER.debug(
-                    "[EXPÉRIMENTAL] Erreur endpoint journalier (contrat %s) : %s",
+                    "Erreur endpoint journalier /rest/produits/ (contrat %s) : %s",
                     contract_id, err,
                 )
             return []
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug(
-                "[EXPÉRIMENTAL] Erreur inattendue endpoint journalier (contrat %s) : %s",
+                "Erreur inattendue endpoint journalier /rest/produits/ (contrat %s) : %s",
                 contract_id, err,
             )
             return []
 
-    async def _get_daily_legacy(self, contract_id: str, nb_jours: int) -> list[dict]:
-        """Anciens endpoints journaliers — deux patterns observés selon versions API."""
+    async def _get_daily_legacy(
+        self, contract_id: str, nb_jours: int
+    ) -> tuple[list[dict], str]:
+        """Anciens endpoints journaliers avec identification de la source."""
         endpoints = [
             (
                 f"/application/rest/interfaces/ael/contrats/{contract_id}"
-                f"/consommationsJournalieres?nbJours={nb_jours}"
+                f"/consommationsJournalieres?nbJours={nb_jours}",
+                "Legacy (Standard)",
             ),
             (
                 f"/application/rest/interfaces/ael/contrats/{contract_id}"
-                f"/consommationsDailyPeriode?nbJours={nb_jours}"
+                f"/consommationsDailyPeriode?nbJours={nb_jours}",
+                "Legacy (Période)",
             ),
         ]
 
-        for endpoint in endpoints:
+        for url, source_name in endpoints:
             try:
-                data = await self._get(endpoint)
-                entries: list[dict] = []
-                if isinstance(data, dict) and "postes" in data:
-                    for poste in data["postes"]:
-                        entries.extend(poste.get("data", []))
-                elif isinstance(data, list):
-                    entries = data
+                data = await self._get(url)
+                entries = self._parse_daily_response(data)
 
                 if entries:
                     entries.sort(key=lambda x: x.get("date", ""))
                     _LOGGER.debug(
-                        "Données journalières legacy OK contrat %s : %d entrées",
-                        contract_id, len(entries),
+                        "Données journalières %s OK contrat %s : %d entrées",
+                        source_name, contract_id, len(entries),
                     )
-                    return entries
+                    return entries, source_name
 
             except ApiError as err:
-                if "404" in str(err):
-                    _LOGGER.debug(
-                        "Endpoint journalier legacy non disponible (contrat %s) : %s",
-                        contract_id,
-                        endpoint.split("/")[-1].split("?")[0],
-                    )
-                else:
-                    _LOGGER.debug(
-                        "Données journalières legacy non disponibles (contrat %s) : %s",
-                        contract_id, err,
-                    )
+                _LOGGER.debug(
+                    "Endpoint journalier %s non disponible pour %s : %s",
+                    source_name, contract_id, err,
+                )
                 continue
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug(
-                    "Erreur traitement données journalières legacy (contrat %s) : %s",
-                    contract_id, err,
+                    "Erreur sur %s (contrat %s) : %s", source_name, contract_id, err
                 )
                 continue
 
-        return []
+        return [], "Aucune"
 
     async def get_alertes(self) -> list[dict]:
         """Retourne la liste des alertes actives (tous contrats)."""
@@ -596,6 +674,162 @@ class EauGrandLyonApi:
             return data if isinstance(data, list) else []
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Erreur récupération alertes : %s", err)
+            return []
+
+    async def get_date_prochaine_facture(self, contract_id: str) -> str | None:
+        """Retourne la date de la prochaine facture (ISO YYYY-MM-DD) ou None.
+
+        Endpoint confirmé HTTP 200 en production (browser inspection 2026-04-26) :
+          GET /rest/produits/contrats/{id}/dateProchaineFacture
+
+        Retourne None si indisponible ou si l'endpoint échoue.
+        """
+        try:
+            data = await self._do_get(
+                f"{BASE_URL}/application/rest/produits/contrats"
+                f"/{contract_id}/dateProchaineFacture"
+            )
+            # La réponse peut être une chaîne ISO, un dict {"date": "..."} ou {"value": "..."}
+            if isinstance(data, str):
+                return data[:10] if len(data) >= 10 else None
+            if isinstance(data, dict):
+                raw = data.get("date") or data.get("value") or data.get("dateProchaineFacture")
+                return str(raw)[:10] if raw else None
+            return None
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Erreur get_date_prochaine_facture (contrat %s) : %s", contract_id, err)
+            return None
+
+    async def get_point_de_service_etendu(self, contract_id: str) -> dict:
+        """Retourne les données étendues du point de service.
+
+        Endpoint confirmé HTTP 200 en production (browser inspection 2026-04-26).
+        Champs clés retournés :
+          - communicabiliteAMM  : bool — compteur Téléo communicant
+          - modeReleve          : str  — "AMM" ou "RELEVE_TERRAIN"
+          - dateProchaineReleveReelle : ISO — date du prochain relevé compteur
+          - consommationAnnuelleReference : float — conso de référence (m³/an)
+          - niveauDeTension / typeTension : type de raccordement
+          - nbCadransCompteur  : int — nombre de cadrans
+
+        Retourne {} si indisponible.
+        """
+        select = (
+            "communicabiliteAMM,modeReleve,activite,"
+            "dateProchaineReleveReelle,reference,referenceExterne,"
+            "niveauDeTension,typeTension,nbCadransCompteur,"
+            "periodesActiviteProfil(dateDebut,consommationAnnuelleReference,"
+            "profil(libelle))"
+        )
+        expand = "periodesActiviteProfil(profil,contrat),concession(gestionnaire)"
+        try:
+            data = await self._do_get(
+                f"{BASE_URL}/application/rest/produits/contrats"
+                f"/{contract_id}/pointDeService",
+                params={"select": select, "expand": expand},
+            )
+            if not isinstance(data, dict):
+                return {}
+
+            # Extraire consommationAnnuelleReference depuis la période active la plus récente
+            conso_ref = None
+            for periode in data.get("periodesActiviteProfil", []):
+                v = periode.get("consommationAnnuelleReference")
+                if v is not None:
+                    try:
+                        conso_ref = float(v)
+                    except (ValueError, TypeError):
+                        pass
+
+            return {
+                "communicabilite_amm":    data.get("communicabiliteAMM"),
+                "mode_releve":            data.get("modeReleve"),
+                "date_prochaine_releve":  (data.get("dateProchaineReleveReelle") or "")[:10] or None,
+                "niveau_tension":         data.get("niveauDeTension"),
+                "type_tension":           data.get("typeTension"),
+                "nb_cadrans":             data.get("nbCadransCompteur"),
+                "conso_annuelle_ref_m3":  conso_ref,
+                "reference_pds":          data.get("reference"),
+            }
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug(
+                "Erreur get_point_de_service_etendu (contrat %s) : %s", contract_id, err
+            )
+            return {}
+
+    async def get_interventions(self) -> list[dict]:
+        """Retourne les interventions terrain planifiées (releveur, technicien…).
+
+        Endpoint confirmé HTTP 200 en production (browser inspection 2026-04-26).
+        Filtre : interventions planifiées (modePlanification=7),
+                 à domicile (modeRealisation=1),
+                 présence client nécessaire,
+                 statuts : planifiée (4), en cours (9) ou demandée (0).
+
+        Retourne une liste de dicts normalisés avec :
+          - reference        : str
+          - type             : str (libellé du sous-type)
+          - statut           : str (libellé du statut)
+          - date_debut       : str YYYY-MM-DD
+          - date_fin         : str YYYY-MM-DD
+          - presence_requise : bool
+          - contrat_ref      : str
+        """
+        select = (
+            "reference,modePlanification,sousType,modeRealisation,"
+            "presenceDuClientNecessaire,statut,dateDebutPrevue,dateFinPrevue,"
+            "activite,serviceSouscrit(contrat(reference,espaceDeLivraison)),"
+            "jourDemande"
+        )
+        filt = (
+            "(modePlanification eq 7)"
+            " and (modeRealisation eq 1)"
+            " and (presenceDuClientNecessaire eq true)"
+            " and (statut eq 4 or statut eq 9 or statut eq 0)"
+        )
+        try:
+            data = await self._do_get(
+                f"{BASE_URL}/application/rest/produits/interventions",
+                params={
+                    "expand": "serviceSouscrit(contrat)",
+                    "select": select,
+                    "$filter": filt,
+                },
+            )
+            raw_list = []
+            if isinstance(data, list):
+                raw_list = data
+            elif isinstance(data, dict):
+                raw_list = data.get("content", data.get("_embedded", {}).get("interventions", []))
+
+            result = []
+            for item in raw_list:
+                try:
+                    svc = item.get("serviceSouscrit") or {}
+                    contrat = svc.get("contrat") or {}
+                    sous_type = item.get("sousType") or {}
+                    statut_raw = item.get("statut")
+
+                    date_debut = (item.get("dateDebutPrevue") or "")[:10] or None
+                    date_fin   = (item.get("dateFinPrevue")   or date_debut or "")[:10] or None
+
+                    result.append({
+                        "reference":        item.get("reference", ""),
+                        "type":             sous_type.get("libelle", "") if isinstance(sous_type, dict) else str(sous_type),
+                        "statut":           str(statut_raw) if statut_raw is not None else "",
+                        "date_debut":       date_debut,
+                        "date_fin":         date_fin,
+                        "presence_requise": bool(item.get("presenceDuClientNecessaire", False)),
+                        "contrat_ref":      contrat.get("reference", ""),
+                    })
+                except (KeyError, TypeError, AttributeError):
+                    continue
+
+            _LOGGER.debug("Interventions planifiées : %d trouvées", len(result))
+            return result
+
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Erreur get_interventions : %s", err)
             return []
 
     # ------------------------------------------------------------------
@@ -649,12 +883,7 @@ class EauGrandLyonApi:
             data = await self._get_interfaces(
                 f"contrats/{contract_id}/courbeDeCharge", params
             )
-            entries: list[dict] = []
-            if isinstance(data, dict) and "postes" in data:
-                for poste in data["postes"]:
-                    entries.extend(poste.get("data", []))
-            elif isinstance(data, list):
-                entries = data
+            entries = self._parse_daily_response(data)
 
             if entries:
                 entries.sort(key=lambda x: x.get("date", ""))
@@ -819,39 +1048,191 @@ class EauGrandLyonApi:
         return result
 
     @staticmethod
-    def format_daily_consumptions(raw_entries: list[dict]) -> list[dict]:
-        """Enrichit les entrées journalières brutes.
+    def format_daily_consumptions(raw_entries: list[dict], contract_id: str = "inconnu") -> list[dict]:
+        """Enrichit les entrées journalières brutes avec parsing multi-clés.
 
-        Extrait les champs standards (date, consommation) et les champs
-        expérimentaux optionnels remontés par les nouveaux compteurs Téléo :
-          - volumeFuiteEstime → volume_fuite_estime_m3
-          - debitMin          → debit_min_m3h
-          - index             → index_m3
-        Ces champs sont absents si le compteur ne les supporte pas.
+        Vérifie successivement les clés: consommation, volume, quantite, valeur.
+        Log un WARNING si aucune donnée de consommation n'est trouvée.
         """
         result = []
+        nb_with_conso = 0
         for e in raw_entries:
             try:
+                conso = EauGrandLyonApi._extract_conso(e)
                 entry: dict = {
                     "date":            e.get("date", ""),
-                    "consommation_m3": float(e.get("consommation", 0)),
+                    "consommation_m3": conso if conso is not None else 0.0,
                 }
+                if conso is not None:
+                    nb_with_conso += 1
+
                 # Champs expérimentaux — présents seulement sur compteurs Téléo récents
+                has_exp = False
                 for src_key, dst_key in [
                     ("volumeFuiteEstime", "volume_fuite_estime_m3"),
                     ("debitMin",          "debit_min_m3h"),
-                    ("index",             "index_m3"),
                 ]:
                     val = e.get(src_key)
                     if val is not None:
                         try:
                             entry[dst_key] = float(val)
+                            has_exp = True
                         except (ValueError, TypeError):
                             pass
-                result.append(entry)
+                
+                # Extraction de l'index avec synonymes (hufon robust pattern)
+                idx_val = EauGrandLyonApi._extract_index(e)
+                if idx_val is not None:
+                    entry["index_m3"] = idx_val
+                    has_exp = True
+
+                if conso is not None or has_exp:
+                    result.append(entry)
             except (ValueError, TypeError):
                 _LOGGER.debug("Entrée journalière ignorée (format inattendu) : %s", e)
+        
+        if raw_entries and nb_with_conso == 0:
+            _LOGGER.warning(
+                "Le parsing des volumes journaliers pour le contrat %s a échoué : "
+                "aucune clé reconnue (consommation, volume, quantite, valeur) "
+                "dans les %d entrées reçues. Les compteurs d'eau ne seront pas mis à jour.", 
+                contract_id, len(raw_entries)
+            )
+        elif not raw_entries:
+            _LOGGER.warning(
+                "Aucune donnée journalière reçue de l'API pour le contrat %s "
+                "(le compteur n'est probablement pas compatible Téléo/TIC).", 
+                contract_id
+            )
+
         return result
+
+    @staticmethod
+    def _extract_index(entry: dict) -> float | None:
+        """Extrait l'index cumulé via une large liste de synonymes (Robust Index Parsing).
+        
+        Clés supportées (inspiré du fork hufon) :
+        - index, indexCompteur, index_compteur
+        - releve, releveCompteur, volumeCompteur
+        - volume_cumule, consommationCumulee, consommation_cumulee
+        """
+        for key in (
+            "index", "indexCompteur", "index_compteur",
+            "releve", "releveCompteur", "volumeCompteur",
+            "volume_cumule", "consommationCumulee", "consommation_cumulee"
+        ):
+            if key in entry:
+                try:
+                    val = float(entry[key] or 0)
+                    # Guess Litres vs m3 : si la valeur brute est > 100000 
+                    # sur un index journalier, c'est probablement des Litres.
+                    if val > 100000:
+                        return round(val / 1000, 3)
+                    return round(val, 3)
+                except (ValueError, TypeError):
+                    continue
+        return None
+
+    @staticmethod
+    def _extract_conso(entry: dict) -> float | None:
+        """Extrait la valeur de consommation via plusieurs clés possibles."""
+        for key in ("consommation", "volume", "quantite", "valeur"):
+            if key in entry:
+                try:
+                    return float(entry[key] or 0)
+                except (ValueError, TypeError):
+                    continue
+        return None
+
+    @staticmethod
+    def _parse_daily_response(data: Any) -> list[dict]:
+        """Parse les différentes structures de réponse possibles pour le journalier.
+
+        Gère deux formats principaux :
+
+        Format « postes » (nouveau endpoint /rest/produits/…/consommationsJournalieres) :
+          {
+            "postes": [{"data": [{"annee": 2024, "mois": 3, "jour": 15,
+                                  "consommation": 120, "index": …, "estime": false,
+                                  "volumeEstimeFuite": 0}]}],
+            "unites": {"consommation": "L", "index": "m3"}
+          }
+          ⚠️  "mois" est 0-indexed (style JavaScript : 0=janvier … 11=décembre).
+          ⚠️  "consommation" peut être en Litres — converti en m³ si unites.consommation == "L".
+
+        Format « liste plate » (anciens endpoints legacy) :
+          [{"date": "2024-04-15", "consommation": 0.120, …}]
+          ou {"data": […]} / {"consommationsJournalieres": […]}
+          Dans ce cas "mois" est 1-indexed et la valeur est déjà en m³.
+        """
+        entries: list[dict] = []
+        from_postes = False
+        unites: dict = {}
+
+        if isinstance(data, dict):
+            unites = data.get("unites") or {}
+            if "postes" in data:
+                from_postes = True
+                for poste in data["postes"]:
+                    entries.extend(poste.get("data", []))
+            elif "data" in data and isinstance(data["data"], list):
+                entries = data["data"]
+            elif "consommationsJournalieres" in data and isinstance(
+                data["consommationsJournalieres"], list
+            ):
+                entries = data["consommationsJournalieres"]
+        elif isinstance(data, list):
+            entries = data
+
+        if not from_postes:
+            return entries
+
+        # ── Normalisation du format « postes » ────────────────────────────────
+        conso_unit = (unites.get("consommation") or "").upper()  # "L" ou "M3" ou ""
+
+        # ── Auto-détection de l'encodage des mois (0-indexed vs 1-indexed) ────
+        # Inspiré du fork hufon : on calcule un score sur un échantillon d'entrées.
+        # Si plus de la moitié des mois sont 0-indexed (0-11), on applique +1.
+        # Si les mois sont déjà 1-indexed (1-12), on ne touche pas.
+        month_offset = _detect_month_offset(entries)
+
+        # ── Auto-inférence d'unité par magnitude si unité non déclarée ────────
+        # Si l'API ne précise pas l'unité mais que les valeurs médianes sont > 100,
+        # ce sont probablement des Litres (1 personne/jour ≈ 100-200 L).
+        if not conso_unit:
+            conso_unit = _infer_unit_from_magnitude(entries)
+
+        normalized: list[dict] = []
+        for e in entries:
+            entry = dict(e)
+
+            # 1. Construire le champ "date" manquant
+            if "date" not in entry and "annee" in entry and "mois" in entry:
+                try:
+                    annee = int(entry["annee"])
+                    mois_1based = int(entry["mois"]) + month_offset
+                    # Borner 1-12 pour éviter les dates invalides
+                    mois_1based = max(1, min(12, mois_1based))
+                    jour = int(entry.get("jour") or 1)
+                    entry["date"] = f"{annee}-{mois_1based:02d}-{jour:02d}"
+                except (ValueError, TypeError):
+                    pass
+
+            # 2. Convertir Litres → m³
+            if conso_unit == "L" and "consommation" in entry:
+                try:
+                    entry["consommation"] = float(entry["consommation"]) / 1000.0
+                except (ValueError, TypeError):
+                    pass
+
+            # 3. Harmoniser le nom du champ de fuite estimée
+            #    API retourne "volumeEstimeFuite", format_daily_consumptions attend "volumeFuiteEstime"
+            if "volumeEstimeFuite" in entry and "volumeFuiteEstime" not in entry:
+                entry["volumeFuiteEstime"] = entry.pop("volumeEstimeFuite")
+
+            normalized.append(entry)
+
+        return normalized
 
     @staticmethod
     def format_factures(raw_factures: list[dict]) -> list[dict]:
@@ -936,6 +1317,7 @@ class EauGrandLyonApi:
             "id":               raw.get("id", ""),
             "reference":        ref,
             "statut":           statut,
+            "teleo_compatible": bool(module),
             "signal_pct":       signal_pct,
             "battery_ok":       battery_ok,
             "date_effet":       date_effet,

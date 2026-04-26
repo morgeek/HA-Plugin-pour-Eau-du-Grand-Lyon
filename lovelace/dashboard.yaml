@@ -1,19 +1,30 @@
 # ═══════════════════════════════════════════════════════════════════
-#  Dashboard "Eau du Grand Lyon" — Lovelace YAML (Version PRO 2.3.0)
+#  Dashboard "Eau du Grand Lyon" — Lovelace YAML (Version PLATINUM 2.5.0)
 # ═══════════════════════════════════════════════════════════════════
 #
 #  Ce dashboard regroupe toutes les fonctions d'intelligence, d'écologie
-#  et de sécurité de la version 2.3.0.
+#  et de sécurité de la version 2.5.0 (Hardening & Features Pack).
 #
-#  Conseil : Remplacez les entités par vos noms d'entités réels si vous
-#  avez renommé l'intégration lors de l'installation.
+#  Note : Les noms d'entités peuvent varier selon votre configuration.
 # ═══════════════════════════════════════════════════════════════════
 
-title: 💧 Eau du Grand Lyon PRO
+title: 💧 Eau du Grand Lyon PLATINUM
 views:
   - title: Synthèse
     icon: mdi:water
     cards:
+
+      # ── RÉSUMÉ QUOTIDIEN (NOUVEAU) ───────────────────────────────
+      - type: horizontal-stack
+        cards:
+          - type: sensor
+            entity: sensor.eau_du_grand_lyon_conso_hier
+            name: Hier (L)
+            graph: line
+          - type: sensor
+            entity: sensor.eau_du_grand_lyon_conso_moyenne_7j
+            name: Moyenne (L/j)
+            graph: line
 
       # ── RÉSUMÉ FINANCIER & CONSO ──────────────────────────────────
       - type: horizontal-stack
@@ -23,43 +34,52 @@ views:
             name: Ce mois
             graph: line
           - type: sensor
-            entity: sensor.eau_du_grand_lyon_cout_estime_mois_courant
+            entity: sensor.eau_du_grand_lyon_cout_mois_courant_eur
             name: Coût estimé
             graph: line
 
-      # ── INTELLIGENCE & PRÉDICTIONS ────────────────────────────────
+      # ── INTELLIGENCE & ÉCONOMIE ───────────────────────────────────
       - type: entities
-        title: 🧠 Intelligence & Prédictions
+        title: 🧠 Intelligence & Économie
         show_header_toggle: false
         entities:
-          - entity: sensor.eau_du_grand_lyon_conseils_eco_coach
+          - entity: sensor.eau_du_grand_lyon_conseil_eco_coach
             name: Eco-Coach (Conseil)
           - entity: sensor.eau_du_grand_lyon_tendance_vs_n_1
             name: Tendance vs N-1
-          - entity: sensor.eau_du_grand_lyon_prediction_consommation_fin_de_mois
+          - entity: sensor.eau_du_grand_lyon_economie_potentielle
+            name: Économie vs N-1 (€)
+          - entity: sensor.eau_du_grand_lyon_prediction_consommation_mois
             name: Prédiction volume (m³)
-          - entity: sensor.eau_du_grand_lyon_prediction_cout_fin_de_mois
-            name: Prédiction coût (€)
           - type: divider
-          - entity: sensor.eau_du_grand_lyon_eco_score
+          - entity: sensor.eau_du_grand_lyon_eco_score_m3_pers_mois
             name: Eco-Score (Performance)
-          - entity: sensor.eau_du_grand_lyon_empreinte_carbone
+          - entity: sensor.eau_du_grand_lyon_empreinte_co2
             name: Impact CO2 (kg CO2e)
+
+      # ── QUALITÉ DE L'EAU (OPEN DATA) ─────────────────────────────
+      - type: entities
+        title: 🔬 Qualité de l'Eau (Open Data)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.eau_du_grand_lyon_durete_de_l_eau_open_data
+            name: Dureté réelle (°fH)
+          - entity: sensor.eau_du_grand_lyon_nitrates_open_data
+            name: Nitrates (mg/L)
+          - entity: sensor.eau_du_grand_lyon_chlore_residuel_open_data
+            name: Chlore (mg/L)
 
       # ── MAINTENANCE & CALCAIRE ───────────────────────────────────
       - type: entities
         title: 🧱 Entretien & Calcaire
         show_header_toggle: false
         entities:
-          - entity: sensor.eau_du_grand_lyon_accumulation_de_calcaire
+          - entity: sensor.eau_du_grand_lyon_calcaire_cumule
             name: Calcaire cumulé (est.)
           - entity: binary_sensor.eau_du_grand_lyon_alerte_maintenance_calcaire
             name: État maintenance
-          - type: attribute
-            entity: sensor.eau_du_grand_lyon_accumulation_de_calcaire
-            attribute: dureté_appliquée_fh
-            name: Dureté de l'eau (°fH)
-            icon: mdi:water-opacity
+          - entity: sensor.eau_du_grand_lyon_index_journalier_energy
+            name: Index journalier (Suivi)
 
       # ── SÉCURITÉ & RESTRICTIONS ──────────────────────────────────
       - type: vertical-stack
@@ -69,7 +89,7 @@ views:
             square: false
             cards:
               - type: entity
-                entity: sensor.eau_du_grand_lyon_restrictions_secheresse_69
+                entity: sensor.eau_du_grand_lyon_niveau_de_secheresse
                 name: Sécheresse (69)
               - type: entity
                 entity: switch.eau_du_grand_lyon_mode_vacances
@@ -85,6 +105,16 @@ views:
                 ### 🛡️ Surveillance Vacances Active
                 Toute consommation > 1L déclenchera une alerte critique.
 
+      # ── GESTION DES FACTURES ─────────────────────────────────────
+      - type: entities
+        title: 📄 Facturation & Services
+        show_header_toggle: false
+        entities:
+          - entity: sensor.eau_du_grand_lyon_derniere_facture
+            name: Date dernière facture
+          - entity: button.eau_du_grand_lyon_telecharger_la_derniere_facture
+            name: Télécharger le PDF (v2.5)
+
       # ── ALERTES FUITES ───────────────────────────────────────────
       - type: entities
         title: ⚠️ Détection de fuites
@@ -92,20 +122,22 @@ views:
         entities:
           - entity: binary_sensor.eau_du_grand_lyon_detection_fuite_teleo
             name: Fuite officielle (Téléo)
-          - entity: binary_sensor.eau_du_grand_lyon_detection_fuite_locale
+          - entity: binary_sensor.eau_du_grand_lyon_alerte_fuite_pattern_local
             name: Analyse locale (Pattern)
+          - entity: binary_sensor.eau_du_grand_lyon_interruption_de_service_travaux_coupure
+            name: Alerte Coupure / Travaux
 
-      # ── DIAGNOSTICS & HARDWARE ───────────────────────────────────
+      # ── DIAGNOSTICS & COMPTABILITÉ ──────────────────────────────
       - type: entities
-        title: 🔧 Santé du matériel
+        title: 🔧 Santé & Compatibilité
         show_header_toggle: false
         entities:
-          - entity: sensor.eau_du_grand_lyon_signal_module_teleo
+          - entity: sensor.eau_du_grand_lyon_compatibilite_compteur
+            name: Type de compteur
+          - entity: sensor.eau_du_grand_lyon_signal_teleo
             name: Signal radio module
           - entity: binary_sensor.eau_du_grand_lyon_batterie_module_teleo
             name: État de la pile module
-          - entity: sensor.eau_du_grand_lyon_statut_api
-            name: Connectivité API
 
       # ── ÉCHÉANCES & CALENDRIER ───────────────────────────────────
       - type: calendar
@@ -117,23 +149,9 @@ views:
       - type: statistics-graph
         title: Historique 24 mois
         entities:
-          - entity: sensor.eau_du_grand_lyon_index_cumulatif
+          - entity: sensor.eau_du_grand_lyon_index_journalier_energy
         stat_types:
           - change
         period: month
         chart_type: bar
         days_to_show: 730
-
-  - title: Multi-Contrats
-    icon: mdi:layers-triple
-    cards:
-      # ── TOTAUX GLOBAUX (Multi-Contrats) ───────────────────────────
-      - type: entities
-        title: 🌍 Totaux du compte (Agrégation)
-        entities:
-          - entity: sensor.eau_du_grand_lyon_total_consommation_compte
-            name: Conso totale (m³)
-          - entity: sensor.eau_du_grand_lyon_total_cout_compte
-            name: Coût total (€)
-          - entity: sensor.eau_du_grand_lyon_total_prediction_cout_compte
-            name: Budget total prévu (€)

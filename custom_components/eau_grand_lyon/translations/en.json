@@ -54,6 +54,10 @@
       "conso_annuelle":     { "name": "Annual consumption" },
       "conso_7j":           { "name": "7-day consumption" },
       "conso_30j":          { "name": "30-day consumption" },
+      "conso_hier":         { "name": "Yesterday's consumption" },
+      "index_journalier":   { "name": "Daily index (Energy)" },
+      "conso_moyenne_7j":   { "name": "Average daily consumption (7d)" },
+      "compatibilite_compteur": { "name": "Meter compatibility" },
       "cout_mois":          { "name": "Current month cost" },
       "cout_annuel":        { "name": "Estimated annual cost" },
       "cout_cumule":        { "name": "Cumulative cost (year)" },
@@ -86,7 +90,19 @@
       "water_hardness_live":{ "name": "Water hardness (Open Data)" },
       "nitrates":           { "name": "Nitrates (Open Data)" },
       "chlore":             { "name": "Residual chlorine (Open Data)" },
-      "next_outage":        { "name": "Next service interruption" }
+      "next_outage":        { "name": "Next service interruption" },
+      "prochaine_facture":  { "name": "Next invoice" },
+      "prochaine_releve":   { "name": "Next meter reading" },
+      "conso_annuelle_ref": { "name": "Annual reference consumption" }
+    },
+    "button": {
+      "download_invoice":   { "name": "Download latest invoice" }
+    },
+    "switch": {
+      "vacation_mode":      { "name": "Vacation mode" }
+    },
+    "calendar": {
+      "billing_events":     { "name": "Billing & Invoicing" }
     },
     "binary_sensor": {
       "leak_alert":       { "name": "Possible leak alert" },
