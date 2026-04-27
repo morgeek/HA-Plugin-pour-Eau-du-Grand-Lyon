@@ -312,6 +312,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                     await asyncio.sleep(delay)
 
             except AuthenticationError as err:
+                self._entry.async_start_reauth(self.hass)
                 raise UpdateFailed(f"Erreur d'authentification: {err}") from err
 
             except Exception as err:

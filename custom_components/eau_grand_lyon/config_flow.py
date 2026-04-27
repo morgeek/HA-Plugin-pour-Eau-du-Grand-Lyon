@@ -80,6 +80,84 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Retourne le gestionnaire du flux d'options."""
         return EauGrandLyonOptionsFlowHandler(config_entry)
 
+    async def async_step_reauth(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Flux de réauthentification après une erreur d'authentification."""
+        config_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        if not config_entry:
+            return self.async_abort(reason="reauth_failed")
+
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Confirmation de réauthentification : saisie des identifiants."""
+        config_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        if not config_entry:
+            return self.async_abort(reason="reauth_failed")
+
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            email = user_input[CONF_EMAIL]
+            password = user_input[CONF_PASSWORD]
+
+            async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True)) as session:
+                api = EauGrandLyonApi(session, email, password)
+                try:
+                    await api.authenticate()
+                except AuthenticationError as err:
+                    _LOGGER.warning("Réauth échouée: %s", err)
+                    errors["base"] = "invalid_auth"
+                except WafBlockedError as err:
+                    _LOGGER.warning("Blocage WAF: %s", err)
+                    errors["base"] = "waf_blocked"
+                except NetworkError as err:
+                    _LOGGER.warning("Erreur réseau: %s", err)
+                    errors["base"] = "cannot_connect"
+                except ApiError as err:
+                    _LOGGER.warning("Erreur API: %s", err)
+                    errors["base"] = "api_error"
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.exception("Erreur inattendue: %s", err)
+                    errors["base"] = "unknown"
+                else:
+                    self.hass.config_entries.async_update_entry(
+                        config_entry,
+                        data={
+                            **config_entry.data,
+                            CONF_EMAIL: email,
+                            CONF_PASSWORD: password,
+                        },
+                    )
+                    await self.hass.config_entries.async_reload(config_entry.entry_id)
+                    return self.async_abort(reason="reauth_successful")
+
+        # Pré-remplir avec l'email courant
+        current_email = config_entry.data.get(CONF_EMAIL, "")
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_EMAIL, default=current_email): vol.All(
+                        str, _validate_email
+                    ),
+                    vol.Required(CONF_PASSWORD): vol.All(str, vol.Length(min=4)),
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "site_url": "https://agence.eaudugrandlyon.com",
+            },
+        )
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:

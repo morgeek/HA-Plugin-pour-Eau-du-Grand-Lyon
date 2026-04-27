@@ -9,6 +9,14 @@
           "password": "Password",
           "tarif_m3": "Price per m³ (€)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate Eau du Grand Lyon",
+        "description": "Your credentials have expired. Please reconnect.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -19,7 +27,9 @@
       "unknown": "Unknown error. Check Home Assistant logs for details."
     },
     "abort": {
-      "already_configured": "This account is already configured."
+      "already_configured": "This account is already configured.",
+      "reauth_successful": "Reauthentication successful.",
+      "reauth_failed": "Reauthentication failed."
     }
   },
   "options": {
