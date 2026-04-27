@@ -16,6 +16,18 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
 
 Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
 
+### 🏗️ Refonte Architecturale & Tests (v2.7.0)
+- **Refonte Modulaire** : Scission du monolithe `sensor.py` (1800 lignes) en 9 modules spécialisés (`sensors/consumption.py`, `sensors/cost.py`, `sensors/intelligence.py`, etc.)
+- **Suite de Tests Complète** : 35 tests pytest couvrant les flux de config, les fonctions du coordinateur, et la logique métier
+- **Conformité HA 100%** : Audit complet et fixes de tous les problèmes de cycle de vie des entités (CoordinatorEntity)
+- **Optimisation Installation** : Réduction du bloat (screenshots déplacés en `docs/`, dépendances inutiles supprimées)
+- **Corrections Critiques** :
+  - Fix bug du bouton facture (utilisait une clé hardcodée au lieu de la constante)
+  - Fix calendrier (tous les événements maintenant en `date` objects pour HA compatibility)
+  - Fix switch vacances (CoordinatorEntity lifecycle)
+- **Nettoyage Code** : Suppression imports morts, constantes inutilisées, et refactoring du répertoire `api/` (double)
+- **Stabilité** : Aucun breaking change, migration transparente depuis v2.6.0
+
 ### 🚀 Hardening & Features Pack (v2.5.0)
 - **Hardening API 2026** : Parsing ultra-robuste des volumes journaliers (support multi-clés et structures API variées).
 - **Consommation Moyenne (L/j)** : Nouveau capteur glissant en **Litres** pour une vision plus concrète du quotidien.
@@ -109,7 +121,7 @@ L'intégration inclut désormais des **Blueprints** (modèles d'automatisation) 
 - **Alerte Sécheresse** : Notification automatique dès que le département du Rhône change de niveau de restriction.
 
 ## Prérequis
-- Home Assistant (`2024.1.0` ou ultérieure)
+- Home Assistant (`2024.4.0` ou ultérieure)
 - Un compte valide avec Eau du Grand Lyon (email et mot de passe)
 
 ## Installation
@@ -118,8 +130,8 @@ L'intégration inclut désormais des **Blueprints** (modèles d'automatisation) 
 > **IMPORTANT** : Avant d'installer cette intégration ou toute autre extension personnalisée, effectuez toujours une **sauvegarde complète (Backup)** de votre configuration Home Assistant. L'auteur ne peut être tenu responsable en cas de perte de données ou d'instabilité de votre instance.
 
 ### Option 1 : Installation à l'ancienne
-1. Téléchargez la dernière version depuis le [dépôt GitHub](https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon).
-2. Extrayez le contenu du dossier `custom_components/eau_grand_lyon/` dans le répertoire `custom_components/` de votre Home Assistant.
+1. Téléchargez la dernière version depuis le [dépôt GitHub](https://github.com/morgeek/eau_grand_lyon_component).
+2. Extrayez **l'intégralité** du dossier `custom_components/eau_grand_lyon/` (y compris le sous-dossier `sensors/`) dans le répertoire `custom_components/` de votre Home Assistant.
 3. Redémarrez Home Assistant.
 
 Arborescence attendue après copie manuelle :
@@ -139,11 +151,13 @@ Ne copiez pas le dépôt complet dans `/config/custom_components/` sinon vous ob
 
 Dans ce cas, Home Assistant ne trouvera pas l'intégration et affichera `Non chargé`.
 
-### Option 2 : HACS
+### Option 2 : HACS (Recommandé)
 1. Assurez-vous d'avoir [HACS](https://hacs.xyz/) installé dans votre instance Home Assistant.
-2. Allez dans "Intégrations" et recherchez "Eau du Grand Lyon".
-3. Cliquez sur "Installer" et redémarrez Home Assistant.
+2. Allez dans **Intégrations** HACS et recherchez "Eau du Grand Lyon".
+3. Cliquez sur **Installer** et redémarrez Home Assistant.
 4. Passez à la configuration ci-dessous.
+
+> **Note** : Si l'intégration n'est pas encore dans HACS, utilisez l'Option 1 ou ajoutez le dépôt personnalisé manuellement dans les paramètres HACS.
 
 ## Configuration
 1. Dans Home Assistant, allez dans **Paramètres** > **Appareils et services**.
@@ -201,7 +215,29 @@ En cas de doute, la structure valide est :
   sensor.py
   binary_sensor.py
   button.py
+  calendar.py
+  switch.py
+  repairs.py
+  diagnostics.py
+  const.py
+  strings.json
+  services.yaml
+  brand/
+    icon.png
+    logo.png
+  sensors/
+    __init__.py
+    base.py
+    consumption.py
+    contract.py
+    cost.py
+    experimental.py
+    global_sensors.py
+    intelligence.py
+    quality.py
   translations/
+    fr.json
+    en.json
 ```
 
 ### Fonctionnalités à venir
