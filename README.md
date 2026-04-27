@@ -99,6 +99,22 @@ Si votre compteur est compatible et que les nouveaux endpoints répondent, les n
 
 En cas d'erreur avec la nouvelle API, l'intégration repassera automatiquement sur l'ancienne version pour assurer la continuité des données.
 
+## Mise à jour des données
+
+L'intégration récupère vos données de consommation selon un intervalle configurable :
+
+- **Intervalle par défaut** : 24 heures (pour éviter les blocages WAF)
+- **Intervalle configurable** : 6h, 12h, 24h, 48h — accessible via Paramètres > Appareils et services > Options
+- **Mise à jour manuelle** : Service `update_now` pour forcer un rafraîchissement immédiat
+- **Cache persistant** : En cas d'indisponibilité API, les dernières données connues restent affichées localement
+- **Retry automatique** : En cas d'erreur réseau ou blocage WAF, l'intégration réessaie après un délai croissant (1 min, 5 min)
+
+### Gestion du blocage WAF
+
+L'API officielle utilise un pare-feu web (WAF) qui peut bloquer les requêtes trop fréquentes. Si vous recevez l'erreur "Requête bloquée par le pare-feu", deux solutions :
+1. **Augmentez l'intervalle** : Passez à 48 heures au lieu de 24h
+2. **Attendez quelques minutes** : L'intégration réessaye automatiquement après un délai exponentiel
+
 ### Dashboard Lovelace
 - Template complet : `lovelace/dashboard.yaml`
 - Template avec notifications : `lovelace/dashboard_notifications.yaml`*(temporairement désactivé)*
@@ -122,6 +138,69 @@ L'intégration inclut désormais des **Blueprints** (modèles d'automatisation) 
 - **Alerte Fuite Actionnable** : Notification sur mobile avec boutons "Rafraîchir" et "Voir Dashboard".
 - **Alerte Budget** : Notification si la prédiction de fin de mois dépasse un seuil choisi.
 - **Alerte Sécheresse** : Notification automatique dès que le département du Rhône change de niveau de restriction.
+
+## Appareils supportés
+
+L'intégration fonctionne avec deux types de compteurs :
+
+| Type | Nom | Disponibilité des données |
+|------|-----|---------------------------|
+| **Téléo** (smart) | Compteur communicant Eau du Grand Lyon | Consommation journalière, courbe horaire, alertes temps réel, signal radio |
+| **Standard** | Compteur traditionnel avec relevé manuel | Consommation mensuelle uniquement |
+
+### Comment savoir quel compteur j'ai ?
+
+- Un capteur **Compatibilité compteur** (désactivé par défaut) indique `Téléo` ou `Standard`
+- Allez dans Paramètres > Appareils et services > Eau du Grand Lyon > Entités
+- Cherchez "Compatibilité compteur" — activez-la si elle est masquée
+
+## Limitations connues
+
+- **Mise à jour mensuelle** : Les données de consommation sont généralement mises à jour une fois par mois par le service. La vue quotidienne n'est disponible que pour les compteurs Téléo.
+- **Blocage WAF** : L'API officielle peut bloquer les requêtes trop fréquentes. Consultez la section "Mise à jour des données" pour plus de détails.
+- **Données historiques** : Seules les 12 derniers mois de données mensuelles sont disponibles par l'API.
+- **Compteurs Standard** : Les détails horaires et alertes temps réel ne sont disponibles que sur compteurs Téléo.
+- **Mode hors-ligne** : En cas d'indisponibilité prolongée (>7 jours), une alerte apparaît dans les réparations HA.
+
+## Dépannage
+
+### L'intégration affiche "HORS-LIGNE"
+
+**Cause** : L'API Eau du Grand Lyon est indisponible ou inaccessible.
+
+**Solutions** :
+1. Vérifiez votre connexion réseau et que le serveur https://agence.eaudugrandlyon.com est accessible
+2. Attendez quelques minutes — l'intégration réessaye automatiquement
+3. Utilisez le service **Effacer le cache** (Paramètres > Appareils et services) pour réinitialiser l'état
+4. Consultez les logs Home Assistant pour plus de détails : `Settings > System > Logs`
+
+### Erreur "Identifiants incorrects"
+
+**Cause** : Votre email ou mot de passe est invalide ou a changé.
+
+**Solutions** :
+1. Vérifiez que votre email et mot de passe sont corrects sur https://agence.eaudugrandlyon.com
+2. Réinitialisez votre mot de passe sur le site si nécessaire
+3. Allez dans Paramètres > Appareils et services > Eau du Grand Lyon
+4. Cliquez sur le bouton Reconfigurer et entrez vos identifiants à jour
+
+### Erreur "Requête bloquée par le pare-feu web"
+
+**Cause** : L'API officielle utilise un pare-feu web (WAF) qui bloque les requêtes trop fréquentes.
+
+**Solutions** :
+1. Augmentez l'intervalle de mise à jour : Paramètres > Appareils et services > Eau du Grand Lyon > Options > Fréquence de mise à jour (passez à 48h)
+2. Attendez quelques minutes avant de réessayer — l'intégration réessaye automatiquement avec un délai exponentiel
+3. Si le problème persiste, attendez 1-2 heures avant de configurer l'intégration
+
+### Certains capteurs sont manquants
+
+**Cause** : Certains capteurs techniques sont désactivés par défaut.
+
+**Solutions** :
+1. Allez dans Paramètres > Appareils et services > Eau du Grand Lyon > Entités
+2. Cherchez les capteurs que vous souhaitez voir (ex. "Fuite estimée", "Heure de pic", "Éco-Score")
+3. Cliquez sur le capteur puis sur l'icône engrenage → Activez le capteur
 
 ## Prérequis
 - Home Assistant (`2024.4.0` ou ultérieure)
@@ -179,23 +258,6 @@ Une fois configuré, les capteurs apparaîtront dans votre tableau de bord Home 
 
 > ⚠️ **Non disponible dans cette version** — prévu pour une version future.
 
-## Dépannage
-- **Problèmes d'authentification** : Assurez-vous que votre email et mot de passe sont corrects. L'intégration utilise l'API officielle d'Eau du Grand Lyon.
-Merci @painteau pour le fix et @hufon pour le merge.
-- **Aucune donnée** : Les données eau sont mises à jour mensuellement. Si aucune donnée n'apparaît, vérifiez le statut de votre contrat.
-- **Erreurs** : Vérifiez les journaux Home Assistant pour tout message d'erreur lié à l'intégration.
-- **Réparations (Repairs)** : L'intégration utilise la plateforme native de Home Assistant pour signaler les problèmes critiques (ex. Alertes Sécheresse). Consultez l'onglet "Réparations" dans HA.
-- **Diagnostics** : En cas de bug, téléchargez l'export de diagnostic depuis la page de l'intégration pour obtenir des logs redactés et anonymisés.
-
-### Erreur `Integration 'eau_grand_lyon' not found`
-
-Si vous voyez dans les logs :
-
-```text
-Unable to get manifest for integration eau_grand_lyon: Integration 'eau_grand_lyon' not found.
-```
-
-le problème n'est généralement pas l'API Eau du Grand Lyon mais l'installation locale de l'intégration.
 
 Checklist de réparation :
 
@@ -241,6 +303,105 @@ En cas de doute, la structure valide est :
   translations/
     fr.json
     en.json
+```
+
+## Cas d'usage & Exemples
+
+### Alerte fuite en temps réel
+
+Créez une automation qui vous envoie une notification si une fuite est détectée :
+
+```yaml
+alias: Alerte Fuite Eau
+trigger:
+  - platform: state
+    entity_id: binary_sensor.eau_grand_lyon_alerte_fuite_possible
+    to: 'on'
+action:
+  - service: persistent_notification.create
+    data:
+      title: "⚠️ Fuite d'eau détectée !"
+      message: "Consommation actuelle : {{ state_attr('sensor.eau_grand_lyon_conso_courant_m3', 'consommation') }} m³"
+```
+
+### Notification budget dépassé
+
+Recevez une alerte si votre facture prévisionnelle dépasse un seuil :
+
+```yaml
+alias: Alerte Budget Eau
+trigger:
+  - platform: numeric_state
+    entity_id: sensor.eau_grand_lyon_prediction_cout_mois
+    above: 50  # Alert if monthly prediction exceeds €50
+action:
+  - service: notify.mobile_app_smartphone
+    data:
+      title: "💰 Budget eau dépassé"
+      message: "Estimation coût du mois : {{ states('sensor.eau_grand_lyon_prediction_cout_mois') }}€"
+```
+
+### Dashboard personnalisé
+
+Exemple de carte Lovelace pour afficher votre consommation :
+
+```yaml
+type: vertical-stack
+cards:
+  - type: gauge
+    entity: sensor.eau_grand_lyon_conso_courant_m3
+    min: 0
+    max: 100
+    unit: m³
+    title: Consommation mois courant
+  
+  - type: history-stats
+    entity: sensor.eau_grand_lyon_conso_7j
+    state: 'on'
+    period: day
+    title: Consommation 7 jours
+
+  - type: entities
+    entities:
+      - entity: sensor.eau_grand_lyon_cout_mois
+      - entity: sensor.eau_grand_lyon_eco_score
+      - entity: binary_sensor.eau_grand_lyon_alerte_fuite_possible
+```
+
+### Export de données mensuel
+
+Programmez un export automatique de vos données chaque 1er du mois :
+
+```yaml
+alias: Export données eau mensuel
+trigger:
+  - platform: time
+    at: "09:00:00"
+condition:
+  - condition: template
+    value_template: "{{ now().day == 1 }}"
+action:
+  - service: eau_grand_lyon.export_data
+    data:
+      path: /config/www/eau_export_{{ now().strftime('%Y-%m') }}.csv
+```
+
+### Fomulations prédictives
+
+Créez un template pour afficher une estimation personnalisée :
+
+```jinja2
+{% set consumption = states('sensor.eau_grand_lyon_conso_courant_m3') | float(0) %}
+{% set tarif = 5.20 %}
+{% if consumption < 50 %}
+  💚 Très économe ({{ consumption }} m³)
+{% elif consumption < 100 %}
+  🟢 Bon ({{ consumption }} m³)
+{% elif consumption < 150 %}
+  🟡 À optimiser ({{ consumption }} m³)
+{% else %}
+  🔴 À réduire ({{ consumption }} m³)
+{% endif %}
 ```
 
 ### Fonctionnalités à venir
