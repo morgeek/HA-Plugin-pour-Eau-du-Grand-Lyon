@@ -43,6 +43,32 @@
       "reconfigure_failed": "Reconfiguration failed."
     }
   },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "Unable to connect to the Eau du Grand Lyon server. Check your network connection and service status."
+    },
+    "invalid_auth": {
+      "message": "Incorrect credentials. Please verify your email and password."
+    },
+    "waf_blocked": {
+      "message": "Request blocked by the server's web firewall. Increase the update interval or wait a few minutes before retrying."
+    },
+    "api_error": {
+      "message": "Eau du Grand Lyon API error. Check the service status or see logs for details."
+    },
+    "export_failed": {
+      "message": "Data export failed: {reason}"
+    },
+    "download_failed": {
+      "message": "Invoice download failed: {reason}"
+    },
+    "invalid_path": {
+      "message": "Invalid path. The path must be a non-empty string."
+    },
+    "no_invoices": {
+      "message": "No invoices found for the configured contract(s)."
+    }
+  },
   "options": {
     "step": {
       "init": {

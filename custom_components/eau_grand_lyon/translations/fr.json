@@ -43,6 +43,32 @@
       "reconfigure_failed": "Reconfiguration échouée."
     }
   },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "Impossible de se connecter au serveur Eau du Grand Lyon. Vérifiez votre connexion réseau et le statut du service."
+    },
+    "invalid_auth": {
+      "message": "Identifiants incorrects. Veuillez vérifier votre email et mot de passe."
+    },
+    "waf_blocked": {
+      "message": "La requête a été bloquée par le pare-feu web du serveur. Augmentez l'intervalle de mise à jour ou patientez quelques minutes avant de réessayer."
+    },
+    "api_error": {
+      "message": "Erreur de l'API Eau du Grand Lyon. Vérifiez le statut du service ou consultez les logs pour plus de détails."
+    },
+    "export_failed": {
+      "message": "Échec de l'export des données : {reason}"
+    },
+    "download_failed": {
+      "message": "Échec du téléchargement de la facture : {reason}"
+    },
+    "invalid_path": {
+      "message": "Chemin invalide. Le chemin doit être une chaîne de caractères non vide."
+    },
+    "no_invoices": {
+      "message": "Aucune facture trouvée pour le(s) contrat(s) configuré(s)."
+    }
+  },
   "options": {
     "step": {
       "init": {
