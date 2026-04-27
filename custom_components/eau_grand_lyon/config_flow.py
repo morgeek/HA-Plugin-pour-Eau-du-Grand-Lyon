@@ -50,6 +50,33 @@ def _validate_email(value: str) -> str:
     return value
 
 
+async def _authenticate_and_handle_errors(
+    email: str, password: str, context: str = ""
+) -> dict[str, str]:
+    """Authenticate user and return error dict if authentication fails, or empty dict on success."""
+    errors: dict[str, str] = {}
+    async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True)) as session:
+        api = EauGrandLyonApi(session, email, password)
+        try:
+            await api.authenticate()
+        except AuthenticationError as err:
+            _LOGGER.warning("Auth échouée%s: %s", context, err)
+            errors["base"] = "invalid_auth"
+        except WafBlockedError as err:
+            _LOGGER.warning("Blocage WAF%s: %s", context, err)
+            errors["base"] = "waf_blocked"
+        except NetworkError as err:
+            _LOGGER.warning("Erreur réseau%s: %s", context, err)
+            errors["base"] = "cannot_connect"
+        except ApiError as err:
+            _LOGGER.warning("Erreur API%s: %s", context, err)
+            errors["base"] = "api_error"
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.exception("Erreur inattendue%s: %s", context, err)
+            errors["base"] = "unknown"
+    return errors
+
+
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_EMAIL): vol.All(str, _validate_email),
@@ -107,37 +134,18 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             email = user_input[CONF_EMAIL]
             password = user_input[CONF_PASSWORD]
-
-            async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True)) as session:
-                api = EauGrandLyonApi(session, email, password)
-                try:
-                    await api.authenticate()
-                except AuthenticationError as err:
-                    _LOGGER.warning("Réauth échouée: %s", err)
-                    errors["base"] = "invalid_auth"
-                except WafBlockedError as err:
-                    _LOGGER.warning("Blocage WAF: %s", err)
-                    errors["base"] = "waf_blocked"
-                except NetworkError as err:
-                    _LOGGER.warning("Erreur réseau: %s", err)
-                    errors["base"] = "cannot_connect"
-                except ApiError as err:
-                    _LOGGER.warning("Erreur API: %s", err)
-                    errors["base"] = "api_error"
-                except Exception as err:  # noqa: BLE001
-                    _LOGGER.exception("Erreur inattendue: %s", err)
-                    errors["base"] = "unknown"
-                else:
-                    self.hass.config_entries.async_update_entry(
-                        config_entry,
-                        data={
-                            **config_entry.data,
-                            CONF_EMAIL: email,
-                            CONF_PASSWORD: password,
-                        },
-                    )
-                    await self.hass.config_entries.async_reload(config_entry.entry_id)
-                    return self.async_abort(reason="reauth_successful")
+            errors = await _authenticate_and_handle_errors(email, password, " (reauth)")
+            if not errors:
+                self.hass.config_entries.async_update_entry(
+                    config_entry,
+                    data={
+                        **config_entry.data,
+                        CONF_EMAIL: email,
+                        CONF_PASSWORD: password,
+                    },
+                )
+                await self.hass.config_entries.async_reload(config_entry.entry_id)
+                return self.async_abort(reason="reauth_successful")
 
         # Pré-remplir avec l'email courant
         current_email = config_entry.data.get(CONF_EMAIL, "")
@@ -173,37 +181,18 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             email = user_input[CONF_EMAIL]
             password = user_input[CONF_PASSWORD]
-
-            async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True)) as session:
-                api = EauGrandLyonApi(session, email, password)
-                try:
-                    await api.authenticate()
-                except AuthenticationError as err:
-                    _LOGGER.warning("Reconfig auth échouée: %s", err)
-                    errors["base"] = "invalid_auth"
-                except WafBlockedError as err:
-                    _LOGGER.warning("Blocage WAF: %s", err)
-                    errors["base"] = "waf_blocked"
-                except NetworkError as err:
-                    _LOGGER.warning("Erreur réseau: %s", err)
-                    errors["base"] = "cannot_connect"
-                except ApiError as err:
-                    _LOGGER.warning("Erreur API: %s", err)
-                    errors["base"] = "api_error"
-                except Exception as err:  # noqa: BLE001
-                    _LOGGER.exception("Erreur inattendue: %s", err)
-                    errors["base"] = "unknown"
-                else:
-                    self.hass.config_entries.async_update_entry(
-                        config_entry,
-                        data={
-                            **config_entry.data,
-                            CONF_EMAIL: email,
-                            CONF_PASSWORD: password,
-                        },
-                    )
-                    await self.hass.config_entries.async_reload(config_entry.entry_id)
-                    return self.async_abort(reason="reconfigure_successful")
+            errors = await _authenticate_and_handle_errors(email, password, " (reconfigure)")
+            if not errors:
+                self.hass.config_entries.async_update_entry(
+                    config_entry,
+                    data={
+                        **config_entry.data,
+                        CONF_EMAIL: email,
+                        CONF_PASSWORD: password,
+                    },
+                )
+                await self.hass.config_entries.async_reload(config_entry.entry_id)
+                return self.async_abort(reason="reconfigure_successful")
 
         # Pré-remplir avec les données courantes
         current_email = config_entry.data.get(CONF_EMAIL, "")
@@ -242,37 +231,18 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             email = user_input[CONF_EMAIL]  # already stripped and validated by schema
             password = user_input[CONF_PASSWORD]
-
-            async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True)) as session:
-                api = EauGrandLyonApi(session, email, password)
-                try:
-                    await api.authenticate()
-                except AuthenticationError as err:
-                    _LOGGER.warning("Auth échouée: %s", err)
-                    errors["base"] = "invalid_auth"
-                except WafBlockedError as err:
-                    _LOGGER.warning("Blocage WAF: %s", err)
-                    errors["base"] = "waf_blocked"
-                except NetworkError as err:
-                    _LOGGER.warning("Erreur réseau: %s", err)
-                    errors["base"] = "cannot_connect"
-                except ApiError as err:
-                    _LOGGER.warning("Erreur API: %s", err)
-                    errors["base"] = "api_error"
-                except Exception as err:  # noqa: BLE001
-                    _LOGGER.exception("Erreur inattendue: %s", err)
-                    errors["base"] = "unknown"
-                else:
-                    await self.async_set_unique_id(email.lower())
-                    self._abort_if_unique_id_configured()
-                    return self.async_create_entry(
-                        title=f"Eau du Grand Lyon ({email})",
-                        data={
-                            CONF_EMAIL: email,
-                            CONF_PASSWORD: password,
-                            CONF_TARIF_M3: user_input[CONF_TARIF_M3],
-                        },
-                    )
+            errors = await _authenticate_and_handle_errors(email, password)
+            if not errors:
+                await self.async_set_unique_id(email.lower())
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(
+                    title=f"Eau du Grand Lyon ({email})",
+                    data={
+                        CONF_EMAIL: email,
+                        CONF_PASSWORD: password,
+                        CONF_TARIF_M3: user_input[CONF_TARIF_M3],
+                    },
+                )
 
         return self.async_show_form(
             step_id="user",

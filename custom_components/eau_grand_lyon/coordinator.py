@@ -397,7 +397,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         for raw in raw_contracts:
             details = EauGrandLyonApi.parse_contract_details(raw)
             ref = details["reference"]
-            if not ref:
+            cid = details.get("id")
+            if not ref or not cid:
+                _LOGGER.warning("Invalid contract (missing reference or ID); skipping")
                 continue
 
             contract_data = await self._process_contract(details, tarif_m3, factures, experimental)

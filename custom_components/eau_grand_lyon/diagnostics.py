@@ -26,14 +26,13 @@ async def async_get_config_entry_diagnostics(
     
     coordinator = entry.runtime_data
 
-
     diagnostics_data = {
         "entry": {
             "title": entry.title,
             "version": entry.version,
             "options": entry.options,
         },
-        "coordinator_data": coordinator.data,
+        "coordinator_data": coordinator.data or {"status": "no_data_available"},
     }
 
     return async_redact_data(diagnostics_data, to_redact)
