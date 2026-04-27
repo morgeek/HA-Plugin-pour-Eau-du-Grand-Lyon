@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
+from homeassistant.const import EntityCategory
 
 from .base import _EauGrandLyonBase, _EauGrandLyonDailyBase
 
@@ -323,6 +324,8 @@ class EauGrandLyonCompatibilitySensor(_EauGrandLyonBase):
 
     _attr_icon = "mdi:check-network"
     translation_key = "compatibilite_compteur"
+    _attr_entity_registry_enabled_default = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -352,6 +355,7 @@ class EauGrandLyonConsoAnnuelleRefSensor(_EauGrandLyonBase):
     _attr_icon = "mdi:water-circle"
     translation_key = "conso_annuelle_ref"
     _attr_suggested_display_precision = 0
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)

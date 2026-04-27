@@ -169,6 +169,7 @@ class EauGrandLyonCoutReelMoisSensor(_EauGrandLyonBase):
     _attr_icon = "mdi:receipt-text-check"
     translation_key = "cout_reel_mois"
     _attr_suggested_display_precision = 2
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -199,6 +200,7 @@ class EauGrandLyonCoutReelAnnuelSensor(_EauGrandLyonBase):
     _attr_icon = "mdi:receipt-text-outline"
     translation_key = "cout_reel_annuel"
     _attr_suggested_display_precision = 2
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)

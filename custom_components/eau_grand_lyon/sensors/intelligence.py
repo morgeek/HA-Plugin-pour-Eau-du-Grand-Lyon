@@ -101,6 +101,7 @@ class EauGrandLyonCO2FootprintSensor(_EauGrandLyonBase):
 
     _attr_icon = "mdi:molecule-co2"
     _attr_state_class = SensorStateClass.TOTAL
+    _attr_entity_registry_enabled_default = False
     translation_key = "co2_footprint"
     _attr_native_unit_of_measurement = "kg CO2e"
     _attr_suggested_display_precision = 2
@@ -128,6 +129,7 @@ class EauGrandLyonLimescaleSensor(_EauGrandLyonBase):
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "g"
     _attr_icon = "mdi:shimmer"
+    _attr_entity_registry_enabled_default = False
     translation_key = "limescale"
     _attr_suggested_display_precision = 0
 
