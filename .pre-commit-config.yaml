@@ -1,0 +1,38 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 24.1.1
+    hooks:
+      - id: black
+        language_version: python3
+        files: custom_components/eau_grand_lyon/
+
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ["--profile", "black"]
+        files: custom_components/eau_grand_lyon/
+
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        args: ["--max-line-length=120", "--extend-ignore=E203,W503"]
+        files: custom_components/eau_grand_lyon/
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+        files: ^custom_components/eau_grand_lyon/.*\.json$
+      - id: detect-private-key
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.33.0
+    hooks:
+      - id: yamllint
+        files: ^custom_components/eau_grand_lyon/
+        args: [--relaxed]
