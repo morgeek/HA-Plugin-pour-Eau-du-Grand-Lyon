@@ -79,6 +79,7 @@
           "tarif_m3": "Static price per m³ (€)",
           "price_entity": "Dynamic price entity (sensor)",
           "experimental_api": "⚗️ Experimental mode (2026 API endpoints)",
+          "max_retries": "Max API retry attempts",
           "household_size": "Number of household occupants",
           "water_hardness": "Water hardness (°fH)",
           "subscription_annual": "💶 Annual fixed subscription (€/yr)"
@@ -86,6 +87,7 @@
         "data_description": {
           "price_entity": "Optional: Select an entity (e.g. sensor.water_price) to use as the current price instead of the static value.",
           "experimental_api": "Enables new /rest/produits/ endpoints discovered in the 2026 Angular bundle: real invoices, daily estimated leaks, load curves. Automatic fallback to old endpoints is always active.",
+          "max_retries": "Maximum number of attempts before switching to offline mode. Retry timing uses exponential backoff with jitter to reduce load on the API.",
           "household_size": "Used to calculate the Eco-Score and personalised Eco-Coach tips.",
           "water_hardness": "Water hardness in French degrees (°fH). Lyon average: {hardness_lyon_avg} °fH. If you have a softener, set to the output hardness (e.g. 10-15 °fH).",
           "subscription_annual": "Annual fixed subscription cost (excluding consumption). Visible on your annual invoice. Ex. Grand Lyon 2024: ~{subscription_example} €/yr. Leave at 0 to exclude the subscription from cost calculations.",

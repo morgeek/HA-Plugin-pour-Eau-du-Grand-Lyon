@@ -56,6 +56,9 @@ class EauGrandLyonLastUpdateSensor(_EauGrandLyonGlobalBase):
         return {
             "dernière_erreur": data.get("last_error"),
             "type_erreur": data.get("last_error_type"),
+            "heure_dernier_echec": data.get("last_failure_time"),
+            "raison_dernier_echec": data.get("last_failure_reason"),
+            "age_cache_jours": data.get("cache_age_days"),
         }
 
 
@@ -88,13 +91,17 @@ class EauGrandLyonHealthSensor(_EauGrandLyonGlobalBase):
             "last_update_success_time": data.get("last_update_success_time"),
             "last_error":               data.get("last_error"),
             "last_error_type":          data.get("last_error_type"),
+            "last_failure_time":        data.get("last_failure_time"),
+            "last_failure_reason":      data.get("last_failure_reason"),
             "offline_mode":             data.get("offline_mode", False),
+            "cache_age_days":           data.get("cache_age_days"),
             "experimental_mode":        data.get("experimental_mode", False),
             "api_mode":                 data.get("api_mode", "Legacy"),
             "consecutive_failures":     data.get("consecutive_failures", 0),
         }
         if data.get("offline_mode"):
             attrs["offline_since"] = data.get("offline_since")
+            attrs["cached_data_age_days"] = data.get("cache_age_days")
             attrs["note"] = "Données issues du cache local — API indisponible"
         return attrs
 

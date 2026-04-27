@@ -23,6 +23,7 @@ from .const import (
     CONF_EMAIL,
     CONF_EXPERIMENTAL,
     CONF_PASSWORD,
+    CONF_MAX_RETRIES,
     CONF_PRICE_ENTITY,
     CONF_TARIF_M3,
     CONF_UPDATE_INTERVAL_HOURS,
@@ -31,6 +32,7 @@ from .const import (
     CONF_SUBSCRIPTION_ANNUAL,
     DEFAULT_EXPERIMENTAL,
     DEFAULT_HOUSEHOLD_SIZE,
+    DEFAULT_MAX_RETRIES,
     DEFAULT_TARIF_M3,
     DEFAULT_UPDATE_INTERVAL_HOURS,
     DEFAULT_WATER_HARDNESS,
@@ -277,6 +279,7 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
             else self._config_entry.data.get(CONF_TARIF_M3, DEFAULT_TARIF_M3)
         )
         current_experimental = bool(opts.get(CONF_EXPERIMENTAL, DEFAULT_EXPERIMENTAL))
+        current_max_retries = int(opts.get(CONF_MAX_RETRIES, DEFAULT_MAX_RETRIES))
         current_price_entity = opts.get(CONF_PRICE_ENTITY, "")
         current_household = int(opts.get(CONF_HOUSEHOLD_SIZE, DEFAULT_HOUSEHOLD_SIZE))
         current_hardness = float(opts.get(CONF_WATER_HARDNESS, DEFAULT_WATER_HARDNESS))
@@ -300,6 +303,10 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_EXPERIMENTAL,
                     default=current_experimental,
                 ): bool,
+                vol.Optional(
+                    CONF_MAX_RETRIES,
+                    default=current_max_retries,
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=6)),
                 vol.Optional(
                     CONF_HOUSEHOLD_SIZE,
                     default=current_household,

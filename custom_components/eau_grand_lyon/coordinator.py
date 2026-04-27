@@ -2,20 +2,44 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
+import random
 import time
 from datetime import datetime, timedelta, timezone
 import logging
+from typing import TYPE_CHECKING, TypedDict
 
 import aiohttp
 
 import calendar
 import re
-from typing import TYPE_CHECKING
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+
+try:
+    from async_lru import alru_cache
+except ImportError:
+    def alru_cache(maxsize: int | None = 128):
+        """Fallback async memoization when async_lru is unavailable."""
+
+        def decorator(func):
+            cache: dict[tuple, asyncio.Task] = {}
+
+            @functools.wraps(func)
+            async def wrapper(*args, **kwargs):
+                key = (args, tuple(sorted(kwargs.items())))
+                task = cache.get(key)
+                if task is None:
+                    task = asyncio.create_task(func(*args, **kwargs))
+                    cache[key] = task
+                return await task
+
+            return wrapper
+
+        return decorator
 
 try:
     from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
@@ -42,6 +66,7 @@ from .const import (
     CONF_EMAIL,
     CONF_EXPERIMENTAL,
     CONF_PASSWORD,
+    CONF_MAX_RETRIES,
     CONF_PRICE_ENTITY,
     CONF_TARIF_M3,
     CONF_UPDATE_INTERVAL_HOURS,
@@ -50,89 +75,86 @@ from .const import (
     CONF_SUBSCRIPTION_ANNUAL,
     DEFAULT_EXPERIMENTAL,
     DEFAULT_HOUSEHOLD_SIZE,
+    DEFAULT_MAX_RETRIES,
     DEFAULT_TARIF_M3,
     DEFAULT_UPDATE_INTERVAL_HOURS,
     DEFAULT_WATER_HARDNESS,
     DEFAULT_SUBSCRIPTION_ANNUAL,
     DOMAIN,
+    CACHE_MAX_AGE_DAYS,
+    RATE_LIMIT_DELAY_S,
+    NETWORK_RETRY_BASE_DELAY_S,
+    RETRY_BACKOFF_MULTIPLIER,
+    RETRY_JITTER_RATIO,
+    WAF_RETRY_BASE_DELAY_S,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-# Délais de retry en cas de blocage WAF ou d'erreur réseau
-_WAF_RETRY_DELAYS = (60.0, 300.0)   # 1 min, 5 min
-_NET_RETRY_DELAYS = (10.0, 30.0)    # 10 s, 30 s
+
+class ContractData(TypedDict, total=False):
+    """Per-contract data structure."""
+    id: str
+    reference: str
+    statut: str
+    date_effet: str
+    date_echeance: str
+    solde_eur: float
+    mensualise: bool
+    mode_paiement: str
+    calibre_compteur: str
+    usage: str
+    nombre_habitants: str
+    reference_pds: str
+    consommations: list[dict]
+    consommation_mois_courant: float | None
+    label_mois_courant: str | None
+    consommation_mois_precedent: float | None
+    label_mois_precedent: str | None
+    consommation_annuelle: float
+    consommation_cumulee_annee: float
+    consommation_n1: float | None
+    label_n1: str | None
+    mois_manquants: list[str]
+    consommations_journalieres: list[dict]
+    consommation_7j: float | None
+    consommation_30j: float | None
+    consommation_derniere_heure_m3: float | None
+    heure_pic: str | None
+    debit_moyen_m3h: float | None
+    cout_mois_courant_eur: float | None
+    cout_annuel_eur: float | None
+    tarif_m3: float
+    factures: list[dict]
+    derniere_facture: dict | None
+    fuite_estime_30j_m3: float | None
+    courbe_de_charge: list[dict]
 
 
-class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
-    """Gère les mises à jour périodiques des données Eau du Grand Lyon.
+class CoordinatorData(TypedDict, total=False):
+    """Root coordinator.data schema."""
+    contracts: dict[str, ContractData]
+    drought_level: str
+    vacation_alert: bool
+    nb_alertes: int
+    interruptions: list[dict]
+    prochaine_coupure: dict | None
+    interventions_planifiees: list[dict]
+    water_quality: dict
+    last_update_success_time: datetime | None
+    last_error: str | None
+    last_error_type: str | None
+    consecutive_failures: int
+    experimental_mode: bool
+    api_mode: str
+    offline_mode: bool
+    offline_since: datetime | None
 
-    Structure de coordinator.data :
-    {
-        "contracts": {
-            "<reference>": {
-                # — Infos contrat —
-                "id":                          str,
-                "reference":                   str,
-                "statut":                      str,
-                "date_effet":                  str,
-                "date_echeance":               str,
-                "solde_eur":                   float,
-                "mensualise":                  bool,
-                "mode_paiement":               str,
-                "calibre_compteur":            str,
-                "usage":                       str,
-                "nombre_habitants":            str,
-                "reference_pds":               str,
-                # — Consommations mensuelles —
-                "consommations":               list[dict],
-                "consommation_mois_courant":   float | None,
-                "label_mois_courant":          str | None,
-                "consommation_mois_precedent": float | None,
-                "label_mois_precedent":        str | None,
-                "consommation_annuelle":       float,
-                "consommation_cumulee_annee":  float,
-                "consommation_n1":             float | None,
-                "label_n1":                    str | None,
-                "mois_manquants":              list[str],
-                # — Consommations journalières (si compteur compatible) —
-                "consommations_journalieres":  list[dict],   # [] si non disponible
-                "consommation_7j":             float | None,
-                "consommation_30j":            float | None,
-                # — Consommations horaires (Téléo uniquement) —
-                "consommation_derniere_heure_m3": float | None,
-                "heure_pic":                   str | None,
-                "debit_moyen_m3h":             float | None,
-                # — Coûts estimés —
-                "cout_mois_courant_eur":       float | None,
-                "cout_annuel_eur":             float | None,
-                "tarif_m3":                    float,
-                # — Mode expérimental uniquement —
-                "factures":                    list[dict],   # [] si désactivé ou indispo
-                "derniere_facture":            dict | None,  # facture la plus récente
-                "fuite_estime_30j_m3":         float | None, # somme volume_fuite_estime 30j
-                "courbe_de_charge":            list[dict],   # [] si désactivé ou indispo
-            },
-            ...
-        },
-        "global":                   dict,    # Agrégats multi-contrats (nb_contracts, totaux)
-        "drought_level":            str,     # Niveau de sécheresse (Ex: "Vigilance")
-        "vacation_alert":           bool,    # Alerte si conso anormalement basse
-        "nb_alertes":               int,
-        "interruptions":            list[dict], # Coupures/travaux prévus
-        "prochaine_coupure":        dict | None, # Prochaine interruption
-        "interventions_planifiees": list[dict], # Interventions du gestionnaire
-        "water_quality":            dict,    # Qualité de l'eau (Open Data Lyon)
-        "last_update_success_time": datetime | None,
-        "last_error":               str | None,
-        "last_error_type":          str | None,
-        "consecutive_failures":     int,     # Nombre d'échecs consécutifs
-        "experimental_mode":        bool,    # indique si le mode expérimental est actif
-        "api_mode":                 str,     # "Legacy" ou "Experimental (2026)"
-        # — Mode hors-ligne —
-        "offline_mode":             bool,
-        "offline_since":            datetime | None,
-    }
+
+class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
+    """Manages periodic data updates for Eau du Grand Lyon.
+
+    Data schema is defined in ContractData and CoordinatorData TypedDicts.
     """
 
     def __init__(self, hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> None:
@@ -152,6 +174,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         )
         self._entry = entry
         self._prev_nb_alertes = 0
+        self._max_retries = int(options.get(CONF_MAX_RETRIES, DEFAULT_MAX_RETRIES))
 
         # Mode expérimental — lu depuis les options
 
@@ -170,7 +193,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             experimental=experimental,
         )
         self._last_request_mono: float | None = None
-        self._min_request_delay_s: float = 30.0  # rate limiting : 30 s min entre requêtes
+        self._min_request_delay_s: float = RATE_LIMIT_DELAY_S
 
         # Suivi de la santé des mises à jour
         self._consecutive_failures: int = 0
@@ -208,14 +231,34 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         try:
             stored = await self._store.async_load()
             if stored:
-                ts = stored.get("last_update_success_time")
-                if isinstance(ts, str):
-                    try:
-                        stored["last_update_success_time"] = datetime.fromisoformat(ts)
-                    except ValueError:
-                        stored["last_update_success_time"] = None
+                for key in (
+                    "last_update_success_time",
+                    "offline_since",
+                    "last_failure_time",
+                    "cache_saved_at",
+                ):
+                    ts = stored.get(key)
+                    if isinstance(ts, str):
+                        try:
+                            stored[key] = datetime.fromisoformat(ts)
+                        except ValueError:
+                            stored[key] = None
+                cache_saved_at = stored.get("cache_saved_at")
+                if (
+                    isinstance(cache_saved_at, datetime)
+                    and datetime.now(timezone.utc) - cache_saved_at > timedelta(days=CACHE_MAX_AGE_DAYS)
+                ):
+                    _LOGGER.warning(
+                        "Cache persistant ignore car trop ancien (%d jours max)",
+                        CACHE_MAX_AGE_DAYS,
+                    )
+                    await self._store.async_remove()
+                    return
                 stored["offline_mode"]  = False
                 stored["offline_since"] = None
+                stored["cache_age_days"] = self._calculate_cache_age_days(
+                    stored.get("last_update_success_time")
+                )
                 self.data = stored
                 self._last_good_data = stored
                 _LOGGER.debug("Données persistantes chargées (cache hors-ligne disponible)")
@@ -228,10 +271,21 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         """Sauvegarde les données persistantes (jamais l'état offline)."""
         try:
             source = self._last_good_data or self.data or {}
-            data_to_save = {**source, "offline_mode": False, "offline_since": None}
-            ts = data_to_save.get("last_update_success_time")
-            if isinstance(ts, datetime):
-                data_to_save["last_update_success_time"] = ts.isoformat()
+            data_to_save = {
+                **source,
+                "offline_mode": False,
+                "offline_since": None,
+                "cache_saved_at": datetime.now(timezone.utc),
+            }
+            for key in (
+                "last_update_success_time",
+                "offline_since",
+                "last_failure_time",
+                "cache_saved_at",
+            ):
+                ts = data_to_save.get(key)
+                if isinstance(ts, datetime):
+                    data_to_save[key] = ts.isoformat()
             await self._store.async_save(data_to_save)
             _LOGGER.debug("Données persistantes sauvegardées")
         except (json.JSONDecodeError, OSError, TypeError) as err:
@@ -256,6 +310,19 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
     # Mise à jour principale avec retry
     # ------------------------------------------------------------------
 
+    def _compute_retry_delay(self, base_delay_s: float, attempt: int) -> float:
+        """Return exponential backoff delay with bounded jitter for one retry."""
+        raw_delay = base_delay_s * (RETRY_BACKOFF_MULTIPLIER ** attempt)
+        jitter_window = raw_delay * RETRY_JITTER_RATIO
+        jitter = random.uniform(-jitter_window, jitter_window)
+        return max(0.0, raw_delay + jitter)
+
+    @staticmethod
+    def _calculate_cache_age_days(last_update_success_time: datetime | None) -> int | None:
+        if not isinstance(last_update_success_time, datetime):
+            return None
+        return max(0, (datetime.now(timezone.utc) - last_update_success_time).days)
+
     async def _async_update_data(self) -> dict:
         """Récupère toutes les données depuis l'API avec retry intelligent."""
         # Rate limiting — time.monotonic() insensible aux changements NTP
@@ -271,15 +338,18 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         last_exc: Exception | None = None
         last_err_type: str = "UnknownError"
 
-        for attempt in range(3):
+        for attempt in range(self._max_retries):
             try:
                 data = await self._fetch_all_data()
                 now = datetime.now(timezone.utc)
                 data["last_update_success_time"] = now
                 data["last_error"]           = None
                 data["last_error_type"]      = None
+                data["last_failure_time"]    = None
+                data["last_failure_reason"]  = None
                 data["offline_mode"]         = False
                 data["offline_since"]        = None
+                data["cache_age_days"]       = 0
                 data["consecutive_failures"] = 0
                 self._consecutive_failures   = 0
                 self._cumulative_index_cache = {}
@@ -298,11 +368,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                         "Vérifiez l'intervalle de mise à jour dans les options (recommandé : 24h).",
                         self._consecutive_failures,
                     )
-                if attempt < len(_WAF_RETRY_DELAYS):
-                    delay = _WAF_RETRY_DELAYS[attempt]
+                if attempt < self._max_retries - 1:
+                    delay = self._compute_retry_delay(WAF_RETRY_BASE_DELAY_S, attempt)
                     _LOGGER.warning(
-                        "WAF bloqué (tentative %d/3), retry dans %.0f s — %s",
-                        attempt + 1, delay, err,
+                        "WAF bloqué (tentative %d/%d), retry dans %.1f s — %s",
+                        attempt + 1, self._max_retries, delay, err,
                     )
                     await asyncio.sleep(delay)
 
@@ -316,11 +386,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                         "Vérifiez la connectivité et le statut du service.",
                         self._consecutive_failures,
                     )
-                if attempt < len(_NET_RETRY_DELAYS):
-                    delay = _NET_RETRY_DELAYS[attempt]
+                if attempt < self._max_retries - 1:
+                    delay = self._compute_retry_delay(NETWORK_RETRY_BASE_DELAY_S, attempt)
                     _LOGGER.warning(
-                        "Erreur réseau (tentative %d/3), retry dans %.0f s — %s",
-                        attempt + 1, delay, err,
+                        "Erreur réseau (tentative %d/%d), retry dans %.1f s — %s",
+                        attempt + 1, self._max_retries, delay, err,
                     )
                     await asyncio.sleep(delay)
 
@@ -340,8 +410,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                 else datetime.now(timezone.utc)
             )
             _LOGGER.warning(
-                "API indisponible après 3 tentatives (%s) — mode hors-ligne activé "
+                "API indisponible après %d tentatives (%s) — mode hors-ligne activé "
                 "(données du %s)",
+                self._max_retries,
                 last_err_type,
                 cache.get("last_update_success_time", "inconnu"),
             )
@@ -354,34 +425,39 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                 "offline_since":        offline_since,
                 "last_error":           str(last_exc),
                 "last_error_type":      last_err_type,
+                "last_failure_time":    datetime.now(timezone.utc),
+                "last_failure_reason":  str(last_exc),
+                "cache_age_days":       self._calculate_cache_age_days(
+                    cache.get("last_update_success_time")
+                ),
                 "consecutive_failures": self._consecutive_failures,
             }
 
-        raise UpdateFailed(f"Échec après 3 tentatives (aucun cache disponible): {last_exc}")
+        raise UpdateFailed(
+            f"Échec après {self._max_retries} tentatives (aucun cache disponible): {last_exc}"
+        )
 
     async def _fetch_all_data(self) -> dict:
         """Effectue tous les appels API et construit le dictionnaire de données."""
         experimental = self.api.experimental
+        cycle_api = _CycleCachedApi(self.api)
 
-        raw_contracts = await self.api.get_contracts()
+        raw_contracts = await cycle_api.get_contracts()
         _LOGGER.debug("%d contrat(s) trouvé(s)", len(raw_contracts))
 
-        alertes    = await self.api.get_alertes()
+        alertes = await cycle_api.get_alertes()
         nb_alertes = len(alertes)
         interruptions = _parse_outage_alertes(alertes)
         prochaine_coupure = interruptions[0] if interruptions else None
 
-        # Qualité de l'eau (Open Data Métropole Lyon) + interventions planifiées — en parallèle
-        water_quality, interventions_planifiees = await asyncio.gather(
-            self.api.get_water_quality(),
-            self.api.get_interventions(),
-        )
+        water_quality_task = asyncio.create_task(cycle_api.get_water_quality())
+        interventions_task = asyncio.create_task(cycle_api.get_interventions())
 
         tarif_m3 = self._calculate_tarif_m3()
 
         factures_raw: list[dict] = []
         if experimental:
-            factures_raw = await self.api.get_factures()
+            factures_raw = await cycle_api.get_factures()
 
         factures = EauGrandLyonApi.format_factures(factures_raw) if factures_raw else []
 
@@ -394,6 +470,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             "nb_contracts":             0,
         }
 
+        valid_contracts: list[dict] = []
         for raw in raw_contracts:
             details = EauGrandLyonApi.parse_contract_details(raw)
             ref = details["reference"]
@@ -401,16 +478,32 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             if not ref or not cid:
                 _LOGGER.warning("Invalid contract (missing reference or ID); skipping")
                 continue
+            valid_contracts.append(details)
 
-            contract_data = await self._process_contract(details, tarif_m3, factures, experimental)
+        contract_results = await asyncio.gather(
+            *[
+                self._process_contract(cycle_api, details, tarif_m3, factures, experimental)
+                for details in valid_contracts
+            ]
+        )
+
+        for details, contract_data in zip(valid_contracts, contract_results):
+            ref = details["reference"]
             contracts_data[ref] = contract_data
-            
+
             # Mise à jour des agrégats globaux
             global_data["total_conso_courant"]      += contract_data.get("consommation_mois_courant") or 0
             global_data["total_cout_courant_eur"]   += contract_data.get("cout_mois_courant_eur") or 0
             global_data["total_prediction_cout_eur"] += contract_data.get("prediction_cout_mois") or 0
             global_data["total_consommation_annuelle"] += contract_data.get("consommation_annuelle") or 0
             global_data["nb_contracts"] += 1
+
+        water_quality = await water_quality_task
+        try:
+            interventions_planifiees = await interventions_task
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Chargement lazy des interventions échoué : %s", err)
+            interventions_planifiees = []
 
         drought_level = self._get_drought_level()
         check_drought_issue(self.hass, drought_level)
@@ -435,6 +528,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             "last_update_success_time":   datetime.now(tz=timezone.utc),
             "last_error":                 None,
             "last_error_type":            None,
+            "last_failure_time":          None,
+            "last_failure_reason":        None,
+            "cache_age_days":             0,
         }
 
     def _calculate_tarif_m3(self) -> float:
@@ -456,17 +552,24 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         except (ValueError, TypeError):
             return DEFAULT_TARIF_M3
 
-    async def _process_contract(self, details: dict, tarif_m3: float, factures: list[dict], experimental: bool) -> dict:
+    async def _process_contract(
+        self,
+        cycle_api: "_CycleCachedApi",
+        details: dict,
+        tarif_m3: float,
+        factures: list[dict],
+        experimental: bool,
+    ) -> dict:
         """Traite les données d'un contrat spécifique."""
         ref = details["reference"]
         cid = details["id"]
 
         # ── Consommations mensuelles + journalières + données PdS (en parallèle) ──
         raw_consos, raw_daily_data, date_prochaine_facture, pds_etendu = await asyncio.gather(
-            self.api.get_monthly_consumptions(cid),
-            self.api.get_daily_consumptions(cid, nb_jours=90),
-            self.api.get_date_prochaine_facture(cid),
-            self.api.get_point_de_service_etendu(cid),
+            cycle_api.get_monthly_consumptions(cid),
+            cycle_api.get_daily_consumptions(cid, nb_jours=90),
+            cycle_api.get_date_prochaine_facture(cid),
+            cycle_api.get_point_de_service_etendu(cid),
         )
         consos              = EauGrandLyonApi.format_consumptions(raw_consos)
         consos_journalieres = raw_daily_data["entries"]
@@ -535,7 +638,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         # ── [EXPÉRIMENTAL] Courbe de charge ───────────────────────────
         courbe_de_charge = []
         if experimental and consos_journalieres:
-            courbe_de_charge = await self.api.get_courbe_de_charge(cid, nb_jours=7)
+            courbe_de_charge = await cycle_api.get_courbe_de_charge(cid, nb_jours=7)
 
         # ── [HORAIRE] Analyse de la courbe de charge ──────────────────
         consommation_derniere_heure_m3: float | None = None
@@ -568,7 +671,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
         local_leak_pattern = self._detect_local_leak(courbe_de_charge, consos_journalieres, ref)
 
         # ── [EXPÉRIMENTAL] Index réel & Factures ──────────────────────────
-        real_index = await self._get_real_index(experimental, cid, consos_journalieres)
+        real_index = await self._get_real_index(
+            cycle_api, experimental, cid, consos_journalieres
+        )
 
         # ── [LIMESCALE] Entartrage Virtuel ───────────────────────────────
         hardness = float(self._entry.options.get(CONF_WATER_HARDNESS, DEFAULT_WATER_HARDNESS))
@@ -734,11 +839,17 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
                 return True
         return False
 
-    async def _get_real_index(self, experimental: bool, cid: str, daily: list[dict]) -> float | None:
+    async def _get_real_index(
+        self,
+        cycle_api: "_CycleCachedApi",
+        experimental: bool,
+        cid: str,
+        daily: list[dict],
+    ) -> float | None:
         """Récupère l'index réel du compteur."""
         if not experimental:
             return None
-        siamm = await self.api.get_derniere_releve_siamm(cid)
+        siamm = await cycle_api.get_derniere_releve_siamm(cid)
         index = EauGrandLyonApi.parse_siamm_index(siamm)
         if index is None and daily:
             for e in reversed(daily):
@@ -896,6 +1007,57 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[dict]):
             result = round(sum(e["consommation_m3"] for e in consos), 1) if consos else None
         self._cumulative_index_cache[contract_ref] = result
         return result
+
+
+class _CycleCachedApi:
+    """Per-update-cycle cached facade around EauGrandLyonApi."""
+
+    def __init__(self, api: EauGrandLyonApi) -> None:
+        self._api = api
+
+    @alru_cache(maxsize=None)
+    async def get_contracts(self):
+        return await self._api.get_contracts()
+
+    @alru_cache(maxsize=None)
+    async def get_alertes(self):
+        return await self._api.get_alertes()
+
+    @alru_cache(maxsize=None)
+    async def get_water_quality(self):
+        return await self._api.get_water_quality()
+
+    @alru_cache(maxsize=None)
+    async def get_interventions(self):
+        return await self._api.get_interventions()
+
+    @alru_cache(maxsize=None)
+    async def get_factures(self):
+        return await self._api.get_factures()
+
+    @alru_cache(maxsize=None)
+    async def get_monthly_consumptions(self, contract_id: str):
+        return await self._api.get_monthly_consumptions(contract_id)
+
+    @alru_cache(maxsize=None)
+    async def get_daily_consumptions(self, contract_id: str, nb_jours: int = 90):
+        return await self._api.get_daily_consumptions(contract_id, nb_jours=nb_jours)
+
+    @alru_cache(maxsize=None)
+    async def get_date_prochaine_facture(self, contract_id: str):
+        return await self._api.get_date_prochaine_facture(contract_id)
+
+    @alru_cache(maxsize=None)
+    async def get_point_de_service_etendu(self, contract_id: str):
+        return await self._api.get_point_de_service_etendu(contract_id)
+
+    @alru_cache(maxsize=None)
+    async def get_courbe_de_charge(self, contract_id: str, nb_jours: int = 7):
+        return await self._api.get_courbe_de_charge(contract_id, nb_jours=nb_jours)
+
+    @alru_cache(maxsize=None)
+    async def get_derniere_releve_siamm(self, contract_id: str):
+        return await self._api.get_derniere_releve_siamm(contract_id)
 
 # ------------------------------------------------------------------
 # Helpers

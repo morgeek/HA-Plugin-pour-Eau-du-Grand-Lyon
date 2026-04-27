@@ -79,6 +79,7 @@
           "tarif_m3": "Tarif statique au m³ (€)",
           "price_entity": "Entité de prix dynamique (sensor)",
           "experimental_api": "⚗️ Mode expérimental (nouveaux endpoints API 2026)",
+          "max_retries": "Nombre max de tentatives API",
           "household_size": "Nombre d'habitants du foyer",
           "water_hardness": "Dureté de l'eau (°fH)",
           "subscription_annual": "💶 Abonnement annuel fixe (€/an)"
@@ -88,6 +89,7 @@
           "tarif_m3": "Prix de l'eau en euros par m³, utilisé pour tous les calculs de coût estimés. Consultez votre dernière facture pour le tarif exact (Grand Lyon 2024 : ~5,20 €/m³).",
           "price_entity": "Optionnel : Sélectionnez une entité (ex. sensor.prix_eau) pour utiliser le prix actuel au lieu de la valeur statique.",
           "experimental_api": "Active les nouveaux endpoints /rest/produits/ découverts dans le bundle Angular 2026 : factures réelles, fuite estimée journalière, courbe de charge. Un fallback automatique sur les anciens endpoints est toujours actif. Désactivez si vous observez des erreurs inattendues.",
+          "max_retries": "Nombre maximal de tentatives avant bascule en mode hors-ligne. Le délai de retry utilise un backoff exponentiel avec jitter pour ménager l'API.",
           "household_size": "Utilisé pour calculer l'Eco-Score et les conseils personnalisés de l'Eco-Coach.",
           "water_hardness": "Dureté en degrés Français (°fH). Moyenne Lyon : {hardness_lyon_avg} °fH. Si vous avez un adoucisseur, réglez sur la dureté de sortie (ex. 10-15 °fH).",
           "subscription_annual": "Montant annuel de la partie fixe de votre abonnement (hors consommation), visible sur votre facture. Ex. Grand Lyon 2024 : ~{subscription_example} €/an. Laissez à 0 pour ne pas inclure l'abonnement dans les calculs de coût."
@@ -315,36 +317,6 @@
       },
       "outage_alert": {
         "name": "Interruption de service (Travaux/Coupure)"
-      }
-    }
-  },
-  "services": {
-    "clear_cache": {
-      "name": "Effacer le cache local",
-      "description": "Supprime le cache persistant (historique et consommations enregistrées) et réinitialise les capteurs."
-    },
-    "update_now": {
-      "name": "Mettre à jour maintenant",
-      "description": "Force une synchronisation immédiate avec les serveurs Eau du Grand Lyon."
-    },
-    "export_data": {
-      "name": "Exporter les données",
-      "description": "Exporte l'historique des consommations vers un fichier CSV local.",
-      "fields": {
-        "path": {
-          "name": "Chemin du fichier",
-          "description": "Chemin complet du fichier CSV (ex. /config/exports/eau.csv)"
-        }
-      }
-    },
-    "download_latest_invoice": {
-      "name": "Télécharger la dernière facture",
-      "description": "Télécharge le PDF de la dernière facture disponible.",
-      "fields": {
-        "path": {
-          "name": "Chemin de destination",
-          "description": "Chemin complet du fichier PDF (ex. /config/www/facture.pdf)"
-        }
       }
     }
   }

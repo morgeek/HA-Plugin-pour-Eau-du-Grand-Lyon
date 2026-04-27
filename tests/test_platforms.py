@@ -2,6 +2,7 @@
 from datetime import date, timedelta
 from unittest.mock import MagicMock, AsyncMock
 
+from custom_components.eau_grand_lyon import sensor as sensor_platform
 from custom_components.eau_grand_lyon.button import (
     EauGrandLyonRefreshButton,
     EauGrandLyonDownloadInvoiceButton,
@@ -208,3 +209,145 @@ class TestCalendar:
         await c.async_get_events(hass, start, end)
         assert c.event is not None
         assert "Maintenance" in c.event.summary
+
+
+class TestSensorAutoDiscovery:
+    def _patch_sensor_factories(self, monkeypatch):
+        created = []
+
+        def _factory(name):
+            def _make(coordinator, entry, ref, *args):
+                entity = MagicMock()
+                suffix = name
+                if name == "conso":
+                    suffix = f"conso_{args[0]}"
+                entity._attr_unique_id = f"{entry.entry_id}_{ref}_{suffix}"
+                created.append(entity._attr_unique_id)
+                return entity
+            return _make
+
+        def _global_factory(name):
+            def _make(coordinator, entry, *args):
+                entity = MagicMock()
+                entity._attr_unique_id = f"{entry.entry_id}_{name}"
+                created.append(entity._attr_unique_id)
+                return entity
+            return _make
+
+        patches = {
+            "EauGrandLyonIndexSensor": _factory("index_cumulatif"),
+            "EauGrandLyonEnergyWaterSensor": _factory("energy_water"),
+            "EauGrandLyonEnergyCostSensor": _factory("energy_cost"),
+            "EauGrandLyonConsommationSensor": _factory("conso"),
+            "EauGrandLyonConsommationAnnuelleSensor": _factory("conso_annuelle"),
+            "EauGrandLyonYesterdaySensor": _factory("conso_hier"),
+            "EauGrandLyonIndexJournalierSensor": _factory("index_journalier"),
+            "EauGrandLyonConso7JSensor": _factory("conso_7j"),
+            "EauGrandLyonConsoMoyenne7JSensor": _factory("conso_moyenne_7j"),
+            "EauGrandLyonConso30JSensor": _factory("conso_30j"),
+            "EauGrandLyonCoutMoisSensor": _factory("cout_mois"),
+            "EauGrandLyonCoutAnnuelSensor": _factory("cout_annuel"),
+            "EauGrandLyonCoutCumuleSensor": _factory("cout_cumule"),
+            "EauGrandLyonEconomieSensor": _factory("economie"),
+            "EauGrandLyonCoutReelMoisSensor": _factory("cout_reel_mois"),
+            "EauGrandLyonCoutReelAnnuelSensor": _factory("cout_reel_annuel"),
+            "EauGrandLyonSoldeSensor": _factory("solde"),
+            "EauGrandLyonStatutSensor": _factory("statut"),
+            "EauGrandLyonDateEcheanceSensor": _factory("date_echeance"),
+            "EauGrandLyonProchaineFactureSensor": _factory("prochaine_facture"),
+            "EauGrandLyonProchaineReleveSensor": _factory("prochaine_releve"),
+            "EauGrandLyonConsoAnnuelleRefSensor": _factory("conso_annuelle_ref"),
+            "EauGrandLyonCompatibilitySensor": _factory("compatibility"),
+            "EauGrandLyonTrendSensor": _factory("trend"),
+            "EauGrandLyonPredictionConsoSensor": _factory("prediction_conso"),
+            "EauGrandLyonPredictionCostSensor": _factory("prediction_cost"),
+            "EauGrandLyonEcoScoreSensor": _factory("eco_score"),
+            "EauGrandLyonCO2FootprintSensor": _factory("co2"),
+            "EauGrandLyonSignalSensor": _factory("signal"),
+            "EauGrandLyonDerniereFactureSensor": _factory("derniere_facture"),
+            "EauGrandLyonFuiteEstimeeSensor": _factory("fuite_estimee"),
+            "EauGrandLyonHourlyConsoSensor": _factory("hourly_conso"),
+            "EauGrandLyonPeakHourSensor": _factory("peak_hour"),
+            "EauGrandLyonAvgFlowSensor": _factory("avg_flow"),
+            "EauGrandLyonAlertesSensor": _global_factory("alertes"),
+            "EauGrandLyonLastUpdateSensor": _global_factory("last_update"),
+            "EauGrandLyonHealthSensor": _global_factory("health"),
+            "EauGrandLyonDroughtSensor": _global_factory("drought"),
+            "EauGrandLyonNextOutageSensor": _global_factory("next_outage"),
+            "EauGrandLyonWaterHardnessSensor": _global_factory("water_hardness"),
+            "EauGrandLyonNitratesSensor": _global_factory("nitrates"),
+            "EauGrandLyonChloreSensor": _global_factory("chlore"),
+            "EauGrandLyonGlobalConsoSensor": _global_factory("global_conso"),
+            "EauGrandLyonGlobalCostSensor": _global_factory("global_cost"),
+            "EauGrandLyonGlobalPredictionCostSensor": _global_factory("global_prediction"),
+            "EauGrandLyonLimescaleSensor": _factory("limescale"),
+            "EauGrandLyonCoachingSensor": _factory("coaching"),
+        }
+        for attr, factory in patches.items():
+            monkeypatch.setattr(sensor_platform, attr, factory)
+        return created
+
+    async def test_standard_meter_skips_daily_and_hourly_sensors(self, monkeypatch):
+        created = self._patch_sensor_factories(monkeypatch)
+        coordinator = MagicMock()
+        coordinator.data = {
+            "contracts": {
+                "REF1": {
+                    "teleo_compatible": False,
+                    "pds_communicabilite_amm": False,
+                    "pds_mode_releve": "RELEVE_TERRAIN",
+                }
+            },
+            "experimental_mode": True,
+            "global": {},
+        }
+        entry = MagicMock()
+        entry.runtime_data = coordinator
+        entry.entry_id = "test_entry"
+
+        captured = []
+
+        def _add_entities(entities, update_before_add=False):
+            captured.extend(entities)
+
+        await sensor_platform.async_setup_entry(MagicMock(), entry, _add_entities)
+
+        unique_ids = set(created)
+        assert f"{entry.entry_id}_REF1_conso_hier" not in unique_ids
+        assert f"{entry.entry_id}_REF1_index_journalier" not in unique_ids
+        assert f"{entry.entry_id}_REF1_hourly_conso" not in unique_ids
+        assert f"{entry.entry_id}_REF1_peak_hour" not in unique_ids
+        assert f"{entry.entry_id}_REF1_avg_flow" not in unique_ids
+        assert f"{entry.entry_id}_REF1_compatibility" in unique_ids
+
+    async def test_teleo_meter_keeps_daily_and_hourly_sensors(self, monkeypatch):
+        created = self._patch_sensor_factories(monkeypatch)
+        coordinator = MagicMock()
+        coordinator.data = {
+            "contracts": {
+                "REF1": {
+                    "teleo_compatible": True,
+                    "pds_communicabilite_amm": True,
+                    "pds_mode_releve": "AMM",
+                }
+            },
+            "experimental_mode": True,
+            "global": {},
+        }
+        entry = MagicMock()
+        entry.runtime_data = coordinator
+        entry.entry_id = "test_entry"
+
+        captured = []
+
+        def _add_entities(entities, update_before_add=False):
+            captured.extend(entities)
+
+        await sensor_platform.async_setup_entry(MagicMock(), entry, _add_entities)
+
+        unique_ids = set(created)
+        assert f"{entry.entry_id}_REF1_conso_hier" in unique_ids
+        assert f"{entry.entry_id}_REF1_index_journalier" in unique_ids
+        assert f"{entry.entry_id}_REF1_hourly_conso" in unique_ids
+        assert f"{entry.entry_id}_REF1_peak_hour" in unique_ids
+        assert f"{entry.entry_id}_REF1_avg_flow" in unique_ids
