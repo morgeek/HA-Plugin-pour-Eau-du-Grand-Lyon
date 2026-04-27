@@ -5,6 +5,59 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-04-27
+
+### Refonte Architecturale
+- **Modularisation des Sensors** : `sensor.py` (1800 lignes) découpé en 9 modules spécialisés dans `sensors/`
+  - `sensors/consumption.py` — index, journalier, mensuel, annuel, moyennes
+  - `sensors/cost.py` — coûts estimés, réels, énergie, solde
+  - `sensors/contract.py` — statut contrat, échéances, relevé
+  - `sensors/intelligence.py` — Eco-Coach, Eco-Score, CO₂, tendances, prédictions
+  - `sensors/global_sensors.py` — agrégats multi-contrats, santé API, sécheresse
+  - `sensors/experimental.py` — API 2026 (factures, fuite, courbe de charge)
+  - `sensors/quality.py` — données Open Data (dureté, nitrates, chlore)
+  - `sensors/base.py` — classes de base et mixins partagés
+
+### Tests
+- **Suite de Tests Complète** : 35 tests pytest couvrant les composants critiques
+  - Tests de validation du flux de configuration (email, schéma)
+  - Tests des fonctions utilitaires du coordinateur (parsing mois, détection pannes)
+  - Tests de la logique métier (cache index, agrégats journaliers)
+  - Système de stubs HA compatible Python 3.9+
+
+### Conformité HA
+- **Audit Complet** : Vérification exhaustive de la conformité Home Assistant
+- Fix `CoordinatorEntity` : `switch.py` et `calendar.py` n'héritaient pas correctement de `CoordinatorEntity` — les entités ne s'abonnaient pas aux mises à jour du coordinateur
+- Fix `CalendarEvent` : tous les événements utilisent maintenant des objets `date` (pas `datetime`) pour être conformes aux événements "journée entière" HA
+- Fix `services.yaml` et `strings.json` : ajout des clés `selector` manquantes pour les champs de services (requis pour l'UI Outils de développement HA)
+- Fix `repairs.py` : fonctions renommées en sync (suppression du préfixe `async_` erroné)
+- Vérification : 100 clés de traduction, parfaitement synchronisées entre `strings.json`, `fr.json` et `en.json`
+
+### Corrections de Bugs
+- **Bouton Facture** : correction d'un bug critique où `entry.options.get("experimental_api")` utilisait une clé hardcodée au lieu de la constante `CONF_EXPERIMENTAL` — le bouton n'était jamais créé
+- **Imports Morts** : suppression des imports inutilisés (`asyncio`, `Any`, constantes orphelines)
+- **Constante Morte** : suppression de `_LEGACY_AEL_BASE` jamais référencée dans `api.py`
+- **Dépendance Fantôme** : suppression de `tenacity>=8.2.0` dans `manifest.json` (jamais utilisé)
+- **Dossier `api/`** : suppression du dossier abandonné qui masquait le module `api.py` (shadowing Python)
+
+### Nettoyage
+- Screenshots (257 Ko) déplacés de `custom_components/` vers `docs/screenshots/` — réduit le poids des installations HACS de 34%
+- Suppression des fichiers `.DS_Store` macOS du dépôt
+- README mis à jour : arborescence des fichiers, prérequis HA (`2024.4.0`), liens GitHub corrigés
+- Version : `2.6.0` → `2.7.0`
+
+## [2.6.0] - 2026-04-26
+
+### Ajouté
+- **Téléchargement Facture PDF** : Nouveau service `download_latest_invoice` avec normalisation robuste des données API pour retrouver le bon document même en cas de structure variable.
+- **Bouton Facture** : Entité bouton dédiée dans l'interface pour déclencher le téléchargement en un clic.
+- **Calendrier Enrichi** : Ajout des interventions terrain planifiées et des interruptions de service réseau (travaux/coupures) dans le calendrier HA.
+- **Mode Vacances (Switch)** : Activation persistante de la surveillance renforcée avec alerte immédiate sur toute consommation détectée.
+
+### Amélioré
+- **Normalisation API** : Gestion des structures de réponse variables (multi-clés, multi-postes) pour les factures et consommations journalières.
+- **Lovelace** : Mise à jour des templates `dashboard.yaml` et `energy_config.yaml`.
+
 ## [2.5.0] - 2026-04-26
 (Merci @hufon) pour le code !
 

@@ -16,17 +16,19 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
 
 Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
 
-### 🏗️ Refonte Architecturale & Tests (v2.7.0)
-- **Refonte Modulaire** : Scission du monolithe `sensor.py` (1800 lignes) en 9 modules spécialisés (`sensors/consumption.py`, `sensors/cost.py`, `sensors/intelligence.py`, etc.)
-- **Suite de Tests Complète** : 35 tests pytest couvrant les flux de config, les fonctions du coordinateur, et la logique métier
-- **Conformité HA 100%** : Audit complet et fixes de tous les problèmes de cycle de vie des entités (CoordinatorEntity)
-- **Optimisation Installation** : Réduction du bloat (screenshots déplacés en `docs/`, dépendances inutiles supprimées)
-- **Corrections Critiques** :
-  - Fix bug du bouton facture (utilisait une clé hardcodée au lieu de la constante)
-  - Fix calendrier (tous les événements maintenant en `date` objects pour HA compatibility)
-  - Fix switch vacances (CoordinatorEntity lifecycle)
-- **Nettoyage Code** : Suppression imports morts, constantes inutilisées, et refactoring du répertoire `api/` (double)
-- **Stabilité** : Aucun breaking change, migration transparente depuis v2.6.0
+### 🏗️ Refonte Architecturale & Audit HA (v2.7.0)
+- **Architecture Modulaire** : `sensor.py` (1800 lignes) découpé en 9 modules spécialisés dans `sensors/` pour une meilleure maintenabilité
+- **Suite de Tests Complète** : 35 tests pytest — flux de config, coordinateur, logique métier
+- **Audit HA Complet** : Corrections de cycle de vie des entités (`CoordinatorEntity`), types calendrier (`date` objects), clés de services (`selector`)
+- **Corrections Critiques** : Bug bouton facture (clé hardcodée), `switch.py`/`calendar.py` (`super().__init__()`), fonctions `async_` erronées dans `repairs.py`
+- **Nettoyage** : Imports morts, dépendance `tenacity` fantôme, dossier `api/` abandonné, screenshots (257 Ko) déplacés vers `docs/`
+- **Aucun breaking change** — migration transparente depuis v2.6.0
+
+### 📦 Téléchargement Facture & Calendrier Enrichi (v2.6.0)
+- **Service `download_latest_invoice`** : Téléchargement PDF de la dernière facture avec normalisation robuste des réponses API
+- **Bouton Facture** : Entité bouton dans l'interface HA pour déclencher le téléchargement en un clic
+- **Calendrier Enrichi** : Interventions terrain planifiées et interruptions réseau (travaux/coupures) intégrées
+- **Mode Vacances (Switch)** : Surveillance renforcée persistante avec alerte sur toute consommation
 
 ### 🚀 Hardening & Features Pack (v2.5.0)
 - **Hardening API 2026** : Parsing ultra-robuste des volumes journaliers (support multi-clés et structures API variées).
