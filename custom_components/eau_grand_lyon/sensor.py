@@ -20,6 +20,8 @@ from .sensors.consumption import (
     EauGrandLyonIndexSensor,
     EauGrandLyonYesterdaySensor,
 )
+
+PARALLEL_UPDATES = 0
 from .sensors.cost import (
     EauGrandLyonCoutAnnuelSensor,
     EauGrandLyonCoutCumuleSensor,
