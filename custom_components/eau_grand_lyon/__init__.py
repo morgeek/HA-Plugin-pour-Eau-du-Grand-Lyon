@@ -20,7 +20,10 @@ _LOGGER = logging.getLogger(__name__)
 EauGrandLyonConfigEntry = ConfigEntry[EauGrandLyonCoordinator]
 
 # This integration only supports config entries, no YAML configuration
-CONFIG_SCHEMA = vol.Schema({})
+CONFIG_SCHEMA = vol.Schema(
+    {vol.Optional(DOMAIN): vol.Schema({})},
+    extra=vol.ALLOW_EXTRA,
+)
 
 PLATFORMS: list[Platform] = [
 
