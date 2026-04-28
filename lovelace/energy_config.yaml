@@ -1,24 +1,160 @@
 # Configuration du tableau de bord Énergie Home Assistant
-# pour l'intégration Eau du Grand Lyon (v2.5.0)
+# pour l'intégration Eau du Grand Lyon (v2.9.0+)
 #
-# À ajouter dans l'interface Home Assistant :
-# Paramètres > Tableaux de bord > Énergie > Eau
+# Ce fichier documente la configuration des sources d'eau et de coût
+# dans le tableau de bord Énergie HA.
 
-# Sources d'eau recommandées :
-# ------------------------------------------------------------------
+# ────────────────────────────────────────────────────────────────────────────
+# 1. CONFIGURATION VIA L'INTERFACE HA — ÉTAPES COMPLÈTES
+# ────────────────────────────────────────────────────────────────────────────
+#
+# 📍 ÉTAPE 1 — Ajouter une source d'eau
+# ════════════════════════════════════════════════════════════════════════════
+#
+#   Accédez à : Paramètres > Tableaux de bord > Énergie > Eau
+#
+#   1. Cliquer sur "Ajouter une source"
+#   2. Sélectionner "Eau du Grand Lyon"
+#   3. Choisir l'entity ID selon votre type de compteur (voir section 2)
+#   4. Cliquer sur "Enregistrer"
+#
+# 📍 ÉTAPE 2 — Configurer le coût (optionnel mais recommandé)
+# ════════════════════════════════════════════════════════════════════════════
+#
+#   Après avoir ajouté la source d'eau, vous pouvez ajouter un suivi des coûts :
+#
+#   1. Dans le tableau de bord Énergie, cliquer sur la source d'eau (boîte EAU)
+#   2. Dans le panneau qui s'ouvre, chercher "Ajouter le coût de cette source"
+#   3. Sélectionner : sensor.eau_du_grand_lyon_energie_cout
+#   4. Cliquer sur "Enregistrer"
+#
+#   ⚠️  IMPORTANT : Le tarif doit être configuré dans Options pour que le
+#       coût soit calculé. Si le coût affiche 0, vérifiez :
+#       → Paramètres > Appareils et services > Eau du Grand Lyon > Options
+#       → Vérifier "Tarif €/m³" (doit être > 0)
+#
+# ────────────────────────────────────────────────────────────────────────────
+# 2. SOURCES D'EAU RECOMMANDÉES (par type de compteur)
+# ────────────────────────────────────────────────────────────────────────────
 
-# Option 1 (Recommandé pour compteurs Téléo/TIC) :
-# Utilise l'index journalier pour une précision optimale.
-# Entity ID : sensor.eau_du_grand_lyon_index_journalier_energy
+# 🔹 COMPTEURS TÉLÉO (communicants - relevé journalier) :
+# ────────────────────────────────────────────────────────────────────────────
+# Source d'eau : sensor.eau_du_grand_lyon_index_journalier_energy
+#   ✓ Précision maximale (mise à jour quotidienne)
+#   ✓ Récupère l'index directement du compteur Téléo
+#   ✓ Fonctionne avec le calcul automatique de l'Energy Dashboard
+#
+# Coût associé : sensor.eau_du_grand_lyon_energie_cout [ACTIVÉ PAR DÉFAUT]
+#   ✓ Calculé automatiquement si le tarif est configuré dans les options
+#   ✓ Cumule les coûts sur l'année (suitable for Energy Dashboard)
+#   ✓ À associer à la source d'eau dans l'Energy Dashboard
 
-# Option 2 (Pour compteurs standards / relève manuelle) :
-# Utilise l'index cumulatif mensuel.
-# Entity ID : sensor.eau_du_grand_lyon_index_compteur
+# 🔹 COMPTEURS STANDARDS (relève manuelle - historique mensuel) :
+# ────────────────────────────────────────────────────────────────────────────
+# Source d'eau : sensor.eau_du_grand_lyon_index_compteur
+#   ✓ Cumul mensuel basé sur le relevé officiel
+#   ✓ Fonctionne même sans Téléo
+#   ✓ Moins de détails mais suffisant pour le suivi
+#
+# Coût associé : sensor.eau_du_grand_lyon_energie_cout [ACTIVÉ PAR DÉFAUT]
+#   ✓ Estimé selon le tarif configuré dans les options
+#   ✓ À associer à la source d'eau dans l'Energy Dashboard
 
-# Coûts associés :
-# ------------------------------------------------------------------
-# Vous pouvez utiliser le capteur de coût Énergie dédié :
-# Entity ID : sensor.eau_du_grand_lyon_cout_energie
+# ────────────────────────────────────────────────────────────────────────────
+# 3. STATISTIQUES INJECTÉES (Longue durée)
+# ────────────────────────────────────────────────────────────────────────────
+#
+# Depuis v2.9.0, deux statistiques externes sont auto-injectées par le
+# coordinateur dans la base de données du recorder :
+#
+# 📊 eau_grand_lyon:water_<REF>
+#    • Unit: m³
+#    • Période: mensuelle
+#    • Contenu: historique 36 mois de consommation (si disponible)
+#    • Utile pour: statistics-graph cards, Lovelace dashboards
+#    • ID statistic: "statistic:eau_grand_lyon:water_AB1234567890"
+#
+# 💰 eau_grand_lyon:cost_<REF>
+#    • Unit: EUR
+#    • Période: mensuelle
+#    • Contenu: coût estimé (conso × tarif) sur 36 mois
+#    • Condition: seulement si tarif_m3 > 0 (configuré dans Options)
+#    • Utile pour: suivi budgétaire longue durée, dashboards spécialisés
+#    • ID statistic: "statistic:eau_grand_lyon:cost_AB1234567890"
+#
+# Récupérer votre <REF> :
+#   1. Paramètres > Appareils et services > Eau du Grand Lyon
+#   2. Cliquer sur un capteur (ex: "Consommation annuelle")
+#   3. Noter le dernier segment de l'ID unique
+#      Ex: "eau_du_grand_lyon_CONSO_ANNUELLE_AB1234567890"
+#                                                       ^^^ = votre REF
 
-# Note : Si ces capteurs sont grisés, assurez-vous de les avoir 
-# ACTIVÉS dans Paramètres > Appareils et services > Eau du Grand Lyon.
+# ────────────────────────────────────────────────────────────────────────────
+# 4. UTILISER UN TABLEAU DE BORD PRÊT À L'EMPLOI
+# ────────────────────────────────────────────────────────────────────────────
+#
+# ⭐ GUIDE DE CONFIGURATION COMPLET
+# ────────────────────────────────────────────────────────────────────────────
+#
+# 📖 Lire le guide détaillé (fortement recommandé) :
+#   📄 ENERGY_DASHBOARD_SETUP.md
+#
+# Ce fichier contient les 4 étapes pour configurer complètement :
+# 1. Vérifier que le capteur de coût est activé
+# 2. Configurer le tarif €/m³
+# 3. Ajouter la source d'eau au tableau de bord Énergie
+# 4. Ajouter le coût à la source d'eau
+#
+# ────────────────────────────────────────────────────────────────────────────
+# TABLEAUX DE BORD LOVELACE PRÊTS À L'EMPLOI
+# ────────────────────────────────────────────────────────────────────────────
+#
+# Deux fichiers Lovelace complets sont fournis :
+#
+# 📄 energy_dashboard_preset.yaml
+#   → Tableau de bord complet avec tous les widgets
+#   → Inclut : consommation, coûts, qualité eau, alertes, calendrier
+#   → À importer via Paramètres > Tableaux de bord > Créer > Import YAML
+#
+# 📄 monthly_chart_cards.yaml
+#   → Exemples de cartes individuelles réutilisables
+#   → Inclut : bar charts, combo charts, ApexCharts, Statistics graphs
+#   → À copier-coller dans vos tableaux de bord personnalisés
+
+# ────────────────────────────────────────────────────────────────────────────
+# 5. TROUBLESHOOTING
+# ────────────────────────────────────────────────────────────────────────────
+
+# ❓ "Ajouter le coût" n'apparaît pas après avoir sélectionné une source d'eau ?
+# ✓ L'entity du coût doit d'abord être activée :
+#   → Paramètres > Appareils et services > Eau du Grand Lyon
+#   → Chercher "Coût... Tableau de bord Énergie"
+#   → Cliquer > Activer l'entité
+# ✓ Puis revenir au tableau de bord Énergie, il devrait proposer "Ajouter le coût"
+
+# ❓ Le coût affiche 0 EUR ou "Pas de données" ?
+# ✓ Vérifier que le tarif est configuré :
+#   → Paramètres > Appareils et services > Eau du Grand Lyon > Options
+#   → Vérifier le champ "Tarif €/m³" (doit être > 0)
+# ✓ Sauvegarder les options et attendre la prochaine mise à jour (24h par défaut)
+# ✓ Vérifier que vous avez une consommation d'eau (index > 0)
+
+# ❓ Capteur grisé ou inactive dans l'Energy Dashboard ?
+# ✓ Paramètres > Appareils et services > Eau du Grand Lyon
+# ✓ Cliquer sur le capteur > Activer l'entité
+
+# ❓ Statistiques vides ou "Pas de données" ?
+# ✓ Les statistiques s'accumulent au fil des mises à jour (eau_grand_lyon:water_<ref>)
+# ✓ Attendre 24h après la première mise à jour avec tarif configuré
+# ✓ Redémarrer HA pour forcer l'injection des statistiques
+
+# ❓ Entity ID incorrect ?
+# ✓ Récupérer vos entity_id via l'interface :
+#   Paramètres > Appareils et services > Eau du Grand Lyon
+#   Cliquer sur un capteur pour voir son entity_id complet
+
+# ────────────────────────────────────────────────────────────────────────────
+# 📞 SUPPORT
+# ────────────────────────────────────────────────────────────────────────────
+# Issue tracker: https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/issues
+# README:        https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon

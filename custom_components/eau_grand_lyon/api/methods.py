@@ -64,7 +64,7 @@ async def fetch_invoices(
     try:
         data = await api_client._get_produits(f"factures/{contract_id}")
         return data.get("factures", []) if data else []
-    except Exception:
+    except (KeyError, TypeError, ValueError):
         return []
 
 
@@ -81,7 +81,7 @@ async def fetch_load_curves(
     try:
         data = await api_client._get_produits(f"courbesDeCharge/{contract_id}")
         return {"courbe_de_charge": data.get("courbes", [])} if data else {}
-    except Exception:
+    except (KeyError, TypeError, ValueError):
         return {}
 
 
@@ -99,6 +99,6 @@ async def fetch_leak_estimates(
         data = await api_client._get_produits(f"fuites/{contract_id}")
         if data and "fuite_estime_30j_m3" in data:
             return {"fuite_estime_30j_m3": data["fuite_estime_30j_m3"]}
-    except Exception:
+    except (KeyError, TypeError, ValueError):
         pass
     return {}

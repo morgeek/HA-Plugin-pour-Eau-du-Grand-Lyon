@@ -1,6 +1,7 @@
 """Classes de base pour les sensors Eau du Grand Lyon."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
@@ -34,6 +35,10 @@ class _EauGrandLyonBase(CoordinatorEntity[EauGrandLyonCoordinator], SensorEntity
         if description:
             self.entity_description = description
             self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_{description.key}"
+
+    @property
+    def _current_year_str(self) -> str:
+        return f"{datetime.now().year}-01-01"
 
     @property
     def _contract(self) -> dict:
@@ -111,7 +116,7 @@ class _EauGrandLyonHourlyBase(_EauGrandLyonBase):
 class _EauGrandLyonWaterQualityBase(_EauGrandLyonGlobalBase):
     """Base pour les sensors qualité eau — unavailable si Open Data indisponible."""
 
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property

@@ -5,6 +5,72 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] - 2026-04-28
+
+### Corrections de Bugs
+
+- **AttributeError au démarrage** : Crash critique corrigé — `_current_year_str` référencée dans `extra_state_attributes` de `EauGrandLyonEnergyWaterSensor` et `EauGrandLyonEnergyCostSensor` mais jamais définie. Ajoutée dans la classe de base `_EauGrandLyonBase` (retourne `"YYYY-01-01"` pour le champ `last_reset` du tableau de bord Énergie HA).
+- **Sécheresse jamais déclenchée** : `check_drought_issue()` vérifiait les niveaux `["Alerte", "Alerte Renforcée", "Crise"]`, mais `_get_drought_level()` ne retourne que `"Vigilance"` ou `"Normal"`. Résultat : aucune issue de sécheresse n'était jamais créée dans HA Repairs. Corrigé pour créer une issue quand niveau == `"Vigilance"`.
+- **Coût cumulé = None quand conso = 0** : Le capteur "Coût cumulé" retournait `None` au lieu de `0.0€` quand la consommation était 0. Logique corrigée : `0 m³ × tarif = 0€` (valide), pas `unavailable`.
+- **timedelta(hours=48)** : Clarté : changé en `timedelta(days=2)` pour une intention plus explicite.
+- **"Économie potentielle" toujours indisponible** : La formule exigeait 24 mois d'historique, mais l'API ne retourne que 12 mois — le capteur retournait donc `None` pour tous les utilisateurs. Deux niveaux de correction :
+  1. Fallback immédiat : si l'historique 24 mois n'est pas disponible, le capteur extrapole depuis la comparaison mois courant vs mois N-1 (`(conso_N-1 - conso_courant) × 12 × tarif`). L'attribut `methode` indique `"annuelle"` ou `"extrapolation_mensuelle"` pour être transparent.
+  2. Solution durable : voir section "Historique mensuel" ci-dessous.
+- **"Index journalier" priorité incorrecte** : `get_cumulative_index()` ignorait `index_journalier_dernier` (disponible sans mode expérimental) et tombait directement en fallback sur la somme des mois. Ordre de priorité corrigé : index SIAMM expérimental → index journalier Téléo → somme mensuelle.
+- **Icônes manquantes** : Les capteurs `solde`, `conso_hier` et `last_update` n'avaient pas d'icône dans `icons.json`. Ajout de `mdi:bank-check`, `mdi:calendar-today` et `mdi:clock-check-outline`. Suppression du doublon `derniere_facture`.
+
+### Nouvelles Fonctionnalités
+
+#### Visualisation & Tableaux de Bord
+- **Statistiques de coût injectées** : Nouvelle statistic ID `eau_grand_lyon:cost_<ref>` (EUR par mois) injectée automatiquement dans la base de données HA si un tarif est configuré. Permet au tableau de bord Énergie de HA de suivre l'historique de facturation sur 24+ mois, contre 12 mois maximum via l'API.
+- **Dashboard Énergie Complet** : Fichier `lovelace/energy_dashboard_preset.yaml` — tableau de bord prêt à paster avec 10 sections : résumé jour (4 mini-cards), historique 24 mois (statistiques), graphique mensuel combiné consommation+coût, détail consommation, coûts et facturation, intelligence & coaching, Téléo (si disponible), qualité de l'eau, alertes & santé, calendrier des échéances.
+- **Exemples ApexCharts** : Fichier `lovelace/monthly_chart_cards.yaml` avec 6 exemples prêts à l'emploi utilisant `custom:apexcharts-card` pour visualiser les attributs `monthly_chart_data` : bar chart consommation 12 mois, combo chart consommation + coût, cost bar chart, statistics graph eau (24 mois), statistics graph coût (24 mois), graphique détaillé mensuel.
+- **Guide Configuration Énergie** : Refonte complète de `lovelace/energy_config.yaml` — documentation détaillée des sources d'eau par type de compteur (Téléo vs Standard), statistic IDs injectés, troubleshooting avec FAQ, liens vers les presets.
+- **Graphiques Lovelace natifs** : Les capteurs annuels (`conso_annuelle`, `cout_annuel`) exposent désormais un attribut `monthly_chart_data` structuré : liste de 12 mois avec `{label, conso_m3, cout_eur}`. Permet aux cartes Lovelace custom de tracer directement sans dépendre des statistiques HA.
+
+#### Services & APIs
+- **Téléchargement facture sur l'appareil client** : Après le téléchargement du PDF sur le serveur HA, une notification persistante est envoyée avec un lien cliquable `[Télécharger le PDF](/local/eau_grand_lyon/latest_invoice.pdf)`. Cliquer sur le lien depuis l'app HA ou le navigateur déclenche le téléchargement directement sur l'appareil (téléphone, tablette, PC). Le lien est calculé dynamiquement depuis le chemin de sauvegarde ; si le fichier est sauvegardé hors de `/config/www/`, la notification est omise.
+- **Téléchargement facture multi-contrats** : Le service `download_latest_invoice` accepte désormais un paramètre optionnel `contract_reference` pour cibler un contrat spécifique. Sans paramètre, télécharge du premier contrat avec factures (comportement antérieur). Notification inclut le numéro de contrat pour clarté. Paramètre documenté dans `services.yaml`.
+- **Historique journalier flexible** : La méthode API `_get_daily_new` utilise désormais le paramètre `nb_jours` au lieu de hardcoder 2 ans. Permet aux appelants de configurer la plage (90 jours par défaut). Améliore la flexibilité pour les futures fonctionnalités.
+
+#### Qualité du Code
+- **Exception handling spécifique** : Remplacement des `except Exception:` génériques par des exceptions spécifiques dans `api/methods.py` (`fetch_invoices`, `fetch_load_curves`, `fetch_leak_estimates`) : capture uniquement `KeyError`, `TypeError`, `ValueError` pour une meilleure clarity et maintenabilité.
+- **Manifest.json** : Ajout du champ `homeassistant: "2024.4.0"` pour clarifier la dépendance de version minimale Home Assistant (Gold requirement).
+- **services.yaml** : Documentation complète du paramètre `contract_reference` dans le service `download_latest_invoice`.
+
+### Historique Mensuel Cumulatif (36 mois)
+
+L'API Eau du Grand Lyon ne retourne que 12 mois d'historique — insuffisant pour comparer deux années complètes. Le coordinateur accumule désormais l'historique mensuel contrat par contrat dans un store dédié persistant sur disque (`_monthly_history_store`) :
+
+- **Merge intelligent** : à chaque mise à jour, les nouveaux mois de l'API sont fusionnés avec l'historique stocké. Les données fraîches priment sur les données stockées pour le même mois (dédup par `(annee, mois_index)`). Maximum 36 mois conservés.
+- **N-1 annuel réel** : `conso_annuelle_n1` utilise désormais les 36 mois fusionnés — après 12 mois d'utilisation de l'intégration, le capteur "Économie potentielle" affichera une comparaison annuelle exacte au lieu d'une extrapolation.
+- **Persistance** : l'historique survit aux redémarrages HA et aux mises à jour de l'intégration. La commande "Effacer le cache" réinitialise aussi cet historique.
+
+### Qualité & Fiabilité
+
+- **TypedDict Schema** : Remplacement du commentaire de 68 lignes dans `coordinator.py` par des définitions `TypedDict` (`ContractData`, `CoordinatorData`) — 50+ champs typés statiquement, détection des fautes de frappe à la compilation, zéro impact runtime.
+- **Précision des capteurs** : Ajout de `_attr_suggested_display_precision = 2` sur les capteurs financiers pour un affichage cohérent (€).
+- **Déduplication `strings.json`** : Suppression du bloc `services` en double (30 lignes) — une seule source de vérité pour les traducteurs.
+
+### Tests & Couverture
+
+- **213 tests** (vs 113 en v2.8.0) — +100 nouveaux tests couvrant :
+  - Plateformes complètes : `binary_sensor`, `button`, `switch`, `calendar`
+  - Chemins d'erreur API, config flow et global sensors
+  - Benchmarks de performance : latence, débit, accès aux structures de données
+  - Tests de stress concurrents : 10x et 100x appels simultanés, cohérence des données, isolation des erreurs partielles
+  - `_merge_monthly_history` : override, accumulation 24 mois, tri chronologique, plafonnement
+
+### Outillage Développeur
+
+- **Pre-commit hooks** (`.pre-commit-config.yaml`) : `black`, `isort`, `flake8`, validation YAML/JSON, détection de clés privées — qualité garantie avant chaque commit.
+- **GitHub Actions CI/CD** (`.github/workflows/test.yml`) : Tests automatisés sur Python 3.9, 3.10, 3.11 et 3.12 à chaque push et pull request, avec rapport de couverture via Codecov.
+- **api/methods.py** : Fonctions utilitaires extraites de `api/client.py` (`fetch_contracts`, `fetch_monthly_consumptions`, `fetch_invoices`, `fetch_load_curves`, `fetch_leak_estimates`) — fondation pour la future modularisation du client API.
+
+### Aucun breaking change — mise à jour transparente depuis v2.8.0
+
+---
+
 ## [2.8.0] - 2026-04-27
 
 ### Certification Gold ⭐ Home Assistant

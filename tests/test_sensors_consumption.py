@@ -122,8 +122,8 @@ class TestConso7JSensor:
         s = _make_sensor(EauGrandLyonConso7JSensor, {})
         assert s.native_value is None
 
-    def test_disabled_by_default(self):
-        assert EauGrandLyonConso7JSensor._attr_entity_registry_enabled_default is False
+    def test_enabled_by_default(self):
+        assert EauGrandLyonConso7JSensor._attr_entity_registry_enabled_default is True
 
 
 # ── EauGrandLyonConso30JSensor ────────────────────────────────────────────────
@@ -137,8 +137,8 @@ class TestConso30JSensor:
         s = _make_sensor(EauGrandLyonConso30JSensor, {})
         assert s.native_value is None
 
-    def test_disabled_by_default(self):
-        assert EauGrandLyonConso30JSensor._attr_entity_registry_enabled_default is False
+    def test_enabled_by_default(self):
+        assert EauGrandLyonConso30JSensor._attr_entity_registry_enabled_default is True
 
 
 # ── EauGrandLyonConsoMoyenne7JSensor ──────────────────────────────────────────

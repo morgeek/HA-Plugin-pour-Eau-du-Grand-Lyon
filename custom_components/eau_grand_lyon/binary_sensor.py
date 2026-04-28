@@ -242,7 +242,7 @@ class EauGrandLyonOutageSensor(
         if not interruptions:
             return False
         today = date.today()
-        horizon = today + timedelta(hours=48)
+        horizon = today + timedelta(days=2)
         for inter in interruptions:
             debut_str = inter.get("date_debut")
             fin_str   = inter.get("date_fin")

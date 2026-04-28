@@ -175,10 +175,20 @@ class EauGrandLyonConsommationAnnuelleSensor(_EauGrandLyonBase):
         c = self._contract
         consos = c.get("consommations", [])
         last_12 = consos[-12:] if len(consos) >= 12 else consos
+        tarif = c.get("tarif_m3", 0)
+        monthly_chart = [
+            {
+                "label": e["label"],
+                "conso_m3": e["consommation_m3"],
+                "cout_eur": round(e["consommation_m3"] * tarif, 2) if tarif else None,
+            }
+            for e in last_12
+        ]
         return {
             "nb_mois_inclus": len(last_12),
             "période_début": last_12[0]["label"] if last_12 else None,
             "période_fin": last_12[-1]["label"] if last_12 else None,
+            "monthly_chart_data": monthly_chart,
             "détail_mensuel": [
                 {"période": e["label"], "consommation_m3": e["consommation_m3"]}
                 for e in last_12
@@ -194,6 +204,7 @@ class EauGrandLyonYesterdaySensor(_EauGrandLyonDailyBase):
     _attr_native_unit_of_measurement = "L"
     translation_key = "conso_hier"
     _attr_suggested_display_precision = 0
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -228,7 +239,7 @@ class EauGrandLyonConso7JSensor(_EauGrandLyonDailyBase):
     _attr_native_unit_of_measurement = "m³"
     translation_key = "conso_7j"
     _attr_suggested_display_precision = 2
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -260,7 +271,7 @@ class EauGrandLyonConso30JSensor(_EauGrandLyonDailyBase):
     _attr_native_unit_of_measurement = "m³"
     translation_key = "conso_30j"
     _attr_suggested_display_precision = 2
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -294,6 +305,7 @@ class EauGrandLyonConsoMoyenne7JSensor(_EauGrandLyonDailyBase):
     _attr_native_unit_of_measurement = "L"
     translation_key = "conso_moyenne_7j"
     _attr_suggested_display_precision = 0
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)

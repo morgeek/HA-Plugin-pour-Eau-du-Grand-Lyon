@@ -24,6 +24,7 @@ def _make_coordinator(options=None):
     coord._max_retries = 3
     coord._consecutive_failures = 0
     coord._cumulative_index_cache = {}
+    coord._monthly_history = {}
     coord._save_persistent_data = AsyncMock()
     coord.logger = MagicMock()
     return coord
@@ -239,3 +240,57 @@ class TestUpdateErrorPaths:
         assert isinstance(result["last_failure_time"], datetime)
         assert result["last_failure_reason"] == "offline"
         assert result["cache_age_days"] == 7
+
+
+class TestMergeMonthlyHistory:
+    """Tests for _merge_monthly_history static method."""
+
+    def _make_month(self, annee, mois_index, conso):
+        return {"annee": annee, "mois_index": mois_index, "label": f"M{mois_index}/{annee}", "consommation_m3": conso}
+
+    def test_empty_stored_returns_fresh(self):
+        fresh = [self._make_month(2025, 1, 10.0), self._make_month(2025, 2, 12.0)]
+        result = EauGrandLyonCoordinator._merge_monthly_history([], fresh)
+        assert len(result) == 2
+        assert result[0]["consommation_m3"] == 10.0
+
+    def test_fresh_overrides_stored_for_same_month(self):
+        stored = [self._make_month(2025, 1, 10.0)]
+        fresh = [self._make_month(2025, 1, 15.0)]  # API has updated value
+        result = EauGrandLyonCoordinator._merge_monthly_history(stored, fresh)
+        assert len(result) == 1
+        assert result[0]["consommation_m3"] == 15.0
+
+    def test_accumulates_old_and_new_months(self):
+        # Simulates API returning months 13-24 (old) stored, now returning months 1-12 (new)
+        stored = [self._make_month(2024, m, 10.0) for m in range(1, 13)]   # 12 months 2024
+        fresh = [self._make_month(2025, m, 12.0) for m in range(1, 13)]    # 12 months 2025
+        result = EauGrandLyonCoordinator._merge_monthly_history(stored, fresh)
+        assert len(result) == 24
+        assert result[0]["annee"] == 2024
+        assert result[-1]["annee"] == 2025
+
+    def test_sorted_chronologically(self):
+        stored = [self._make_month(2024, 6, 8.0), self._make_month(2024, 3, 9.0)]
+        fresh = [self._make_month(2024, 1, 10.0)]
+        result = EauGrandLyonCoordinator._merge_monthly_history(stored, fresh)
+        years_months = [(e["annee"], e["mois_index"]) for e in result]
+        assert years_months == sorted(years_months)
+
+    def test_capped_at_max_months(self):
+        stored = [self._make_month(2023, m, 10.0) for m in range(1, 13)]   # 12 months 2023
+        fresh = [self._make_month(2024, m, 11.0) for m in range(1, 13)]    # 12 months 2024
+        result = EauGrandLyonCoordinator._merge_monthly_history(stored, fresh, max_months=15)
+        assert len(result) == 15
+        # Most recent months kept
+        assert result[-1]["annee"] == 2024
+
+    def test_24_months_enables_n1_calculation(self):
+        """After 1 year of accumulation, N-1 annual calculation becomes possible."""
+        stored = [self._make_month(2024, m, 10.0) for m in range(1, 13)]
+        fresh = [self._make_month(2025, m, 12.0) for m in range(1, 13)]
+        merged = EauGrandLyonCoordinator._merge_monthly_history(stored, fresh)
+        assert len(merged) >= 24
+        last_24 = merged[-24:-12]
+        conso_n1 = sum(e["consommation_m3"] for e in last_24)
+        assert conso_n1 == pytest.approx(120.0)  # 12 × 10.0 from 2024

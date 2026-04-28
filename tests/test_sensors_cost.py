@@ -34,12 +34,12 @@ class TestCoutCumuleSensor:
         })
         assert s.native_value == round(20.0 * 5.20, 2)
 
-    def test_zero_conso_returns_none(self):
+    def test_zero_conso_returns_zero(self):
         s = _make_sensor(EauGrandLyonCoutCumuleSensor, {
             "consommation_cumulee_annee": 0,
             "tarif_m3": 5.20,
         })
-        assert s.native_value is None
+        assert s.native_value == 0.0
 
     def test_missing_tarif_returns_none(self):
         s = _make_sensor(EauGrandLyonCoutCumuleSensor, {
@@ -47,9 +47,9 @@ class TestCoutCumuleSensor:
         })
         assert s.native_value is None
 
-    def test_missing_conso_returns_none(self):
+    def test_missing_conso_returns_zero(self):
         s = _make_sensor(EauGrandLyonCoutCumuleSensor, {"tarif_m3": 5.20})
-        assert s.native_value is None
+        assert s.native_value == 0.0
 
     def test_rounding(self):
         s = _make_sensor(EauGrandLyonCoutCumuleSensor, {

@@ -245,10 +245,9 @@ class EauGrandLyonApi:
         }
 
     async def _get_daily_new(self, contract_id: str, nb_jours: int) -> list[dict]:
-        del nb_jours
         try:
             date_fin = datetime.now(timezone.utc)
-            date_debut = date_fin.replace(year=date_fin.year - 2)
+            date_debut = date_fin - timedelta(days=nb_jours)
             params = {
                 "dateDebut": date_debut.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
                 "dateFin": date_fin.strftime("%Y-%m-%dT%H:%M:%S.000Z"),

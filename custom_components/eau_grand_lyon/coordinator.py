@@ -206,8 +206,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         self._persistent_data_loaded = False
         self._persistent_data_lock = asyncio.Lock()
 
-        # Cache persistant pour l'historique
+        # Cache persistant pour l'historique offline
         self._store = Store(hass, 1, f"{DOMAIN}_{entry.entry_id}_history")
+
+        # Historique mensuel cumulatif — accumule jusqu'à 36 mois pour le calcul N-1
+        # (l'API ne retourne que 12 mois ; ce store persiste les mois précédents entre mises à jour)
+        self._monthly_history_store = Store(hass, 1, f"{DOMAIN}_{entry.entry_id}_monthly_history")
+        self._monthly_history: dict[str, list[dict]] = {}
 
         if experimental:
             _LOGGER.info(
@@ -228,6 +233,17 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
     async def _load_persistent_data(self) -> None:
         """Charge les données persistantes depuis le store."""
+        try:
+            stored_history = await self._monthly_history_store.async_load()
+            if stored_history and isinstance(stored_history, dict):
+                self._monthly_history = stored_history
+                _LOGGER.debug(
+                    "Historique mensuel chargé : %d contrat(s)",
+                    len(self._monthly_history),
+                )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Erreur chargement historique mensuel : %s", err)
+
         try:
             stored = await self._store.async_load()
             if stored:
@@ -293,9 +309,45 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         except Exception as err:
             _LOGGER.warning("Erreur inattendue sauvegarde données persistantes : %s", err)
 
+    async def _save_monthly_history(self) -> None:
+        """Persiste l'historique mensuel cumulatif sur disque."""
+        try:
+            await self._monthly_history_store.async_save(self._monthly_history)
+            _LOGGER.debug("Historique mensuel sauvegardé : %d contrat(s)", len(self._monthly_history))
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Erreur sauvegarde historique mensuel : %s", err)
+
+    @staticmethod
+    def _merge_monthly_history(
+        stored: list[dict],
+        fresh: list[dict],
+        max_months: int = 36,
+    ) -> list[dict]:
+        """Fusionne l'historique stocké avec les données fraîches de l'API.
+
+        Les données fraîches priment sur les données stockées pour le même mois.
+        Retourne la liste triée chronologiquement, plafonnée à max_months.
+        """
+        by_key: dict[tuple, dict] = {}
+        for entry in stored:
+            key = (entry.get("annee"), entry.get("mois_index"))
+            if None not in key:
+                by_key[key] = entry
+        for entry in fresh:
+            key = (entry.get("annee"), entry.get("mois_index"))
+            if None not in key:
+                by_key[key] = entry  # API prime sur le stocké
+        merged = sorted(
+            by_key.values(),
+            key=lambda e: (e.get("annee", 0), e.get("mois_index", 0)),
+        )
+        return merged[-max_months:]
+
     async def async_clear_cache(self) -> None:
         """Supprime le cache persistant et réinitialise les données locales."""
         await self._store.async_remove()
+        await self._monthly_history_store.async_remove()
+        self._monthly_history = {}
         self.data = {}
         self._last_good_data = None
         _LOGGER.info("Cache persistant Eau du Grand Lyon supprimé")
@@ -512,6 +564,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         await self._inject_statistics(contracts_data)
         self._handle_alert_notifications(nb_alertes)
+        await self._save_monthly_history()
 
         return {
             "contracts":                  contracts_data,
@@ -574,6 +627,17 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         consos              = EauGrandLyonApi.format_consumptions(raw_consos)
         consos_journalieres = raw_daily_data["entries"]
 
+        # Merge avec l'historique persistant pour avoir jusqu'à 36 mois (nécessaire pour N-1 annuel)
+        merged_consos = self._merge_monthly_history(
+            self._monthly_history.get(ref, []),
+            consos,
+        )
+        self._monthly_history[ref] = merged_consos
+        _LOGGER.debug(
+            "Contrat %s : %d mois API + historique → %d mois total",
+            ref, len(consos), len(merged_consos),
+        )
+
         conso_courant   = consos[-1]["consommation_m3"] if consos else None
         label_courant   = consos[-1]["label"]           if consos else None
         conso_precedent = consos[-2]["consommation_m3"] if len(consos) >= 2 else None
@@ -587,11 +651,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             sum(e["consommation_m3"] for e in consos if e.get("annee") == current_year), 1
         )
 
-        # Comparaison N-1 (Mois vs Mois N-1)
+        # Comparaison N-1 (Mois vs Mois N-1) — utilise les données fraîches uniquement
         conso_mois_n1, label_n1 = self._get_consumption_n1(consos)
 
-        # Consommation annuelle N-1 (Mois -24 à -13 pour comparaison annuelle)
-        last_24 = consos[-24:-12] if len(consos) >= 24 else []
+        # Consommation annuelle N-1 — utilise l'historique étendu (jusqu'à 36 mois)
+        last_24 = merged_consos[-24:-12] if len(merged_consos) >= 24 else []
         conso_annuelle_n1 = round(sum(e["consommation_m3"] for e in last_24), 1) if last_24 else None
 
         # Détection des mois manquants
@@ -954,6 +1018,52 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             except Exception as err:
                 _LOGGER.warning("Erreur injection statistiques pour %s : %s", ref, err)
 
+        # Inject cost statistics (EUR per month) if tarif is configured
+        for ref, contract in contracts_data.items():
+            consos = contract.get("consommations", [])
+            tarif = contract.get("tarif_m3", 0)
+            if not consos or tarif <= 0:
+                continue
+
+            cost_statistic_id = f"{DOMAIN}:cost_{ref}"
+            cost_metadata: StatisticMetaData = {
+                **_mean_kwargs,
+                "has_sum": True,
+                "name": f"Eau Grand Lyon - Coût {ref}",
+                "source": DOMAIN,
+                "statistic_id": cost_statistic_id,
+                "unit_of_measurement": "EUR",
+                "unit_class": "monetary",
+            }
+
+            cost_stats: list[StatisticData] = []
+            cost_cumulative = 0.0
+            for entry in consos:
+                try:
+                    mois_num = entry["mois_index"] + 1
+                    annee = entry["annee"]
+                    conso = entry["consommation_m3"]
+                    dt = datetime(annee, mois_num, 1, 0, 0, 0, tzinfo=timezone.utc)
+                    cost_month = round(conso * tarif, 2)
+                    cost_cumulative += cost_month
+                    cost_stats.append(
+                        StatisticData(
+                            start=dt,
+                            sum=round(cost_cumulative, 2),
+                            state=round(cost_month, 2),
+                        )
+                    )
+                except (KeyError, ValueError, TypeError) as err:
+                    _LOGGER.debug("Entrée coût ignorée : %s — %s", entry, err)
+                    continue
+
+            if cost_stats:
+                try:
+                    async_add_external_statistics(self.hass, cost_metadata, cost_stats)
+                    _LOGGER.debug("Statistiques coût injectées : contrat %s, %d mois", ref, len(cost_stats))
+                except Exception as err:
+                    _LOGGER.warning("Erreur injection statistiques coût %s : %s", ref, err)
+
     def _handle_alert_notifications(self, nb_alertes: int) -> None:
         """Crée ou supprime une notification HA persistante selon les alertes."""
         try:
@@ -999,9 +1109,14 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         if contract_ref in self._cumulative_index_cache:
             return self._cumulative_index_cache[contract_ref]
         contract = self.data.get("contracts", {}).get(contract_ref, {})
+        # Priority 1: real index from experimental SIAMM endpoint
         real = contract.get("real_index")
         if real is not None:
             result = round(real, 1)
+        # Priority 2: last known meter index from daily Téléo data (no experimental needed)
+        elif contract.get("index_journalier_dernier") is not None:
+            result = round(contract["index_journalier_dernier"], 1)
+        # Priority 3: sum of monthly consumptions (relative, but works for Energy dashboard)
         else:
             consos = contract.get("consommations", [])
             result = round(sum(e["consommation_m3"] for e in consos), 1) if consos else None

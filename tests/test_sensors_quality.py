@@ -37,9 +37,9 @@ class TestWaterHardnessSensor:
         s.coordinator.data = {}
         assert s.native_value is None
 
-    def test_disabled_by_default(self):
+    def test_enabled_by_default(self):
         from custom_components.eau_grand_lyon.sensors.base import _EauGrandLyonWaterQualityBase
-        assert _EauGrandLyonWaterQualityBase._attr_entity_registry_enabled_default is False
+        assert _EauGrandLyonWaterQualityBase._attr_entity_registry_enabled_default is True
 
     def test_extra_attributes_contains_turbidity(self):
         s = _make_quality_sensor(EauGrandLyonWaterHardnessSensor,

@@ -1,0 +1,193 @@
+# Exemples de cartes Lovelace utilisant les attributs monthly_chart_data
+# Ces cartes utilisent la bibliothèque personnalisée "custom:apexcharts-card" (HACS)
+#
+# Installation:
+#   1. Installer apexcharts-card depuis HACS (Intégrations > apexcharts-card)
+#   2. Copier les cartes ci-dessous dans votre tableau de bord ou dans le YAML brut
+
+# ────────────────────────────────────────────────────────────────────────────
+# Card 1 : Graphique en barres — Consommation par mois (12 derniers mois)
+# ────────────────────────────────────────────────────────────────────────────
+type: custom:apexcharts-card
+header:
+  title: Consommation mensuelle (m³)
+  show: true
+chart_type: bar
+apex_config:
+  chart:
+    height: 250
+    toolbar:
+      show: true
+  plotOptions:
+    bar:
+      borderRadius: 4
+      columnWidth: "80%"
+  colors:
+    - "#1E90FF"
+series:
+  - entity: sensor.eau_du_grand_lyon_consommation_annuelle
+    attribute: monthly_chart_data
+    transform: |
+      return x.map(e => ({x: e.label, y: e.conso_m3}))
+    type: column
+    name: "m³"
+
+---
+# ────────────────────────────────────────────────────────────────────────────
+# Card 2 : Graphique combiné — Consommation (barres) + Coût (ligne)
+# ────────────────────────────────────────────────────────────────────────────
+type: custom:apexcharts-card
+header:
+  title: Consommation & Coût mensuel
+  show: true
+chart_type: bar
+apex_config:
+  chart:
+    height: 280
+    toolbar:
+      show: true
+  plotOptions:
+    bar:
+      borderRadius: 4
+      columnWidth: "70%"
+series:
+  # Consommation (barres, axe gauche)
+  - entity: sensor.eau_du_grand_lyon_consommation_annuelle
+    attribute: monthly_chart_data
+    transform: |
+      return x.map(e => ({x: e.label, y: e.conso_m3}))
+    type: column
+    name: "Consommation (m³)"
+    color: "#1E90FF"
+    yaxis_id: conso
+  # Coût (ligne, axe droit)
+  - entity: sensor.eau_du_grand_lyon_cout_annuel
+    attribute: monthly_chart_data
+    transform: |
+      return x.map(e => ({x: e.label, y: e.cout_eur}))
+    type: line
+    name: "Coût (€)"
+    color: "#FF6B35"
+    yaxis_id: cout
+yaxis:
+  - id: conso
+    apex_config:
+      title:
+        text: "m³"
+      opposite: false
+  - id: cout
+    apex_config:
+      title:
+        text: "€"
+      opposite: true
+
+---
+# ────────────────────────────────────────────────────────────────────────────
+# Card 3 : Graphique en barres — Coût mensuel avec moyenne
+# ────────────────────────────────────────────────────────────────────────────
+type: custom:apexcharts-card
+header:
+  title: Coût mensuel (€)
+  show: true
+chart_type: bar
+apex_config:
+  chart:
+    height: 250
+    toolbar:
+      show: true
+  plotOptions:
+    bar:
+      borderRadius: 4
+      columnWidth: "80%"
+  colors:
+    - "#FF6B35"
+series:
+  - entity: sensor.eau_du_grand_lyon_cout_annuel
+    attribute: monthly_chart_data
+    transform: |
+      return x.map(e => ({x: e.label, y: e.cout_eur}))
+    type: column
+    name: "€"
+
+---
+# ────────────────────────────────────────────────────────────────────────────
+# Card 4 : Graphique statistique — Historique mensuel sur 24 mois
+# (Utilise les statistiques injectées dans HA, pas besoin de custom:apexcharts-card)
+# ────────────────────────────────────────────────────────────────────────────
+type: statistics-graph
+title: Historique 24 mois (m³)
+entities:
+  - entity: sensor.eau_du_grand_lyon_consommation_annuelle
+    statistics_type: change
+chart_type: bar
+period: month
+days_to_show: 730
+stat_types:
+  - change
+
+---
+# ────────────────────────────────────────────────────────────────────────────
+# Card 5 : Graphique statistique — Coût sur 24 mois
+# (Utilise la statistique de coût injectée : eau_grand_lyon:cost_<ref>)
+# ────────────────────────────────────────────────────────────────────────────
+type: statistics-graph
+title: Historique coût 24 mois (€)
+entities:
+  - entity: statistic:eau_grand_lyon:cost_VOTRE_REF_CONTRAT
+    # ⚠️ Remplacer VOTRE_REF_CONTRAT par votre référence contrat
+    # (visible dans l'ID de capteur, ex: sensor.eau_du_grand_lyon_*_<ref>)
+    statistics_type: change
+chart_type: bar
+period: month
+days_to_show: 730
+stat_types:
+  - change
+
+---
+# ────────────────────────────────────────────────────────────────────────────
+# Card 6 : Détail mensuel — Entités avec tableau
+# ────────────────────────────────────────────────────────────────────────────
+type: custom:apexcharts-card
+header:
+  title: Détail mensuel
+  show: true
+  show_states: true
+  colorize_states: true
+chart_type: bar
+apex_config:
+  chart:
+    height: 300
+  tooltip:
+    y:
+      formatter: |
+        function(y) {
+          if(y !== null) {
+            return y.toFixed(2) + " m³";
+          }
+          return y;
+        }
+series:
+  - entity: sensor.eau_du_grand_lyon_consommation_annuelle
+    attribute: monthly_chart_data
+    transform: |
+      return x.map(e => ({x: e.label, y: e.conso_m3}))
+    type: column
+    name: "m³"
+    color: "#1E90FF"
+
+# ────────────────────────────────────────────────────────────────────────────
+# 💡 Utilisation :
+# ────────────────────────────────────────────────────────────────────────────
+# - Les cartes utilisent des attributs de capteur (custom:apexcharts-card)
+# - "monthly_chart_data" est une liste d'objets {label, conso_m3, cout_eur}
+# - Remplacer les entity_id par les vôtres selon votre configuration
+# - Testé avec apexcharts-card v1.10.0+
+# - Pour la Card 5 : récupérer votre ref_contrat depuis:
+#   Paramètres > Appareils et services > Eau du Grand Lyon >
+#   cliquer sur un capteur > copier le dernier segment de l'ID unique
+#
+# 📊 Remarques :
+# - La statistique "eau_grand_lyon:cost_<ref>" est injectée automatiquement
+#   par le coordinateur si un tarif/m³ est configuré (voir Options)
+# - Les statistiques Water et Cost sont disponibles 24h après la première
+#   mise à jour avec la tarification (Card 5 peut afficher "No data" au départ)

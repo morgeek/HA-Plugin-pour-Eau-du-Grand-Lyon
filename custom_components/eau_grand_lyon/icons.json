@@ -32,7 +32,6 @@
       "coaching": { "default": "mdi:account-voice" },
       "signal": { "default": "mdi:signal-variant" },
       "alertes": { "default": "mdi:bell-alert" },
-      "derniere_facture": { "default": "mdi:clock-check-outline" },
       "health": { "default": "mdi:heart-pulse" },
       "global_conso": { "default": "mdi:water-group" },
       "global_cost": { "default": "mdi:cash-multiple" },
@@ -47,7 +46,10 @@
       "avg_flow": { "default": "mdi:water-flow" },
       "derniere_facture": { "default": "mdi:receipt-text" },
       "drought": { "default": "mdi:water-off" },
-      "next_outage": { "default": "mdi:pipe-wrench" }
+      "next_outage": { "default": "mdi:pipe-wrench" },
+      "solde": { "default": "mdi:bank-check" },
+      "conso_hier": { "default": "mdi:calendar-today" },
+      "last_update": { "default": "mdi:clock-check-outline" }
     },
     "binary_sensor": {
       "leak_alert": { "default": "mdi:water-alert" },

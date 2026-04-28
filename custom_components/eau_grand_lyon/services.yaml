@@ -29,10 +29,15 @@ download_latest_invoice:
   name: Télécharger la dernière facture
   description: >
     Télécharge le PDF de la dernière facture disponible et l'enregistre
-    localement.
+    localement. Si un contrat est spécifié, télécharge sa facture.
   fields:
     path:
       name: Chemin de destination
       description: Chemin complet du fichier PDF (ex. /config/www/facture.pdf)
       example: "/config/www/eau_grand_lyon/derniere_facture.pdf"
       default: "/config/www/eau_grand_lyon/latest_invoice.pdf"
+    contract_reference:
+      name: Référence du contrat
+      description: Numéro de contrat spécifique (optionnel). Si absent, utilise le premier contrat avec factures.
+      example: "AB1234567890"
+      required: false

@@ -22,13 +22,13 @@ async def async_create_fix_flow(
 def check_drought_issue(hass: HomeAssistant, level: str) -> None:
     """Enregistre ou supprime une issue de sécheresse selon le niveau."""
     issue_id = "drought_alert"
-    if level in ["Alerte", "Alerte Renforcée", "Crise"]:
+    if level == "Vigilance":
         ir.async_create_issue(
             hass,
             DOMAIN,
             issue_id,
             is_fixable=False,
-            severity=ir.IssueSeverity.WARNING if level != "Crise" else ir.IssueSeverity.ERROR,
+            severity=ir.IssueSeverity.WARNING,
             translation_key="drought_alert",
             translation_placeholders={"level": level},
             learn_more_url="https://www.rhone.gouv.fr/Politiques-publiques/Environnement/Eau/Secheresse",

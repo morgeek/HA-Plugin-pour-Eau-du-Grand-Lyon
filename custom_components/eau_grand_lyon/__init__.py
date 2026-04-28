@@ -142,12 +142,22 @@ def _async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to export data: {err}") from err
 
     async def async_handle_download_invoice(call):
-        """Télécharge la dernière facture PDF."""
+        """Télécharge la dernière facture PDF.
+
+        Si contract_reference est spécifié, télécharge depuis ce contrat.
+        Sinon, télécharge du premier contrat avec des factures.
+        """
         target_path = call.data.get("path", "/config/www/eau_grand_lyon/latest_invoice.pdf")
+        contract_ref_filter = call.data.get("contract_reference")
+
         if not target_path or not isinstance(target_path, str):
             raise ServiceValidationError("path must be a non-empty string")
 
-        _LOGGER.info("Service download_latest_invoice appelé — cible: %s", target_path)
+        _LOGGER.info(
+            "Service download_latest_invoice appelé — cible: %s%s",
+            target_path,
+            f" — contrat: {contract_ref_filter}" if contract_ref_filter else "",
+        )
 
         for entry in hass.config_entries.async_entries(DOMAIN):
             if not hasattr(entry, "runtime_data"):
@@ -155,8 +165,10 @@ def _async_setup_services(hass: HomeAssistant) -> None:
             coord = entry.runtime_data
             if not coord.data:
                 continue
-            # On prend la première facture du premier contrat trouvé
-            for contract in coord.data.get("contracts", {}).values():
+            for contract_ref, contract in coord.data.get("contracts", {}).items():
+                # Si un contrat est spécifié, ne traiter que celui-ci
+                if contract_ref_filter and contract_ref != contract_ref_filter:
+                    continue
                 factures = contract.get("factures", [])
                 if factures:
                     latest = factures[0]
@@ -170,7 +182,30 @@ def _async_setup_services(hass: HomeAssistant) -> None:
                                 f.write(pdf_data)
 
                         await hass.async_add_executor_job(_save_pdf)
-                        _LOGGER.info("Facture %s téléchargée avec succès", ref)
+                        _LOGGER.info("Facture %s (contrat %s) téléchargée avec succès", ref, contract_ref)
+
+                        # Derive the /local/ URL from the saved path so the user
+                        # can download the file directly to their device.
+                        www_root = hass.config.path("www")
+                        try:
+                            rel = os.path.relpath(target_path, www_root)
+                            download_url = f"/local/{rel}"
+                        except ValueError:
+                            download_url = None
+
+                        if download_url:
+                            await hass.services.async_call(
+                                "persistent_notification",
+                                "create",
+                                {
+                                    "title": "📄 Facture Eau du Grand Lyon",
+                                    "message": (
+                                        f"Facture du contrat {contract_ref} téléchargée. "
+                                        f"[Télécharger le PDF]({download_url})"
+                                    ),
+                                    "notification_id": f"eau_grand_lyon_invoice_{contract_ref}",
+                                },
+                            )
                         return
                     except PermissionError as err:
                         raise HomeAssistantError(f"Permission denied writing to {target_path}") from err
@@ -179,6 +214,8 @@ def _async_setup_services(hass: HomeAssistant) -> None:
                     except Exception as err:
                         raise HomeAssistantError(f"Failed to download invoice: {err}") from err
 
+        if contract_ref_filter:
+            raise HomeAssistantError(f"No invoices found for contract {contract_ref_filter}")
         raise HomeAssistantError("No invoices found")
 
     hass.services.async_register(DOMAIN, "clear_cache", async_handle_clear_cache)

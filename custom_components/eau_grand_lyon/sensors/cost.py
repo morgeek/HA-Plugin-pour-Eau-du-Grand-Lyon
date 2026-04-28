@@ -56,9 +56,21 @@ class EauGrandLyonCoutAnnuelSensor(_EauGrandLyonBase):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         c = self._contract
+        consos = c.get("consommations", [])
+        last_12 = consos[-12:] if len(consos) >= 12 else consos
+        tarif = c.get("tarif_m3", 0)
+        monthly_chart = [
+            {
+                "label": e["label"],
+                "conso_m3": e["consommation_m3"],
+                "cout_eur": round(e["consommation_m3"] * tarif, 2) if tarif else None,
+            }
+            for e in last_12
+        ]
         return {
             "consommation_annuelle_m3": c.get("consommation_annuelle"),
-            "tarif_appliqué_eur_m3": c.get("tarif_m3"),
+            "tarif_appliqué_eur_m3": tarif,
+            "monthly_chart_data": monthly_chart,
             "note": "Estimation — modifiez le tarif dans les options de l'intégration.",
         }
 
@@ -82,7 +94,7 @@ class EauGrandLyonCoutCumuleSensor(_EauGrandLyonBase):
         c = self._contract
         conso_cumulee = c.get("consommation_cumulee_annee", 0)
         tarif = c.get("tarif_m3", 0)
-        return round(conso_cumulee * tarif, 2) if conso_cumulee and tarif else None
+        return round(conso_cumulee * tarif, 2) if tarif else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -111,21 +123,38 @@ class EauGrandLyonEconomieSensor(_EauGrandLyonBase):
     @property
     def native_value(self) -> float | None:
         c = self._contract
+        tarif = c.get("tarif_m3")
+        if not tarif:
+            return None
+        # Preferred: full 12-month vs 12-month comparison (requires 24 months of API history)
         conso_n1_annuelle = c.get("consommation_annuelle_n1")
         conso_annuelle = c.get("consommation_annuelle")
-        tarif = c.get("tarif_m3")
-        if conso_n1_annuelle is not None and conso_annuelle is not None and tarif:
+        if conso_n1_annuelle is not None and conso_annuelle is not None:
             return round((conso_n1_annuelle - conso_annuelle) * tarif, 2)
+        # Fallback: extrapolate from month-level N-1 (API only returns 12 months, so this
+        # is the common case — projects the month-over-month saving to a full year estimate)
+        conso_n1 = c.get("consommation_n1")
+        conso_courant = c.get("consommation_mois_courant")
+        if conso_n1 is not None and conso_courant is not None:
+            return round((conso_n1 - conso_courant) * 12 * tarif, 2)
         return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         c = self._contract
+        has_annual = c.get("consommation_annuelle_n1") is not None
         return {
             "consommation_n1_annuelle_m3": c.get("consommation_annuelle_n1"),
             "consommation_actuelle_m3": c.get("consommation_annuelle"),
+            "consommation_n1_mois_m3": c.get("consommation_n1"),
+            "consommation_mois_courant_m3": c.get("consommation_mois_courant"),
             "tarif_eur_m3": c.get("tarif_m3"),
-            "note": "Comparaison basée sur les 12 derniers mois vs les 12 mois précédents.",
+            "methode": "annuelle" if has_annual else "extrapolation_mensuelle",
+            "note": (
+                "Comparaison 12 mois vs 12 mois précédents."
+                if has_annual
+                else "Estimation extrapolée depuis la comparaison mois courant vs mois N-1 × 12."
+            ),
         }
 
 
@@ -252,7 +281,7 @@ class EauGrandLyonEnergyCostSensor(_EauGrandLyonBase):
     _attr_native_unit_of_measurement = "EUR"
     translation_key = "energy_cost"
     _attr_suggested_display_precision = 2
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)

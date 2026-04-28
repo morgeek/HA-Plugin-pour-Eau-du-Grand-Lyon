@@ -6,7 +6,7 @@
 
 Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](https://www.home-assistant.io/) qui fournit des capteurs pour les données de consommation d'eau du service Eau du Grand Lyon.
 
-> 🌟 **Gold Tier Certified** — Cette intégration satisfait tous les critères de qualité Home Assistant Gold : gestion d'erreurs robuste, flux de configuration avancés, traductions complètes, documentation détaillée, et 113 tests automatisés.
+> 🌟 **Gold Tier Certified** — Cette intégration satisfait tous les critères de qualité Home Assistant Gold : gestion d'erreurs robuste, flux de configuration avancés, traductions complètes, documentation détaillée, et 213 tests automatisés.
 
 ![alt text](https://raw.githubusercontent.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/main/docs/screenshots/HA-Eau-Grand-Lyon.png)
 
@@ -19,6 +19,36 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
 ## Historique des versions
 
 Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
+
+### 🔧 Corrections & Nouvelles Fonctionnalités (v2.9.0)
+
+#### Corrections Critiques
+- **Correction crash démarrage** : `AttributeError` sur `_current_year_str` dans les capteurs Energy — corrigé dans la classe de base
+- **"Économie potentielle" restaurée** : Fallback immédiat par extrapolation mensuelle, puis calcul exact après 12 mois d'accumulation d'historique
+- **Historique mensuel 36 mois** : Le coordinateur accumule l'historique contrat par contrat sur disque — le calcul N-1 annuel devient exact après 1 an d'utilisation
+- **Sécheresse jamais déclenchée** : Corrections du niveau détecté dans `repairs.py` (désormais niveau == "Vigilance")
+- **Coût cumulé = 0€ au lieu de unavailable** : Correction du capteur "Coût cumulé" (0 m³ → 0.0€ valide)
+- **Index journalier priorité** : Correctif pour utiliser réellement `index_journalier_dernier` avant la fallback sur somme mensuelle
+- **nb_jours parameter utilisé** : `_get_daily_new` utilise désormais le paramètre au lieu de hardcoder 2 ans
+
+#### Nouvelles Fonctionnalités
+- **Statistiques de coût injectées** : Nouvel ID statistic `eau_grand_lyon:cost_<ref>` (EUR/mois) injecté automatiquement si tarif configuré — permet au tableau de bord Énergie HA de suivre l'historique de facturation sur 24+ mois
+- **Graphiques Lovelace natifs** : Fichier `lovelace/monthly_chart_cards.yaml` avec 6 exemples prêts à l'emploi utilisant `custom:apexcharts-card` pour visualiser les données `monthly_chart_data` (consommation/coût mensuels, graphiques combinés)
+- **Dashboard Énergie complet** : `lovelace/energy_dashboard_preset.yaml` — tableau de bord prêt à paster avec 10 sections (résumé, historique 24 mois, coûts, intelligence, Téléo, qualité eau, alertes, calendrier)
+- **Guide Configuration Énergie** : `lovelace/energy_config.yaml` enrichi avec documentation complète des sources d'eau, statistic IDs, troubleshooting
+- **Téléchargement facture multi-contrats** : Service `download_latest_invoice` accepte maintenant paramètre optionnel `contract_reference` pour cibler un contrat spécifique
+- **Icônes manquantes** : `solde`, `conso_hier`, `last_update` ajoutées dans `icons.json`
+
+#### Qualité & Maintenabilité
+- **213 tests** (vs 113 en v2.8.0) — +100 nouveaux tests couvrant toutes les plateformes et chemins d'erreur
+- **Exception handling** : Remplacement des `except Exception` génériques par des exceptions spécifiques (`KeyError`, `TypeError`, `ValueError`) dans `api/methods.py`
+- **Documentation des statistic IDs** : Clarification des IDs injectés pour la traçabilité et l'intégration Energy Dashboard
+- **Type hints améliorés** — ~80% de couverture sur les méthodes critiques
+- **CI/CD GitHub Actions** : Tests automatisés sur Python 3.9–3.12 à chaque push et pull request
+- **Pre-commit hooks** : `black`, `isort`, `flake8`, validation YAML/JSON, détection de clés privées
+- **Manifest.json** : Ajout du champ `homeassistant: "2024.4.0"` pour clarifier les dépendances
+- **Aucun dead code** — code audit effectué, zéro imports inutilisés
+- **Aucun breaking change** — upgrade transparent depuis v2.8.0
 
 ### ⭐ Certification Gold Home Assistant (v2.8.0)
 - **Quality Scale Gold** : Intégration certifiée conforme aux critères Gold de Home Assistant
@@ -129,22 +159,59 @@ L'API officielle utilise un pare-feu web (WAF) qui peut bloquer les requêtes tr
 2. **Attendez quelques minutes** : L'intégration réessaye automatiquement après un délai exponentiel
 
 ### Dashboard Lovelace
-- Template complet : `lovelace/dashboard.yaml`
-- Template avec notifications : `lovelace/dashboard_notifications.yaml`*(temporairement désactivé)*
-- Graphique historique sur 24 mois, comparaison N-1, coûts, alerte conditionnelle
-- Boutons de test pour les notifications Pushover/Telegram/vocales
-- Vue journalière si les données sont disponibles
 
-### Intégration Energy Dashboard
-- **Sensors optimisés** : Sensors dédiés avec `state_class: total_increasing` pour de meilleures statistiques
-- **Coûts énergétiques automatiques** : Calcul automatique des coûts basé sur le tarif configuré
-- **Stats par période** : Statistiques automatiques générées par HA pour tous les sensors
-- **Configuration** : Template de configuration dans `lovelace/energy_config.yaml`
+#### Templates Prêts à l'Emploi (v2.9.0+)
+- **`lovelace/energy_dashboard_preset.yaml`** — Dashboard complet prêt à paster (10 sections : résumé, 24 mois historique, coûts, intelligence, Téléo, qualité, alertes, calendrier)
+- **`lovelace/monthly_chart_cards.yaml`** — 6 exemples de cartes ApexCharts pour visualiser `monthly_chart_data` :
+  - Bar chart consommation mensuelle
+  - Combo chart consommation + coût
+  - Bar chart coût mensuel
+  - Statistics graph 24 mois (sans HACS)
+  - Statistics graph coût (avec statistic ID)
+  - Graphique détaillé mensuel
+- **`lovelace/dashboard.yaml`** — Dashboard "Synthèse" avec graphiques et statistiques (v2.8.0+)
+- **`lovelace/dashboard_notifications.yaml`** — Template avec notifications avancées *(optionnel)*
 
-Pour activer l'intégration Energy :
-1. Activez les sensors "Consommation eau (Énergie)" et "Coûts eau (Énergie)" dans les entités
-2. Ajoutez la configuration dans `configuration.yaml` ou via l'interface Énergie
-3. Les statistiques se généreront automatiquement
+#### Installation Rapide
+```
+1. Ouvrir lovelace/energy_dashboard_preset.yaml
+2. Copier tout le contenu YAML
+3. HA : Paramètres > Tableaux de bord > Créer > Importer à partir du YAML
+4. Adapter les entity_id si différents (voir votre intégration)
+5. Valider — le dashboard s'affiche immédiatement
+```
+
+### Intégration Energy Dashboard (v2.9.0+)
+
+#### Statistiques Injectées Automatiquement
+Depuis v2.9.0, deux statistic IDs externes sont injectés automatiquement par le coordinateur :
+
+| Statistic ID | Unit | Period | Usage |
+|---|---|---|---|
+| `eau_grand_lyon:water_<ref>` | m³ | Monthly | Historique consommation 36 mois, Energy Dashboard |
+| `eau_grand_lyon:cost_<ref>` | EUR | Monthly | Historique coûts 36 mois (si tarif configuré), suivi budgétaire |
+
+*`<ref>` = votre numéro de contrat (ex: AB1234567890)*
+
+#### Configuration Pas à Pas
+Pour configurer le tableau de bord Énergie avec coûts, consultez le **[guide complet](lovelace/ENERGY_DASHBOARD_SETUP.md)**.
+
+En résumé :
+1. **Vérifier que le capteur de coût est activé** : `sensor.eau_du_grand_lyon_energie_cout`
+2. **Configurer le tarif €/m³** dans Paramètres > Options
+3. **Ajouter une source d'eau** au tableau de bord Énergie :
+   - Téléo : `sensor.eau_du_grand_lyon_index_journalier_energy` (quotidien, haute précision)
+   - Standard : `sensor.eau_du_grand_lyon_index_compteur` (mensuel)
+4. **Ajouter le coût** pour cette source : `sensor.eau_du_grand_lyon_energie_cout`
+2. **Coûts** : `sensor.eau_du_grand_lyon_energie_cout` (auto-calculé si tarif configuré)
+3. **Statistiques** : Utilisez les statistic IDs ci-dessus pour les cartes `statistics-graph` (voir exemples dans `monthly_chart_cards.yaml`)
+
+#### Troubleshooting
+- ⚠️ Capteurs grisés ? → Paramètres > Appareils et services > Eau du Grand Lyon > Activer
+- 📊 Statistiques vides ? → Attendre 24h après config du tarif, puis redémarrer HA
+- 🔍 Statistic ID inconnu ? → Vérifier `YOURHA/api/statistic_metadata` ou utiliser l'UI directement
+
+Pour plus de détails : voir `lovelace/energy_config.yaml`
 
 ### Notifications Avancées & Blueprints
 L'intégration inclut désormais des **Blueprints** (modèles d'automatisation) pour configurer en un clic :
@@ -287,7 +354,6 @@ En cas de doute, la structure valide est :
 /config/custom_components/eau_grand_lyon/
   manifest.json
   __init__.py
-  api.py
   config_flow.py
   coordinator.py
   sensor.py
@@ -300,6 +366,11 @@ En cas de doute, la structure valide est :
   const.py
   strings.json
   services.yaml
+  api/
+    __init__.py
+    client.py
+    auth.py
+    endpoints.py
   brand/
     icon.png
     logo.png

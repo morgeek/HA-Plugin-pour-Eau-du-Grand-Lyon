@@ -1,0 +1,271 @@
+title: Tableau de bord Eau du Grand Lyon
+views:
+  - path: eau
+    title: Eau
+    icon: mdi:water
+    cards:
+      # ──────────────────────────────────────────────────────────────────────
+      # Résumé du jour (4 colonnes)
+      # ──────────────────────────────────────────────────────────────────────
+      - type: horizontal-stack
+        cards:
+          - type: custom:mini-graph-card
+            entity: sensor.eau_du_grand_lyon_consommation_hier
+            name: Hier
+            icon: mdi:calendar-today
+            line_color: "#1E90FF"
+            show:
+              name: true
+              icon: true
+              legend: false
+          - type: custom:mini-graph-card
+            entity: sensor.eau_du_grand_lyon_consommation_mois_courant
+            name: Ce mois
+            icon: mdi:calendar-month
+            line_color: "#1E90FF"
+            show:
+              name: true
+              icon: true
+              legend: false
+          - type: custom:mini-graph-card
+            entity: sensor.eau_du_grand_lyon_cout_mois_courant_eur
+            name: Coût estimé
+            icon: mdi:currency-eur
+            line_color: "#FF6B35"
+            show:
+              name: true
+              icon: true
+              legend: false
+          - type: custom:mini-graph-card
+            entity: sensor.eau_du_grand_lyon_solde_compte
+            name: Solde
+            icon: mdi:bank-check
+            line_color: "#28A745"
+            show:
+              name: true
+              icon: true
+              legend: false
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Historique 24 mois (statistiques injectées)
+      # ──────────────────────────────────────────────────────────────────────
+      - type: statistics-graph
+        title: Historique consommation (24 mois)
+        entities:
+          - entity: sensor.eau_du_grand_lyon_consommation_annuelle
+            statistics_type: change
+        chart_type: bar
+        period: month
+        days_to_show: 730
+        stat_types:
+          - change
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Graphique mensuel (consommation + coût)
+      # Nécessite custom:apexcharts-card de HACS
+      # ──────────────────────────────────────────────────────────────────────
+      - type: custom:apexcharts-card
+        header:
+          title: Consommation & Coût mensuel (derniers 12 mois)
+          show: true
+        chart_type: bar
+        apex_config:
+          chart:
+            height: 280
+            toolbar:
+              show: true
+          plotOptions:
+            bar:
+              borderRadius: 4
+              columnWidth: "70%"
+        series:
+          - entity: sensor.eau_du_grand_lyon_consommation_annuelle
+            attribute: monthly_chart_data
+            transform: |
+              return x.map(e => ({x: e.label, y: e.conso_m3}))
+            type: column
+            name: "m³"
+            color: "#1E90FF"
+            yaxis_id: conso
+          - entity: sensor.eau_du_grand_lyon_cout_annuel
+            attribute: monthly_chart_data
+            transform: |
+              return x.map(e => ({x: e.label, y: e.cout_eur}))
+            type: line
+            name: "€"
+            color: "#FF6B35"
+            yaxis_id: cout
+        yaxis:
+          - id: conso
+            apex_config:
+              title:
+                text: "m³"
+          - id: cout
+            apex_config:
+              title:
+                text: "€"
+            opposite: true
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Section : Consommation détaillée
+      # ──────────────────────────────────────────────────────────────────────
+      - type: entities
+        title: 📊 Consommation détaillée
+        show_header_toggle: false
+        entities:
+          - entity: sensor.eau_du_grand_lyon_consommation_annuelle
+            name: Annuelle (12 mois)
+            icon: mdi:water-sync
+          - entity: sensor.eau_du_grand_lyon_consommation_mois_courant
+            name: Mois courant
+            icon: mdi:water
+          - entity: sensor.eau_du_grand_lyon_consommation_mois_precedent
+            name: Mois précédent
+            icon: mdi:water-outline
+          - entity: sensor.eau_du_grand_lyon_conso_moyenne_7j
+            name: Moyenne 7j (L/jour)
+            icon: mdi:water-plus
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Section : Coûts et factures
+      # ──────────────────────────────────────────────────────────────────────
+      - type: entities
+        title: 💰 Coûts et facturation
+        show_header_toggle: false
+        entities:
+          - entity: sensor.eau_du_grand_lyon_cout_annuel
+            name: Coût estimé annuel
+            icon: mdi:trending-down
+          - entity: sensor.eau_du_grand_lyon_cout_reel_annuel
+            name: Coût réel annuel (abonnement inclus)
+            icon: mdi:receipt-text-outline
+          - entity: sensor.eau_du_grand_lyon_economie
+            name: Économie vs année N-1
+            icon: mdi:trending-down
+          - entity: sensor.eau_du_grand_lyon_solde_compte
+            name: Solde du compte
+            icon: mdi:bank-check
+          - type: custom:button-card
+            entity: button.eau_du_grand_lyon_telecharger_la_derniere_facture
+            name: 📄 Télécharger facture
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.eau_du_grand_lyon_telecharger_la_derniere_facture
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Section : Intelligence & Coaching
+      # ──────────────────────────────────────────────────────────────────────
+      - type: entities
+        title: 🧠 Intelligence & Coaching
+        show_header_toggle: false
+        entities:
+          - entity: sensor.eau_du_grand_lyon_eco_score
+            name: Score écologique
+            icon: mdi:chart-bell-curve-cumulative
+          - entity: sensor.eau_du_grand_lyon_conseil_eco_coach
+            name: Conseil
+            icon: mdi:account-voice
+          - entity: sensor.eau_du_grand_lyon_tendance_vs_n_1
+            name: Tendance
+            icon: mdi:trending-up
+          - entity: sensor.eau_du_grand_lyon_empreinte_co2_estim
+            name: Empreinte CO₂
+            icon: mdi:molecule-co2
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Section : Téléo (Compteurs communicants - optionnel)
+      # ──────────────────────────────────────────────────────────────────────
+      - type: entities
+        title: "📡 Téléo (si compteur communicant)"
+        show_header_toggle: false
+        entities:
+          - entity: sensor.eau_du_grand_lyon_consommation_7j
+            name: Consommation 7 jours
+            icon: mdi:water-sync
+          - entity: sensor.eau_du_grand_lyon_consommation_30j
+            name: Consommation 30 jours
+            icon: mdi:water-sync
+          - entity: sensor.eau_du_grand_lyon_index_journalier
+            name: Index journalier
+            icon: mdi:counter
+          - entity: sensor.eau_du_grand_lyon_consommation_derniere_heure_m3
+            name: Dernière heure
+            icon: mdi:receipt-text
+          - entity: binary_sensor.eau_du_grand_lyon_alerte_fuite_teleo
+            name: Alerte fuite (Téléo)
+            icon: mdi:water-alert
+          - entity: sensor.eau_du_grand_lyon_signal_teleo
+            name: Signal Téléo
+            icon: mdi:signal-variant
+          - entity: binary_sensor.eau_du_grand_lyon_batterie_module_teleo
+            name: Batterie OK
+            icon: mdi:pipe-wrench
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Section : Qualité de l'eau (Open Data)
+      # ──────────────────────────────────────────────────────────────────────
+      - type: entities
+        title: 💧 Qualité de l'eau (Open Data)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.eau_du_grand_lyon_durete_de_l_eau_open_data
+            name: Dureté (°fH)
+            icon: mdi:water-opacity
+          - entity: sensor.eau_du_grand_lyon_nitrates_open_data
+            name: Nitrates (mg/L)
+            icon: mdi:flask
+          - entity: sensor.eau_du_grand_lyon_chlore_residuel_open_data
+            name: Chlore résiduel (mg/L)
+            icon: mdi:water-plus
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Section : Alertes & Santé du système
+      # ──────────────────────────────────────────────────────────────────────
+      - type: entities
+        title: "⚠️ Alertes & Santé"
+        show_header_toggle: false
+        entities:
+          - entity: sensor.eau_du_grand_lyon_nb_alertes
+            name: Nombre d'alertes
+            icon: mdi:bell-alert
+          - entity: sensor.eau_du_grand_lyon_sante_integr
+            name: Santé intégration
+            icon: mdi:heart-pulse
+          - entity: sensor.eau_du_grand_lyon_derniere_maj
+            name: Dernière mise à jour
+            icon: mdi:clock-check-outline
+          - entity: sensor.eau_du_grand_lyon_niveau_de_secheresse
+            name: Niveau sécheresse
+            icon: mdi:water-off
+          - entity: switch.eau_du_grand_lyon_mode_vacances
+            name: Mode vacances
+            icon: mdi:suitcase
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Calendrier : Échéances de facturation et relevés
+      # ──────────────────────────────────────────────────────────────────────
+      - type: calendar
+        entities:
+          - entity: calendar.eau_du_grand_lyon_echeances_facturation
+        title: 📅 Échéances de facturation
+
+# ────────────────────────────────────────────────────────────────────────────
+# NOTES D'INSTALLATION
+# ────────────────────────────────────────────────────────────────────────────
+# 1. Ce fichier utilise des cartes personnalisées (custom:*)
+#    Installer via HACS :
+#      - mini-graph-card
+#      - apexcharts-card (optionnel, pour les graphiques avancés)
+#      - button-card (optionnel, pour le bouton facture stylisé)
+#
+# 2. Remplacer les entity_id par vos identifiants réels si différents
+#    (Paramètres > Appareils et services > Eau du Grand Lyon)
+#
+# 3. Les cartes avec entités qui n'existent pas (ex. compteur standard sans Téléo)
+#    s'afficheront avec un avertissement — supprimer la section ou masquer l'entité
+#
+# 4. Les statistiques "eau_grand_lyon:water_<ref>" et "eau_grand_lyon:cost_<ref>"
+#    sont injectées automatiquement après la première mise à jour
+#    (voir coordinator.py, _inject_statistics method)
