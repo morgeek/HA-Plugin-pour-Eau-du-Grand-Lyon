@@ -8,6 +8,7 @@ import os
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN
@@ -18,7 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 EauGrandLyonConfigEntry = ConfigEntry[EauGrandLyonCoordinator]
 
 # This integration only supports config entries, no YAML configuration
-CONFIG_SCHEMA = {}  # type: ignore[assignment]
+CONFIG_SCHEMA = cv.schema({})
 
 PLATFORMS: list[Platform] = [
 
