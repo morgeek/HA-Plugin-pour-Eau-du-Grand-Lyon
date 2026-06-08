@@ -5,6 +5,12 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.5] - 2026-06-08
+
+### Corrections de Bugs
+
+- **Historique mensuel incomplet (janvier-mars 2026 manquants)** : L'endpoint `/consommationsMensuelles` était appelé sans paramètre, ce qui entraînait le retour seulement des 2-3 derniers mois de données par l'API. Résultat : les mois au-delà de l'historique récent (janvier-mars 2026 dans le cas signalé) ne s'affichaient pas dans HA même si le site web les montrait. Corrigé : la méthode `get_monthly_consumptions()` accepte maintenant un paramètre `nbJours` (par défaut 1095 jours = 36 mois) qui est envoyé à l'API pour récupérer l'historique complet.
+
 ## [2.9.4] - 2026-06-08
 
 ### Corrections de Bugs

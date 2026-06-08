@@ -202,20 +202,35 @@ class EauGrandLyonApi:
         contracts = data.get("content", data) if isinstance(data, dict) else data
         return list(contracts) if contracts else []
 
-    async def get_monthly_consumptions(self, contract_id: str) -> list[dict]:
+    async def get_monthly_consumptions(self, contract_id: str, nb_jours: int = 1095) -> list[dict]:
+        """Fetch monthly consumptions with optional history parameter (36 months default).
+        
+        Args:
+            contract_id: The contract ID
+            nb_jours: Number of days of history to retrieve (default 1095 = 36 months)
+        """
+        params = {"nbJours": nb_jours} if nb_jours > 0 else {}
         data = await self._get(
-            f"/application/rest/interfaces/ael/contrats/{contract_id}/consommationsMensuelles"
+            f"/application/rest/interfaces/ael/contrats/{contract_id}/consommationsMensuelles",
+            params=params if params else None,
         )
         entries: list[dict] = []
         if not isinstance(data, dict):
             _LOGGER.warning(
-                "Reponse inattendue pour consommationsMensuelles (type=%s)",
+                "Reponse inattendue pour consommationsMensuelles (type=%s, nb_jours=%d)",
                 type(data).__name__,
+                nb_jours,
             )
             return entries
         for poste in data.get("postes", []):
             entries.extend(poste.get("data", []))
         entries.sort(key=lambda item: (int(item.get("annee", 0)), int(item.get("mois", 0))))
+        _LOGGER.debug(
+            "Monthly consumptions OK contrat %s (nb_jours=%d): %d mois recueillis",
+            contract_id,
+            nb_jours,
+            len(entries),
+        )
         return entries
 
     async def get_daily_consumptions(
