@@ -383,7 +383,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 self._cumulative_index_cache = {}
                 self._last_good_data = data
                 await self._save_persistent_data()
-                check_long_outage_issue(self.hass, 0)
+                await check_long_outage_issue(self.hass, 0)
                 return data
 
             except WafBlockedError as err:
@@ -446,7 +446,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 cache.get("last_update_success_time", "inconnu"),
             )
             days_offline = (datetime.now(timezone.utc) - offline_since).days
-            check_long_outage_issue(self.hass, days_offline)
+            await check_long_outage_issue(self.hass, days_offline)
 
             return {
                 **cache,
@@ -535,7 +535,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             interventions_planifiees = []
 
         drought_level = self._get_drought_level()
-        check_drought_issue(self.hass, drought_level)
+        await check_drought_issue(self.hass, drought_level)
         
         vacation_alert = self._check_vacation_alert(contracts_data)
 

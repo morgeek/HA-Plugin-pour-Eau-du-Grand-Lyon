@@ -5,6 +5,12 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.4] - 2026-06-08
+
+### Corrections de Bugs
+
+- **Erreur "a coroutine was expected, got None" au setup** : Les fonctions `check_drought_issue()` et `check_long_outage_issue()` dans `repairs.py` étaient synchrones mais appelaient des fonctions asynchrones HA (`ir.async_create_issue` / `ir.async_delete_issue`) sans les attendre. Résultat : des coroutines non-awaited causaient l'erreur de setup. Corrigé : ces fonctions sont maintenant `async def` avec `await` sur les appels async, et tous les appels depuis `coordinator.py` utilisent `await`.
+
 ## [2.9.3] - 2026-05-11
 
 ### Corrections de Bugs

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "eau-grand-lyon"
-version = "2.9.0"
+version = "2.9.4"
 description = "Home Assistant custom integration for Eau du Grand Lyon water utility"
 readme = "README.md"
 requires-python = ">=3.9"

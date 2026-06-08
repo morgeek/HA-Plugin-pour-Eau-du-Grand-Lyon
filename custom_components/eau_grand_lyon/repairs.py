@@ -19,11 +19,11 @@ async def async_create_fix_flow(
     return None
 
 
-def check_drought_issue(hass: HomeAssistant, level: str) -> None:
+async def check_drought_issue(hass: HomeAssistant, level: str) -> None:
     """Enregistre ou supprime une issue de sécheresse selon le niveau."""
     issue_id = "drought_alert"
     if level == "Vigilance":
-        ir.async_create_issue(
+        await ir.async_create_issue(
             hass,
             DOMAIN,
             issue_id,
@@ -34,14 +34,14 @@ def check_drought_issue(hass: HomeAssistant, level: str) -> None:
             learn_more_url="https://www.rhone.gouv.fr/Politiques-publiques/Environnement/Eau/Secheresse",
         )
     else:
-        ir.async_delete_issue(hass, DOMAIN, issue_id)
+        await ir.async_delete_issue(hass, DOMAIN, issue_id)
 
 
-def check_long_outage_issue(hass: HomeAssistant, days: int) -> None:
+async def check_long_outage_issue(hass: HomeAssistant, days: int) -> None:
     """Enregistre ou supprime une issue si la panne dure trop longtemps."""
     issue_id = "long_outage"
     if days >= 7:
-        ir.async_create_issue(
+        await ir.async_create_issue(
             hass,
             DOMAIN,
             issue_id,
@@ -50,4 +50,4 @@ def check_long_outage_issue(hass: HomeAssistant, days: int) -> None:
             translation_key="long_outage",
         )
     else:
-        ir.async_delete_issue(hass, DOMAIN, issue_id)
+        await ir.async_delete_issue(hass, DOMAIN, issue_id)
