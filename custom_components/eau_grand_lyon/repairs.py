@@ -1,4 +1,5 @@
 """Repairs platform for Eau du Grand Lyon."""
+
 from __future__ import annotations
 
 from homeassistant.components.repairs import ConfirmRepairFlow

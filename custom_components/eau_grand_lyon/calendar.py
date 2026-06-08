@@ -1,7 +1,8 @@
 """Calendar platform for Eau du Grand Lyon."""
+
 from __future__ import annotations
+
 from datetime import date, datetime, timedelta
-from typing import Any
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.config_entries import ConfigEntry
@@ -26,9 +27,7 @@ async def async_setup_entry(
     async_add_entities([EauGrandLyonCalendar(coordinator, entry)])
 
 
-class EauGrandLyonCalendar(
-    CoordinatorEntity[EauGrandLyonCoordinator], CalendarEntity
-):
+class EauGrandLyonCalendar(CoordinatorEntity[EauGrandLyonCoordinator], CalendarEntity):
     """Calendrier des échéances Eau du Grand Lyon."""
 
     _attr_has_entity_name = True
@@ -57,13 +56,15 @@ class EauGrandLyonCalendar(
             if pay_date:
                 try:
                     dt = datetime.strptime(pay_date, "%Y-%m-%d").date()
-                    events.append(CalendarEvent(
-                        summary=f"Paiement Eau ({ref})",
-                        start=dt,
-                        end=dt + timedelta(days=1),
-                        description=f"Échéance de paiement pour le contrat {ref}",
-                        location="Eau du Grand Lyon",
-                    ))
+                    events.append(
+                        CalendarEvent(
+                            summary=f"Paiement Eau ({ref})",
+                            start=dt,
+                            end=dt + timedelta(days=1),
+                            description=f"Échéance de paiement pour le contrat {ref}",
+                            location="Eau du Grand Lyon",
+                        )
+                    )
                 except (ValueError, TypeError):
                     pass
 
@@ -72,13 +73,15 @@ class EauGrandLyonCalendar(
             if bill_date:
                 try:
                     dt = datetime.strptime(bill_date, "%Y-%m-%d").date()
-                    events.append(CalendarEvent(
-                        summary=f"Prochaine facture ({ref})",
-                        start=dt,
-                        end=dt + timedelta(days=1),
-                        description=f"Prochaine facture eau pour le contrat {ref}",
-                        location="Eau du Grand Lyon",
-                    ))
+                    events.append(
+                        CalendarEvent(
+                            summary=f"Prochaine facture ({ref})",
+                            start=dt,
+                            end=dt + timedelta(days=1),
+                            description=f"Prochaine facture eau pour le contrat {ref}",
+                            location="Eau du Grand Lyon",
+                        )
+                    )
                 except (ValueError, TypeError):
                     pass
 
@@ -89,13 +92,15 @@ class EauGrandLyonCalendar(
                     dt = datetime.strptime(releve_date, "%Y-%m-%d").date()
                     mode = contract.get("pds_mode_releve", "")
                     label = "Relevé AMM automatique" if "AMM" in (mode or "") else "Relevé compteur"
-                    events.append(CalendarEvent(
-                        summary=f"{label} ({ref})",
-                        start=dt,
-                        end=dt + timedelta(days=1),
-                        description=f"Prochain relevé du compteur pour le contrat {ref}",
-                        location="Eau du Grand Lyon",
-                    ))
+                    events.append(
+                        CalendarEvent(
+                            summary=f"{label} ({ref})",
+                            start=dt,
+                            end=dt + timedelta(days=1),
+                            description=f"Prochain relevé du compteur pour le contrat {ref}",
+                            location="Eau du Grand Lyon",
+                        )
+                    )
                 except (ValueError, TypeError):
                     pass
 
@@ -112,17 +117,19 @@ class EauGrandLyonCalendar(
                 contrat_ref = inter.get("contrat_ref", "")
                 presence = " (présence requise)" if inter.get("presence_requise") else ""
                 end_d = fin_d + timedelta(days=1) if fin_d == debut_d else fin_d
-                events.append(CalendarEvent(
-                    summary=f"{type_label}{presence} ({contrat_ref})",
-                    start=debut_d,
-                    end=end_d,
-                    description=(
-                        "Intervention planifiée sur le compteur"
-                        + (" — votre présence est requise" if inter.get("presence_requise") else "")
-                        + f"\nRéférence : {inter.get('reference', '')}"
-                    ),
-                    location="Eau du Grand Lyon",
-                ))
+                events.append(
+                    CalendarEvent(
+                        summary=f"{type_label}{presence} ({contrat_ref})",
+                        start=debut_d,
+                        end=end_d,
+                        description=(
+                            "Intervention planifiée sur le compteur"
+                            + (" — votre présence est requise" if inter.get("presence_requise") else "")
+                            + f"\nRéférence : {inter.get('reference', '')}"
+                        ),
+                        location="Eau du Grand Lyon",
+                    )
+                )
             except (ValueError, TypeError, KeyError):
                 continue
 
@@ -138,13 +145,15 @@ class EauGrandLyonCalendar(
                 end_d = fin_d + timedelta(days=1) if fin_d == debut_d else fin_d
                 type_label = inter.get("type", "TRAVAUX")
                 emoji = "🚧" if "TRAVAUX" in type_label else "🔴"
-                events.append(CalendarEvent(
-                    summary=f"{emoji} {inter.get('titre', 'Interruption eau')}",
-                    start=debut_d,
-                    end=end_d,
-                    description=inter.get("description") or f"Interruption type : {type_label}",
-                    location="Eau du Grand Lyon",
-                ))
+                events.append(
+                    CalendarEvent(
+                        summary=f"{emoji} {inter.get('titre', 'Interruption eau')}",
+                        start=debut_d,
+                        end=end_d,
+                        description=inter.get("description") or f"Interruption type : {type_label}",
+                        location="Eau du Grand Lyon",
+                    )
+                )
             except (ValueError, TypeError, KeyError):
                 continue
 

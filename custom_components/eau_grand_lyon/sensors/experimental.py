@@ -1,4 +1,5 @@
 """Sensors du mode expérimental : facture, fuite estimée, courbe de charge."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -29,10 +30,7 @@ class EauGrandLyonDerniereFactureSensor(_EauGrandLyonBase):
 
     @property
     def available(self) -> bool:
-        return (
-            super().available
-            and self._contract.get("derniere_facture") is not None
-        )
+        return super().available and self._contract.get("derniere_facture") is not None
 
     @property
     def native_value(self) -> float | None:
@@ -46,18 +44,18 @@ class EauGrandLyonDerniereFactureSensor(_EauGrandLyonBase):
         facture = self._contract.get("derniere_facture") or {}
         factures = self._contract.get("factures", [])
         return {
-            "référence":          facture.get("reference", ""),
-            "date_édition":       facture.get("date_edition"),
-            "date_exigibilité":   facture.get("date_exigibilite"),
-            "montant_ht_eur":     facture.get("montant_ht"),
-            "montant_ttc_eur":    facture.get("montant_ttc"),
-            "volume_m3":          facture.get("volume_m3"),
-            "statut_paiement":    facture.get("statut_paiement", ""),
-            "nb_factures_total":  len(factures),
+            "référence": facture.get("reference", ""),
+            "date_édition": facture.get("date_edition"),
+            "date_exigibilité": facture.get("date_exigibilite"),
+            "montant_ht_eur": facture.get("montant_ht"),
+            "montant_ttc_eur": facture.get("montant_ttc"),
+            "volume_m3": facture.get("volume_m3"),
+            "statut_paiement": facture.get("statut_paiement", ""),
+            "nb_factures_total": len(factures),
             "historique_factures": [
                 {
-                    "référence":       f.get("reference"),
-                    "date_édition":    f.get("date_edition"),
+                    "référence": f.get("reference"),
+                    "date_édition": f.get("date_edition"),
                     "montant_ttc_eur": f.get("montant_ttc"),
                     "statut_paiement": f.get("statut_paiement"),
                 }
@@ -92,10 +90,7 @@ class EauGrandLyonFuiteEstimeeSensor(_EauGrandLyonBase):
 
     @property
     def available(self) -> bool:
-        return (
-            super().available
-            and self._contract.get("fuite_estime_30j_m3") is not None
-        )
+        return super().available and self._contract.get("fuite_estime_30j_m3") is not None
 
     @property
     def native_value(self) -> float | None:
@@ -109,14 +104,14 @@ class EauGrandLyonFuiteEstimeeSensor(_EauGrandLyonBase):
         # Attributs limités aux 14 derniers jours pour limiter le volume en BDD
         detail = [
             {
-                "date":                   e["date"],
+                "date": e["date"],
                 "volume_fuite_estime_m3": e.get("volume_fuite_estime_m3", 0),
             }
             for e in all_fuite[-14:]
         ]
         return {
             "nb_jours_avec_donnée": len(all_fuite),
-            "détail_journalier":    detail,
+            "détail_journalier": detail,
             "note": (
                 "Volume de fuite nocturne estimé par le compteur Téléo. "
                 "Non nul = possible fuite sur circuit intérieur."

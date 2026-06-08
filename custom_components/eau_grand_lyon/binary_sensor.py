@@ -1,4 +1,5 @@
 """Binary sensors pour Eau du Grand Lyon."""
+
 from __future__ import annotations
 
 import logging
@@ -49,9 +50,7 @@ async def async_setup_entry(
     async_add_entities(entities, update_before_add=False)
 
 
-class _EauGrandLyonBinaryBase(
-    CoordinatorEntity[EauGrandLyonCoordinator], BinarySensorEntity
-):
+class _EauGrandLyonBinaryBase(CoordinatorEntity[EauGrandLyonCoordinator], BinarySensorEntity):
     """Base pour les binary sensors Eau du Grand Lyon."""
 
     _attr_has_entity_name = True
@@ -77,10 +76,7 @@ class _EauGrandLyonBinaryBase(
         calibre = self._contract.get("calibre_compteur", "")
         usage = self._contract.get("usage", "")
         model_parts = [p for p in [calibre and f"DN{calibre}", usage] if p]
-        numero_compteur = (
-            self._contract.get("reference_pds")
-            or self._contract.get("reference", self._contract_ref)
-        )
+        numero_compteur = self._contract.get("reference_pds") or self._contract.get("reference", self._contract_ref)
         return DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry.entry_id}_{self._contract_ref}")},
             name="Eau du Grand Lyon",
@@ -220,9 +216,8 @@ class EauGrandLyonLimescaleAlertSensor(_EauGrandLyonBinaryBase):
 # Feat 3 — Capteur global : Interruption / Travaux planifiés
 # ══════════════════════════════════════════════════════════════════════
 
-class EauGrandLyonOutageSensor(
-    CoordinatorEntity[EauGrandLyonCoordinator], BinarySensorEntity
-):
+
+class EauGrandLyonOutageSensor(CoordinatorEntity[EauGrandLyonCoordinator], BinarySensorEntity):
     """True si une interruption de service est active ou prévue dans les 48h."""
 
     _attr_has_entity_name = True
@@ -245,10 +240,10 @@ class EauGrandLyonOutageSensor(
         horizon = today + timedelta(days=2)
         for inter in interruptions:
             debut_str = inter.get("date_debut")
-            fin_str   = inter.get("date_fin")
+            fin_str = inter.get("date_fin")
             try:
                 debut = date.fromisoformat(debut_str) if debut_str else None
-                fin   = date.fromisoformat(fin_str)   if fin_str   else debut
+                fin = date.fromisoformat(fin_str) if fin_str else debut
             except (ValueError, TypeError):
                 continue
             if debut is None:
@@ -263,17 +258,17 @@ class EauGrandLyonOutageSensor(
         interruptions = (self.coordinator.data or {}).get("interruptions", [])
         prochaine = (self.coordinator.data or {}).get("prochaine_coupure") or {}
         return {
-            "nb_interruptions":     len(interruptions),
-            "prochaine_date":       prochaine.get("date_debut"),
-            "prochaine_fin":        prochaine.get("date_fin"),
-            "prochaine_titre":      prochaine.get("titre"),
-            "prochaine_type":       prochaine.get("type"),
+            "nb_interruptions": len(interruptions),
+            "prochaine_date": prochaine.get("date_debut"),
+            "prochaine_fin": prochaine.get("date_fin"),
+            "prochaine_titre": prochaine.get("titre"),
+            "prochaine_type": prochaine.get("type"),
             "toutes": [
                 {
-                    "titre":      i.get("titre"),
+                    "titre": i.get("titre"),
                     "date_debut": i.get("date_debut"),
-                    "date_fin":   i.get("date_fin"),
-                    "type":       i.get("type"),
+                    "date_fin": i.get("date_fin"),
+                    "type": i.get("type"),
                 }
                 for i in interruptions[:10]
             ],

@@ -1,4 +1,5 @@
 """Bouton de rafraîchissement manuel pour Eau du Grand Lyon."""
+
 from __future__ import annotations
 
 import logging
@@ -26,17 +27,15 @@ async def async_setup_entry(
     """Crée les boutons de l'intégration."""
     coordinator = entry.runtime_data
     entities = [EauGrandLyonRefreshButton(coordinator, entry)]
-    
+
     # Bouton facture (si expérimental)
     if entry.options.get(CONF_EXPERIMENTAL):
         entities.append(EauGrandLyonDownloadInvoiceButton(coordinator, entry))
-        
+
     async_add_entities(entities)
 
 
-class EauGrandLyonRefreshButton(
-    CoordinatorEntity[EauGrandLyonCoordinator], ButtonEntity
-):
+class EauGrandLyonRefreshButton(CoordinatorEntity[EauGrandLyonCoordinator], ButtonEntity):
     """Bouton pour forcer la mise à jour immédiate des données."""
 
     _attr_has_entity_name = True
@@ -72,9 +71,7 @@ class EauGrandLyonRefreshButton(
         await self.coordinator.async_request_refresh()
 
 
-class EauGrandLyonDownloadInvoiceButton(
-    CoordinatorEntity[EauGrandLyonCoordinator], ButtonEntity
-):
+class EauGrandLyonDownloadInvoiceButton(CoordinatorEntity[EauGrandLyonCoordinator], ButtonEntity):
     """Bouton pour télécharger la dernière facture PDF."""
 
     _attr_has_entity_name = True

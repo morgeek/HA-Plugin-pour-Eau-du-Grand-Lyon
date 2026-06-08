@@ -1,4 +1,5 @@
 """PKCE OAuth helpers for Eau du Grand Lyon."""
+
 from __future__ import annotations
 
 import base64
@@ -214,13 +215,10 @@ class EauGrandLyonAuth:
             raise NetworkError(f"Impossible de joindre le serveur: {err}") from err
 
         if login_status == 401:
-            raise AuthenticationError(
-                "Identifiants incorrects. Verifiez votre email et mot de passe."
-            )
+            raise AuthenticationError("Identifiants incorrects. Verifiez votre email et mot de passe.")
         if login_status == 403:
             raise WafBlockedError(
-                "Le WAF a bloque la requete de login (HTTP 403). "
-                "Attendez quelques minutes avant de reessayer."
+                "Le WAF a bloque la requete de login (HTTP 403). " "Attendez quelques minutes avant de reessayer."
             )
         if login_status == 404:
             raise ApiError(f"URL de login non trouvee (404): {urls.login_url}")
@@ -245,13 +243,9 @@ class EauGrandLyonAuth:
             ) as resp:
                 status = resp.status
                 if resp.status == 403:
-                    raise WafBlockedError(
-                        "Le WAF a bloque la requete authorize-internet (HTTP 403)."
-                    )
+                    raise WafBlockedError("Le WAF a bloque la requete authorize-internet (HTTP 403).")
                 if resp.status == 404:
-                    raise ApiError(
-                        f"URL authorize non trouvee (404): {urls.authorize_url}"
-                    )
+                    raise ApiError(f"URL authorize non trouvee (404): {urls.authorize_url}")
                 final_url = str(resp.url)
             _log_http_event(
                 phase="auth_authorize",
@@ -285,9 +279,7 @@ class EauGrandLyonAuth:
 
         code = _extract_code_from_url(final_url)
         if not code:
-            raise AuthenticationError(
-                f"Pas de code d'autorisation dans l'URL de callback: {final_url[:200]}"
-            )
+            raise AuthenticationError(f"Pas de code d'autorisation dans l'URL de callback: {final_url[:200]}")
 
         return await self._exchange_code(code, urls.token_url, correlation_id)
 
@@ -313,9 +305,7 @@ class EauGrandLyonAuth:
                     raise ApiError(f"URL token non trouvee (404): {token_url}")
                 if resp.status != 200:
                     body = await resp.text()
-                    raise AuthenticationError(
-                        f"Echange de token echoue ({resp.status}): {body[:200]}"
-                    )
+                    raise AuthenticationError(f"Echange de token echoue ({resp.status}): {body[:200]}")
                 result: dict = json.loads(await resp.text())
             _log_http_event(
                 phase="auth_token",

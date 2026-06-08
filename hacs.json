@@ -2,6 +2,7 @@
   "name": "Eau du Grand Lyon",
   "content_in_root": false,
   "render_readme": true,
+  "category": "integration",
   "homeassistant": "2024.4.0",
   "country": ["FR"]
 }

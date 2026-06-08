@@ -1,4 +1,5 @@
 """Switch platform for Eau du Grand Lyon."""
+
 from __future__ import annotations
 from typing import Any
 
@@ -26,9 +27,7 @@ async def async_setup_entry(
     async_add_entities([EauGrandLyonVacationSwitch(coordinator, entry)])
 
 
-class EauGrandLyonVacationSwitch(
-    CoordinatorEntity[EauGrandLyonCoordinator], SwitchEntity, RestoreEntity
-):
+class EauGrandLyonVacationSwitch(CoordinatorEntity[EauGrandLyonCoordinator], SwitchEntity, RestoreEntity):
     """Switch pour activer le mode vacances (surveillance renforcée)."""
 
     _attr_has_entity_name = True

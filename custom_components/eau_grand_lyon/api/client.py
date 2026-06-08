@@ -1,4 +1,5 @@
 """Main API client for Eau du Grand Lyon."""
+
 from __future__ import annotations
 
 import json
@@ -127,9 +128,7 @@ class EauGrandLyonApi:
                     await self._auth.authenticate(correlation_id=correlation_id)
                     headers = {"Authorization": f"Bearer {self._auth.access_token}"}
                     retry_start = time.perf_counter()
-                    async with self._session.request(
-                        method, url, headers=headers, **kwargs
-                    ) as retry_resp:
+                    async with self._session.request(method, url, headers=headers, **kwargs) as retry_resp:
                         retry_duration_ms = (time.perf_counter() - retry_start) * 1000
                         _log_http_event(
                             phase="api_request_retry",
@@ -140,9 +139,7 @@ class EauGrandLyonApi:
                             status=retry_resp.status,
                         )
                         if retry_resp.status == 403:
-                            raise WafBlockedError(
-                                f"WAF 403 sur {method} {url} (apres re-auth)."
-                            )
+                            raise WafBlockedError(f"WAF 403 sur {method} {url} (apres re-auth).")
                         retry_resp.raise_for_status()
                         return json.loads(await retry_resp.text())
                 if resp.status == 403:
@@ -195,16 +192,14 @@ class EauGrandLyonApi:
             f"?expand={CONTRACTS_EXPAND}&select={CONTRACTS_SELECT}"
         )
         if not isinstance(data, (dict, list)):
-            _LOGGER.warning(
-                "Reponse inattendue pour get_contracts (type=%s)", type(data).__name__
-            )
+            _LOGGER.warning("Reponse inattendue pour get_contracts (type=%s)", type(data).__name__)
             return []
         contracts = data.get("content", data) if isinstance(data, dict) else data
         return list(contracts) if contracts else []
 
     async def get_monthly_consumptions(self, contract_id: str, nb_jours: int = 1095) -> list[dict]:
         """Fetch monthly consumptions with optional history parameter (36 months default).
-        
+
         Args:
             contract_id: The contract ID
             nb_jours: Number of days of history to retrieve (default 1095 = 36 months)
@@ -233,9 +228,7 @@ class EauGrandLyonApi:
         )
         return entries
 
-    async def get_daily_consumptions(
-        self, contract_id: str, nb_jours: int = 90
-    ) -> dict[str, Any]:
+    async def get_daily_consumptions(self, contract_id: str, nb_jours: int = 90) -> dict[str, Any]:
         result = await self._fetch_daily_raw(contract_id, nb_jours)
         if not result["entries"] and nb_jours > 30:
             _LOGGER.debug(
@@ -267,9 +260,7 @@ class EauGrandLyonApi:
                 "dateDebut": date_debut.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
                 "dateFin": date_fin.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
             }
-            data = await self._get_produits(
-                f"contrats/{contract_id}/consommationsJournalieres", params
-            )
+            data = await self._get_produits(f"contrats/{contract_id}/consommationsJournalieres", params)
             entries = self._parse_daily_response(data)
             if entries:
                 entries.sort(key=lambda item: item.get("date", ""))
@@ -300,9 +291,7 @@ class EauGrandLyonApi:
             )
             return []
 
-    async def _get_daily_legacy(
-        self, contract_id: str, nb_jours: int
-    ) -> tuple[list[dict], str]:
+    async def _get_daily_legacy(self, contract_id: str, nb_jours: int) -> tuple[list[dict], str]:
         endpoints = [
             (
                 f"/application/rest/interfaces/ael/contrats/{contract_id}"
@@ -342,8 +331,7 @@ class EauGrandLyonApi:
     async def get_alertes(self) -> list[dict]:
         try:
             data = await self._get(
-                "/application/rest/interfaces/ael/contrats/alertes"
-                "?expand=infosAlarme,modeleAction,objetMaitre"
+                "/application/rest/interfaces/ael/contrats/alertes" "?expand=infosAlarme,modeleAction,objetMaitre"
             )
             return data if isinstance(data, list) else []
         except Exception as err:
@@ -392,8 +380,7 @@ class EauGrandLyonApi:
             return {
                 "communicabilite_amm": data.get("communicabiliteAMM"),
                 "mode_releve": data.get("modeReleve"),
-                "date_prochaine_releve": (data.get("dateProchaineReleveReelle") or "")[:10]
-                or None,
+                "date_prochaine_releve": (data.get("dateProchaineReleveReelle") or "")[:10] or None,
                 "niveau_tension": data.get("niveauDeTension"),
                 "type_tension": data.get("typeTension"),
                 "nb_cadrans": data.get("nbCadransCompteur"),
@@ -401,9 +388,7 @@ class EauGrandLyonApi:
                 "reference_pds": data.get("reference"),
             }
         except Exception as err:
-            _LOGGER.debug(
-                "Erreur get_point_de_service_etendu (contrat %s) : %s", contract_id, err
-            )
+            _LOGGER.debug("Erreur get_point_de_service_etendu (contrat %s) : %s", contract_id, err)
             return {}
 
     async def get_interventions(self) -> list[dict]:
@@ -428,9 +413,15 @@ class EauGrandLyonApi:
                     "$filter": filt,
                 },
             )
-            raw_list = data if isinstance(data, list) else data.get(
-                "content", data.get("_embedded", {}).get("interventions", [])
-            ) if isinstance(data, dict) else []
+            raw_list = (
+                data
+                if isinstance(data, list)
+                else (
+                    data.get("content", data.get("_embedded", {}).get("interventions", []))
+                    if isinstance(data, dict)
+                    else []
+                )
+            )
             result = []
             for item in raw_list:
                 try:
@@ -443,15 +434,11 @@ class EauGrandLyonApi:
                     result.append(
                         {
                             "reference": item.get("reference", ""),
-                            "type": sous_type.get("libelle", "")
-                            if isinstance(sous_type, dict)
-                            else str(sous_type),
+                            "type": sous_type.get("libelle", "") if isinstance(sous_type, dict) else str(sous_type),
                             "statut": str(statut_raw) if statut_raw is not None else "",
                             "date_debut": date_debut,
                             "date_fin": date_fin,
-                            "presence_requise": bool(
-                                item.get("presenceDuClientNecessaire", False)
-                            ),
+                            "presence_requise": bool(item.get("presenceDuClientNecessaire", False)),
                             "contrat_ref": contrat.get("reference", ""),
                         }
                     )
@@ -481,9 +468,7 @@ class EauGrandLyonApi:
             _LOGGER.debug("[EXPERIMENTAL] Unexpected error in get_factures: %s", err)
             return []
 
-    async def get_courbe_de_charge(
-        self, contract_id: str, nb_jours: int = 30
-    ) -> list[dict]:
+    async def get_courbe_de_charge(self, contract_id: str, nb_jours: int = 30) -> list[dict]:
         try:
             date_fin = datetime.now(timezone.utc)
             date_debut = date_fin - timedelta(days=nb_jours)
@@ -526,8 +511,7 @@ class EauGrandLyonApi:
     async def get_derniere_releve_siamm(self, contract_id: str) -> dict | None:
         try:
             data = await self._get_produits(
-                f"contrats/{contract_id}/derniereReleveSIAMM"
-                "?expand=grandeursPhysiques(modeleGrandeurPhysique)"
+                f"contrats/{contract_id}/derniereReleveSIAMM" "?expand=grandeursPhysiques(modeleGrandeurPhysique)"
             )
             return data if isinstance(data, dict) else None
         except ApiError as err:
@@ -545,8 +529,7 @@ class EauGrandLyonApi:
             return None
         except Exception as err:
             _LOGGER.debug(
-                "[EXPERIMENTAL] Erreur inattendue get_derniere_releve_siamm "
-                "(contrat %s) : %s",
+                "[EXPERIMENTAL] Erreur inattendue get_derniere_releve_siamm " "(contrat %s) : %s",
                 contract_id,
                 err,
             )
@@ -659,9 +642,7 @@ class EauGrandLyonApi:
         return result
 
     @staticmethod
-    def format_daily_consumptions(
-        raw_entries: list[dict], contract_id: str = "inconnu"
-    ) -> list[dict]:
+    def format_daily_consumptions(raw_entries: list[dict], contract_id: str = "inconnu") -> list[dict]:
         result = []
         nb_with_conso = 0
         for entry in raw_entries:
@@ -755,9 +736,7 @@ class EauGrandLyonApi:
                     entries.extend(poste.get("data", []))
             elif "data" in data and isinstance(data["data"], list):
                 entries = data["data"]
-            elif "consommationsJournalieres" in data and isinstance(
-                data["consommationsJournalieres"], list
-            ):
+            elif "consommationsJournalieres" in data and isinstance(data["consommationsJournalieres"], list):
                 entries = data["consommationsJournalieres"]
         elif isinstance(data, list):
             entries = data
@@ -843,7 +822,7 @@ class EauGrandLyonApi:
             nombre_habitants = nb_h.get("libelle", "") if nb_h else ""
         eds = raw.get("espaceDeLivraison") or {}
         point_releve = raw.get("pointDeReleve") or {}
-        module = (point_releve.get("moduleRadio") or {})
+        module = point_releve.get("moduleRadio") or {}
         signal_pct = None
         if "niveauSignal" in module:
             try:

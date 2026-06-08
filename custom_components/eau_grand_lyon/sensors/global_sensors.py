@@ -1,4 +1,5 @@
 """Sensors globaux : alertes, santé API, agrégats multi-contrats, sécheresse, travaux."""
+
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -89,15 +90,15 @@ class EauGrandLyonHealthSensor(_EauGrandLyonGlobalBase):
         data = self.coordinator.data or {}
         attrs: dict[str, Any] = {
             "last_update_success_time": data.get("last_update_success_time"),
-            "last_error":               data.get("last_error"),
-            "last_error_type":          data.get("last_error_type"),
-            "last_failure_time":        data.get("last_failure_time"),
-            "last_failure_reason":      data.get("last_failure_reason"),
-            "offline_mode":             data.get("offline_mode", False),
-            "cache_age_days":           data.get("cache_age_days"),
-            "experimental_mode":        data.get("experimental_mode", False),
-            "api_mode":                 data.get("api_mode", "Legacy"),
-            "consecutive_failures":     data.get("consecutive_failures", 0),
+            "last_error": data.get("last_error"),
+            "last_error_type": data.get("last_error_type"),
+            "last_failure_time": data.get("last_failure_time"),
+            "last_failure_reason": data.get("last_failure_reason"),
+            "offline_mode": data.get("offline_mode", False),
+            "cache_age_days": data.get("cache_age_days"),
+            "experimental_mode": data.get("experimental_mode", False),
+            "api_mode": data.get("api_mode", "Legacy"),
+            "consecutive_failures": data.get("consecutive_failures", 0),
         }
         if data.get("offline_mode"):
             attrs["offline_since"] = data.get("offline_since")
@@ -176,8 +177,10 @@ class EauGrandLyonDroughtSensor(_EauGrandLyonGlobalBase):
     @property
     def icon(self) -> str:
         val = self.native_value
-        if val == "Normal": return "mdi:water-check"
-        if val == "Crise":  return "mdi:water-alert"
+        if val == "Normal":
+            return "mdi:water-check"
+        if val == "Crise":
+            return "mdi:water-alert"
         return "mdi:water-remove"
 
 
@@ -207,9 +210,9 @@ class EauGrandLyonNextOutageSensor(_EauGrandLyonGlobalBase):
         outage = (self.coordinator.data or {}).get("prochaine_coupure") or {}
         interruptions = (self.coordinator.data or {}).get("interruptions", [])
         return {
-            "titre":       outage.get("titre"),
-            "type":        outage.get("type"),
-            "date_fin":    outage.get("date_fin"),
+            "titre": outage.get("titre"),
+            "type": outage.get("type"),
+            "date_fin": outage.get("date_fin"),
             "description": outage.get("description"),
             "nb_interruptions": len(interruptions),
             "toutes_interruptions": [

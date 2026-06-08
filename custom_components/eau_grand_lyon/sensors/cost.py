@@ -1,4 +1,5 @@
 """Sensors de coûts et économies (estimés et réels)."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -208,9 +209,9 @@ class EauGrandLyonCoutReelMoisSensor(_EauGrandLyonBase):
         c = self._contract
         return {
             "part_variable_eur": c.get("cout_mois_courant_eur"),
-            "part_fixe_eur":     round(c.get("subscription_annual", 0) / 12, 2),
+            "part_fixe_eur": round(c.get("subscription_annual", 0) / 12, 2),
             "abonnement_annuel": c.get("subscription_annual"),
-            "tarif_eur_m3":      c.get("tarif_m3"),
+            "tarif_eur_m3": c.get("tarif_m3"),
             "note": "Coût total = conso × tarif + abonnement mensuel proratisé",
         }
 
@@ -239,8 +240,8 @@ class EauGrandLyonCoutReelAnnuelSensor(_EauGrandLyonBase):
         return {
             "part_variable_eur": c.get("cout_annuel_eur"),
             "abonnement_annuel": c.get("subscription_annual"),
-            "consommation_m3":   c.get("consommation_annuelle"),
-            "tarif_eur_m3":      c.get("tarif_m3"),
+            "consommation_m3": c.get("consommation_annuelle"),
+            "tarif_eur_m3": c.get("tarif_m3"),
         }
 
 

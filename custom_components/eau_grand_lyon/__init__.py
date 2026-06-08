@@ -1,4 +1,5 @@
 """Home Assistant integration for Eau du Grand Lyon."""
+
 from __future__ import annotations
 
 import csv
@@ -107,24 +108,30 @@ def _async_setup_services(hass: HomeAssistant) -> None:
                         continue
                     for ref, contract in coord.data.get("contracts", {}).items():
                         for c_entry in contract.get("consommations", []):
-                            writer.writerow([
-                                ref, "MENSUEL", c_entry.get("label"),
-                                c_entry.get("consommation_m3"),
-                                f"Année {c_entry.get('annee')}",
-                            ])
+                            writer.writerow(
+                                [
+                                    ref,
+                                    "MENSUEL",
+                                    c_entry.get("label"),
+                                    c_entry.get("consommation_m3"),
+                                    f"Année {c_entry.get('annee')}",
+                                ]
+                            )
                         for c_entry in contract.get("consommations_journalieres", []):
-                            writer.writerow([
-                                ref, "JOURNALIER", c_entry.get("date"),
-                                c_entry.get("consommation_m3"),
-                                f"Index {c_entry.get('index_m3')}",
-                            ])
+                            writer.writerow(
+                                [
+                                    ref,
+                                    "JOURNALIER",
+                                    c_entry.get("date"),
+                                    c_entry.get("consommation_m3"),
+                                    f"Index {c_entry.get('index_m3')}",
+                                ]
+                            )
 
         try:
             await hass.async_add_executor_job(_do_export)
         except PermissionError as err:
-            raise HomeAssistantError(
-                f"Permission denied writing to {export_path}"
-            ) from err
+            raise HomeAssistantError(f"Permission denied writing to {export_path}") from err
         except OSError as err:
             raise HomeAssistantError(f"Failed to export data: {err}") from err
 
@@ -147,9 +154,7 @@ def _async_setup_services(hass: HomeAssistant) -> None:
                 try:
                     pdf_data = await coord.api.get_invoice_pdf(ref)
                 except (OSError, ValueError, KeyError) as err:
-                    raise HomeAssistantError(
-                        f"Failed to download invoice {ref}: {err}"
-                    ) from err
+                    raise HomeAssistantError(f"Failed to download invoice {ref}: {err}") from err
 
                 def _save_pdf() -> None:
                     os.makedirs(os.path.dirname(target_path), exist_ok=True)
@@ -159,9 +164,7 @@ def _async_setup_services(hass: HomeAssistant) -> None:
                 try:
                     await hass.async_add_executor_job(_save_pdf)
                 except PermissionError as err:
-                    raise HomeAssistantError(
-                        f"Permission denied writing to {target_path}"
-                    ) from err
+                    raise HomeAssistantError(f"Permission denied writing to {target_path}") from err
                 except OSError as err:
                     raise HomeAssistantError(f"Failed to save invoice: {err}") from err
 
@@ -187,17 +190,13 @@ def _async_setup_services(hass: HomeAssistant) -> None:
                 return
 
         if contract_ref_filter:
-            raise HomeAssistantError(
-                f"No invoices found for contract {contract_ref_filter}"
-            )
+            raise HomeAssistantError(f"No invoices found for contract {contract_ref_filter}")
         raise HomeAssistantError("No invoices found")
 
     hass.services.async_register(DOMAIN, "clear_cache", async_handle_clear_cache)
     hass.services.async_register(DOMAIN, "update_now", async_handle_update_now)
     hass.services.async_register(DOMAIN, "export_data", async_handle_export_data)
-    hass.services.async_register(
-        DOMAIN, "download_latest_invoice", async_handle_download_invoice
-    )
+    hass.services.async_register(DOMAIN, "download_latest_invoice", async_handle_download_invoice)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> bool:
@@ -216,4 +215,3 @@ async def async_unload_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry
 async def _async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload the integration when options change."""
     await hass.config_entries.async_reload(entry.entry_id)
-

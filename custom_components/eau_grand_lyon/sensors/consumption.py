@@ -1,4 +1,5 @@
 """Sensors de consommation d'eau (mensuelle, journalière, index)."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -73,12 +74,11 @@ class EauGrandLyonIndexJournalierSensor(_EauGrandLyonBase):
     def extra_state_attributes(self) -> dict[str, Any]:
         c = self._contract
         return {
-            "date_index":    c.get("index_journalier_dernier_date"),
+            "date_index": c.get("index_journalier_dernier_date"),
             "source_donnee": c.get("daily_source", "Inconnue"),
-            "nb_jours":      c.get("daily_nb_entries", 0),
+            "nb_jours": c.get("daily_nb_entries", 0),
             "note": (
-                "Index lu dans les données journalières Téléo. "
-                "Unavailable si le compteur ne transmet pas l'index."
+                "Index lu dans les données journalières Téléo. " "Unavailable si le compteur ne transmet pas l'index."
             ),
         }
 
@@ -100,19 +100,17 @@ class EauGrandLyonConsommationSensor(_EauGrandLyonBase):
     @property
     def native_value(self) -> float | None:
         c = self._contract
-        return (
-            c.get("consommation_mois_courant")
-            if self._period == "courant"
-            else c.get("consommation_mois_precedent")
-        )
+        return c.get("consommation_mois_courant") if self._period == "courant" else c.get("consommation_mois_precedent")
 
     @property
     def icon(self) -> str:
         val = self.native_value
         if val is None or val == 0:
             return "mdi:water-outline"
-        if val < 5:  return "mdi:water-minus"
-        if val < 15: return "mdi:water"
+        if val < 5:
+            return "mdi:water-minus"
+        if val < 15:
+            return "mdi:water"
         return "mdi:water-percent"
 
     @property
@@ -128,27 +126,20 @@ class EauGrandLyonConsommationSensor(_EauGrandLyonBase):
             curr = c.get("consommation_mois_courant")
             if prev is not None and curr is not None:
                 attrs["variation_vs_mois_precedent_m3"] = round(curr - prev, 1)
-                attrs["variation_vs_mois_precedent_pct"] = (
-                    round((curr - prev) / prev * 100, 1) if prev != 0 else None
-                )
+                attrs["variation_vs_mois_precedent_pct"] = round((curr - prev) / prev * 100, 1) if prev != 0 else None
 
             n1 = c.get("consommation_n1")
             if n1 is not None and curr is not None:
                 attrs["consommation_n1_m3"] = n1
                 attrs["période_n1"] = c.get("label_n1", "")
                 attrs["variation_vs_n1_m3"] = round(curr - n1, 1)
-                attrs["variation_vs_n1_pct"] = (
-                    round((curr - n1) / n1 * 100, 1) if n1 != 0 else None
-                )
+                attrs["variation_vs_n1_pct"] = round((curr - n1) / n1 * 100, 1) if n1 != 0 else None
         else:
             attrs["période"] = c.get("label_mois_precedent", "")
 
         # Cap l'historique à 24 mois pour éviter de saturer les attributs (DB bloat)
         consos_capped = consos[-24:] if len(consos) > 24 else consos
-        attrs["historique"] = [
-            {"période": e["label"], "consommation_m3": e["consommation_m3"]}
-            for e in consos_capped
-        ]
+        attrs["historique"] = [{"période": e["label"], "consommation_m3": e["consommation_m3"]} for e in consos_capped]
         attrs["nb_mois_disponibles"] = len(consos)
         return attrs
 
@@ -189,10 +180,7 @@ class EauGrandLyonConsommationAnnuelleSensor(_EauGrandLyonBase):
             "période_début": last_12[0]["label"] if last_12 else None,
             "période_fin": last_12[-1]["label"] if last_12 else None,
             "monthly_chart_data": monthly_chart,
-            "détail_mensuel": [
-                {"période": e["label"], "consommation_m3": e["consommation_m3"]}
-                for e in last_12
-            ],
+            "détail_mensuel": [{"période": e["label"], "consommation_m3": e["consommation_m3"]} for e in last_12],
         }
 
 
@@ -256,10 +244,7 @@ class EauGrandLyonConso7JSensor(_EauGrandLyonDailyBase):
             "source": self._contract.get("daily_source"),
             "nb_entrées_total": self._contract.get("daily_nb_entries"),
             "dernière_date_api": self._contract.get("daily_last_date"),
-            "derniers_jours": [
-                {"date": e["date"], "consommation_m3": e["consommation_m3"]}
-                for e in daily[-7:]
-            ],
+            "derniers_jours": [{"date": e["date"], "consommation_m3": e["consommation_m3"]} for e in daily[-7:]],
         }
 
 
@@ -291,10 +276,7 @@ class EauGrandLyonConso30JSensor(_EauGrandLyonDailyBase):
             "nb_entrées_total": self._contract.get("daily_nb_entries"),
             "dernière_date_api": self._contract.get("daily_last_date"),
             "nb_jours_inclus": min(len(daily), 30),
-            "derniers_jours": [
-                {"date": e["date"], "consommation_m3": e["consommation_m3"]}
-                for e in recent_14
-            ],
+            "derniers_jours": [{"date": e["date"], "consommation_m3": e["consommation_m3"]} for e in recent_14],
         }
 
 

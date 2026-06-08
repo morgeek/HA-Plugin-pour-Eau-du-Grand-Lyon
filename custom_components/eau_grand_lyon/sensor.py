@@ -1,4 +1,5 @@
 """Sensors pour Eau du Grand Lyon — point d'entrée de la plateforme sensor."""
+
 from __future__ import annotations
 
 import logging
@@ -20,8 +21,6 @@ from .sensors.consumption import (
     EauGrandLyonIndexSensor,
     EauGrandLyonYesterdaySensor,
 )
-
-PARALLEL_UPDATES = 0
 from .sensors.cost import (
     EauGrandLyonCoutAnnuelSensor,
     EauGrandLyonCoutCumuleSensor,
@@ -71,6 +70,8 @@ from .sensors.experimental import (
     EauGrandLyonHourlyConsoSensor,
     EauGrandLyonPeakHourSensor,
 )
+
+PARALLEL_UPDATES = 0
 
 if TYPE_CHECKING:
     from . import EauGrandLyonConfigEntry

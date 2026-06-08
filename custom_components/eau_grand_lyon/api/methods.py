@@ -3,6 +3,7 @@
 Keeps api/client.py focused on HTTP orchestration while data-fetching logic
 is modularized for clarity.
 """
+
 from __future__ import annotations
 
 from typing import Any

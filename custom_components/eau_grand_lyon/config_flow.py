@@ -1,4 +1,5 @@
 """Config flow et Options flow pour l'intégration Eau du Grand Lyon."""
+
 from __future__ import annotations
 
 import logging
@@ -10,7 +11,6 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 
 from .api import (
     AuthenticationError,
@@ -49,9 +49,7 @@ def _is_valid_email(value: str) -> bool:
     return bool(_EMAIL_REGEX.match((value or "").strip()))
 
 
-async def _authenticate_and_handle_errors(
-    email: str, password: str, context: str = ""
-) -> dict[str, str]:
+async def _authenticate_and_handle_errors(email: str, password: str, context: str = "") -> dict[str, str]:
     """Authenticate user and return error dict if authentication fails, or empty dict on success."""
     errors: dict[str, str] = {}
     async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True)) as session:
@@ -80,9 +78,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_EMAIL): str,
         vol.Required(CONF_PASSWORD): vol.All(str, vol.Length(min=4)),
-        vol.Optional(CONF_TARIF_M3, default=DEFAULT_TARIF_M3): vol.All(
-            vol.Coerce(float), vol.Range(min=0.5, max=30.0)
-        ),
+        vol.Optional(CONF_TARIF_M3, default=DEFAULT_TARIF_M3): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=30.0)),
     }
 )
 
@@ -106,25 +102,17 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Retourne le gestionnaire du flux d'options."""
         return EauGrandLyonOptionsFlowHandler()
 
-    async def async_step_reauth(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
+    async def async_step_reauth(self, user_input: dict[str, Any] | None = None) -> config_entries.FlowResult:
         """Flux de réauthentification après une erreur d'authentification."""
-        config_entry = self.hass.config_entries.async_get_entry(
-            self.context["entry_id"]
-        )
+        config_entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
         if not config_entry:
             return self.async_abort(reason="reauth_failed")
 
         return await self.async_step_reauth_confirm()
 
-    async def async_step_reauth_confirm(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
+    async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None) -> config_entries.FlowResult:
         """Confirmation de réauthentification : saisie des identifiants."""
-        config_entry = self.hass.config_entries.async_get_entry(
-            self.context["entry_id"]
-        )
+        config_entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
         if not config_entry:
             return self.async_abort(reason="reauth_failed")
 
@@ -163,13 +151,9 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_reconfigure(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> config_entries.FlowResult:
         """Flux de reconfiguration : permet de changer les identifiants."""
-        config_entry = self.hass.config_entries.async_get_entry(
-            self.context["entry_id"]
-        )
+        config_entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
         if not config_entry:
             return self.async_abort(reason="reconfigure_failed")
 
@@ -217,9 +201,7 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> config_entries.FlowResult:
         """Étape principale : saisie des identifiants."""
         errors: dict[str, str] = {}
 
@@ -255,9 +237,7 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
     """Options : intervalle de mise à jour + tarif au m³."""
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> config_entries.FlowResult:
         """Étape unique : modification des options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)

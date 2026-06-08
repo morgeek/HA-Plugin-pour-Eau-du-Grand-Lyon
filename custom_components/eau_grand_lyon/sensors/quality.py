@@ -1,4 +1,5 @@
 """Sensors de qualité de l'eau — Open Data Métropole de Lyon."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -60,10 +61,14 @@ class EauGrandLyonNitratesSensor(_EauGrandLyonWaterQualityBase):
     @property
     def icon(self) -> str:
         val = self.native_value
-        if val is None: return "mdi:flask-outline"
-        if val < 10:    return "mdi:flask"
-        if val < 25:    return "mdi:flask-empty-outline"
-        if val < 50:    return "mdi:alert-circle-outline"
+        if val is None:
+            return "mdi:flask-outline"
+        if val < 10:
+            return "mdi:flask"
+        if val < 25:
+            return "mdi:flask-empty-outline"
+        if val < 50:
+            return "mdi:alert-circle-outline"
         return "mdi:alert-circle"
 
     @property

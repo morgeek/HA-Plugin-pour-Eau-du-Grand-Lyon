@@ -1,4 +1,5 @@
 """Sensors liés au contrat et au compte client."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -111,6 +112,6 @@ class EauGrandLyonProchaineReleveSensor(_EauGrandLyonBase):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
-            "mode_releve":         self._contract.get("pds_mode_releve"),
+            "mode_releve": self._contract.get("pds_mode_releve"),
             "communicabilite_amm": self._contract.get("pds_communicabilite_amm"),
         }

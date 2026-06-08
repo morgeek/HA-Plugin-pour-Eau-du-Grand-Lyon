@@ -1,4 +1,5 @@
 """Sensors d'intelligence : tendance, prédiction, eco-score, coaching, CO2, signal."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -31,8 +32,8 @@ class EauGrandLyonTrendSensor(_EauGrandLyonBase):
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
             "conso_actuelle": self._contract.get("consommation_mois_courant"),
-            "conso_n1":       self._contract.get("consommation_n1"),
-            "mois_n1":        self._contract.get("label_n1"),
+            "conso_n1": self._contract.get("consommation_n1"),
+            "mois_n1": self._contract.get("label_n1"),
         }
 
 
@@ -91,8 +92,8 @@ class EauGrandLyonEcoScoreSensor(_EauGrandLyonBase):
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
             "m3_par_personne": self._contract.get("eco_score_m3_pers"),
-            "nb_habitants":    self._contract.get("nb_habitants"),
-            "méthode":         "Barème national (A < 2.5m3/pers/mois)",
+            "nb_habitants": self._contract.get("nb_habitants"),
+            "méthode": "Barème national (A < 2.5m3/pers/mois)",
         }
 
 
@@ -195,8 +196,12 @@ class EauGrandLyonSignalSensor(_EauGrandLyonBase):
     @property
     def icon(self) -> str:
         val = self.native_value
-        if val is None: return "mdi:signal-off"
-        if val < 20:    return "mdi:signal-cellular-outline"
-        if val < 50:    return "mdi:signal-cellular-1"
-        if val < 80:    return "mdi:signal-cellular-2"
+        if val is None:
+            return "mdi:signal-off"
+        if val < 20:
+            return "mdi:signal-cellular-outline"
+        if val < 50:
+            return "mdi:signal-cellular-1"
+        if val < 80:
+            return "mdi:signal-cellular-2"
         return "mdi:signal-cellular-3"
