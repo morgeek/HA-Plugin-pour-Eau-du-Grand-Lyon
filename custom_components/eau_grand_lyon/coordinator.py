@@ -1056,23 +1056,24 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         notif_id = f"{DOMAIN}_alertes"
 
+        # pn_create / pn_dismiss are synchronous @callback functions (return None);
+        # call them directly. Wrapping in async_create_task(pn_create(...)) would
+        # pass None to async_create_task ("a coroutine was expected, got None").
         if nb_alertes > 0 and nb_alertes != self._prev_nb_alertes:
-            self.hass.async_create_task(
-                pn_create(
-                    self.hass,
-                    message=(
-                        f"Vous avez **{nb_alertes} alerte(s) active(s)** sur votre compte "
-                        f"Eau du Grand Lyon.\n\n"
-                        f"Consultez [l'espace client](https://agence.eaudugrandlyon.com)."
-                    ),
-                    title="⚠️ Eau du Grand Lyon — Alerte",
-                    notification_id=notif_id,
-                )
+            pn_create(
+                self.hass,
+                message=(
+                    f"Vous avez **{nb_alertes} alerte(s) active(s)** sur votre compte "
+                    f"Eau du Grand Lyon.\n\n"
+                    f"Consultez [l'espace client](https://agence.eaudugrandlyon.com)."
+                ),
+                title="⚠️ Eau du Grand Lyon — Alerte",
+                notification_id=notif_id,
             )
             _LOGGER.info("%d Eau du Grand Lyon alert(s) detected", nb_alertes)
 
         elif nb_alertes == 0 and self._prev_nb_alertes > 0:
-            self.hass.async_create_task(pn_dismiss(self.hass, notification_id=notif_id))
+            pn_dismiss(self.hass, notification_id=notif_id)
             _LOGGER.info("Eau du Grand Lyon alerts cleared")
 
         self._prev_nb_alertes = nb_alertes

@@ -10,6 +10,7 @@ et cette intégration adhère au [Versionnage Sémantique](https://semver.org/sp
 ### Corrections de Bugs
 
 - **Plantage `'NoneType' object can't be awaited`** : `repairs.py` faisait `await` sur `ir.async_create_issue()` et `ir.async_delete_issue()`, qui sont des fonctions **synchrones** (`@callback`) dans Home Assistant et renvoient `None`. Attendre `None` provoquait l'erreur lors de la création/suppression d'une issue (sécheresse, panne prolongée). Corrigé : ces appels ne sont plus `await` (les fonctions `check_drought_issue` / `check_long_outage_issue` restent `async def` pour que le coordinateur puisse les attendre). Le stub de test `issue_registry` est passé de `AsyncMock` à `MagicMock` pour refléter le comportement réel de HA, et des tests de non-régression exercent désormais les deux branches.
+- **Notifications d'alerte (`a coroutine was expected, got None`)** : `_handle_alert_notifications` enveloppait `persistent_notification.async_create` / `async_dismiss` dans `hass.async_create_task(...)`, alors que ces fonctions sont synchrones (`@callback`) et renvoient `None` — `async_create_task(None)` échouait dès qu'une alerte était créée ou levée. Corrigé : ces fonctions sont maintenant appelées directement. Stub `persistent_notification` ajouté en test + test de non-régression.
 
 ## [3.0.2] - 2026-06-09
 

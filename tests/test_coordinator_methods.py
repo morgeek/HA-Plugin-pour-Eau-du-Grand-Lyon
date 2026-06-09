@@ -273,6 +273,25 @@ class TestUpdateErrorPaths:
         assert result["last_failure_reason"] == "offline"
         assert result["cache_age_days"] == 7
 
+    def test_alert_notifications_use_sync_persistent_notification(self):
+        """Regression: pn_create/pn_dismiss are sync; must not be wrapped in async_create_task."""
+        from homeassistant.components.persistent_notification import async_create, async_dismiss
+
+        async_create.reset_mock()
+        async_dismiss.reset_mock()
+        self.coord.hass = MagicMock()
+
+        self.coord._prev_nb_alertes = 0
+        self.coord._handle_alert_notifications(3)
+        assert async_create.called
+        # If wrapped in async_create_task(pn_create(...)), None would be passed to it.
+        self.coord.hass.async_create_task.assert_not_called()
+
+        self.coord._prev_nb_alertes = 3
+        self.coord._handle_alert_notifications(0)
+        assert async_dismiss.called
+        self.coord.hass.async_create_task.assert_not_called()
+
 
 class TestMergeMonthlyHistory:
     """Tests for _merge_monthly_history static method."""

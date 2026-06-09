@@ -114,6 +114,12 @@ def _stub_homeassistant() -> None:
         ConfirmRepairFlow=object,
         RepairsFlow=object,
     )
+    # persistent_notification.async_create / async_dismiss are sync @callback in HA.
+    _make_module(
+        "homeassistant.components.persistent_notification",
+        async_create=MagicMock(return_value=None),
+        async_dismiss=MagicMock(return_value=None),
+    )
     _make_module("homeassistant.helpers.issue_registry",
         # Sync @callback functions in real HA — MagicMock (not AsyncMock) so that
         # awaiting them in component code fails in tests, matching production.
