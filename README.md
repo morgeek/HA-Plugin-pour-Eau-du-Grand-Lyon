@@ -6,7 +6,7 @@
 
 Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](https://www.home-assistant.io/) qui fournit des capteurs pour les données de consommation d'eau du service Eau du Grand Lyon.
 
-> 🌟 **Gold Tier Certified** — Cette intégration satisfait tous les critères de qualité Home Assistant Gold : gestion d'erreurs robuste, flux de configuration avancés, traductions complètes, documentation détaillée, et 213 tests automatisés.
+> 🌟 **Gold Tier Certified** — Cette intégration satisfait tous les critères de qualité Home Assistant Gold : gestion d'erreurs robuste, flux de configuration avancés, traductions complètes, documentation détaillée, et 219 tests automatisés.
 
 ![alt text](https://raw.githubusercontent.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/main/docs/screenshots/HA-Eau-Grand-Lyon.png)
 
@@ -19,6 +19,14 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
 ## Historique des versions
 
 Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
+
+### 🩹 Stabilité & Endpoints (v3.0.x)
+
+- **Endpoints API corrigés** : les routes de données utilisent désormais le préfixe `/application/rest/...` (les anciennes routes `/rest/...` renvoyaient 404, vérifié en production). Authentification et récupération des données fiabilisées.
+- **Correctifs de plantage** : résolution de plusieurs erreurs au rafraîchissement et lors des notifications/alertes — `TypeError: _get() ... 'params'`, `'NoneType' object can't be awaited`, `a coroutine was expected, got None` (appel correct des fonctions synchrones `@callback` de Home Assistant).
+- **Options** : correction de l'affichage des libellés de configuration (dureté de l'eau, abonnement annuel) qui provoquaient une erreur de traduction.
+- **Détection Téléo/TIC** améliorée (gère les nouveaux formats de champs de l'API).
+- **Qualité & packaging** : 219 tests automatisés ; validations HACS et hassfest au vert ; nettoyage du dépôt (suppression du `.venv` versionné) et ajout d'un guide `AGENTS.md` pour les contributeurs et agents IA.
 
 ### 🐛 Correctif Graphique Historique (v2.9.3)
 
@@ -132,20 +140,20 @@ Si l'API Eau du Grand Lyon est indisponible (coupure réseau, maintenance, bloca
 - Le cache est persistant sur disque — il survit à un redémarrage de Home Assistant
 - Dès que l'API répond à nouveau, les données sont rafraîchies et le mode hors-ligne se désactive automatiquement
 
-### Mode Expérimental (API 2026)
-Cette version inclut un nouveau mode basé sur les endpoints découverts dans le bundle Angular 2026 du site officiel :
-- **Nouvelles Données** : Accès aux factures détaillées, à la courbe de charge (données sub-journalières pour Téléo) et aux volumes de fuite nocturnes.
-- **Modernisation** : Utilise les dernières routes API sans le préfixe `/application/`, offrant potentiellement une meilleure stabilité future.
-- **Sécurité & Fallback** : Si un nouvel endpoint échoue ou retourne une erreur 404, l'intégration bascule automatiquement sur l'API stable (legacy). Rien ne casse.
-- **Activation** : Désactivé par défaut. Peut être activé dans les options de l'intégration (**Configurer**).
-Allez dans Paramètres > Appareils et services.
-Recherchez l'intégration Eau du Grand Lyon.
-Cliquez sur le bouton Configurer (ou Options selon votre version de HA).
-Cochez la case Mode expérimental (API 2026)
+### Mode Expérimental (données étendues)
+Une option **Mode expérimental** (désactivée par défaut) active la récupération de données supplémentaires, lorsque votre compteur et votre compte les exposent :
+- **Factures détaillées**, **courbe de charge horaire** (compteurs Téléo) et **volumes de fuite estimés**.
+- Ces données proviennent d'endpoints additionnels de l'API. Si elles ne sont pas disponibles pour votre compteur, les capteurs correspondants restent simplement indisponibles, sans impacter le reste de l'intégration.
 
-Si votre compteur est compatible et que les nouveaux endpoints répondent, les nouveaux capteurs apparaîtront automatiquement (pensez à vérifier s'ils sont désactivés par défaut dans l'interface des entités).
+**Activation** :
+1. Allez dans Paramètres > Appareils et services.
+2. Recherchez l'intégration Eau du Grand Lyon.
+3. Cliquez sur **Configurer** (ou **Options** selon votre version de HA).
+4. Cochez la case **Mode expérimental**.
 
-En cas d'erreur avec la nouvelle API, l'intégration repassera automatiquement sur l'ancienne version pour assurer la continuité des données.
+Si votre compteur est compatible, les capteurs supplémentaires apparaîtront automatiquement (pensez à vérifier s'ils sont désactivés par défaut dans l'interface des entités).
+
+> **Note (v3.0.x)** : l'authentification et la récupération des données utilisent les routes officielles `/application/...`, vérifiées en production. L'ancien basculement automatique vers des routes alternatives (sans préfixe `/application/`) a été retiré : ces routes n'existent plus côté serveur (404).
 
 ## Mise à jour des données
 
@@ -378,6 +386,7 @@ En cas de doute, la structure valide est :
     client.py
     auth.py
     endpoints.py
+    methods.py
   brand/
     icon.png
     logo.png
