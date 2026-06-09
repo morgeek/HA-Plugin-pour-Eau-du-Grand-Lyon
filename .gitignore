@@ -1,9 +1,30 @@
-custom_components/eau_grand_lyon/.DS_Store
+# OS / editor cruft
 .DS_Store
-.gitignore
+custom_components/eau_grand_lyon/.DS_Store
+
+# AI tool local state (personal, not shared)
 .continue
 .claude
-.pytest_cache
+CLAUDE.md
+
+# Python
 __pycache__/
 *.pyc
-CLAUDE.md
+*.pyo
+*.egg
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test / coverage / type-check caches
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
