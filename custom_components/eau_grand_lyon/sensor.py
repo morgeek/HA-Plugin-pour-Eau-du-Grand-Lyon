@@ -81,11 +81,19 @@ _LOGGER = logging.getLogger(__name__)
 
 def _is_teleo_meter(contract: dict) -> bool:
     """Infer whether a contract uses a communicant Teleo meter."""
-    if contract.get("teleo_compatible"):
+    teleo = contract.get("teleo_compatible")
+    if teleo is not None:
+        return bool(teleo)
+    # Fallback for API responses that don't include teleo_compatible.
+    # pds_communicabilite_amm and pds_mode_releve may be dicts {code, libelle}
+    # or legacy plain values (bool / string).
+    amm = contract.get("pds_communicabilite_amm")
+    if amm is True or (isinstance(amm, dict) and amm.get("code") == "ACTIVE"):
         return True
-    if contract.get("pds_communicabilite_amm") is True:
-        return True
-    return contract.get("pds_mode_releve") == "AMM"
+    mode = contract.get("pds_mode_releve")
+    if isinstance(mode, dict):
+        return mode.get("code") == "AMM"
+    return mode == "AMM"
 
 
 def _supports_daily_sensors(contract: dict) -> bool:

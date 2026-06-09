@@ -226,7 +226,8 @@ class TestUpdateErrorPaths:
         assert sleep_mock.await_count == 3
 
     @pytest.mark.asyncio
-    async def test_inject_statistics_cost_falls_back_when_monetary_not_supported(self):
+    async def test_inject_statistics_cost_metadata_has_no_unit_class(self):
+        """Cost stats must omit unit_class — the recorder rejects monetary unit_class."""
         self.coord.hass = MagicMock()
         self.coord._stats_month_counts = {}
         self.coord._monthly_history = {}
@@ -241,19 +242,20 @@ class TestUpdateErrorPaths:
             }
         }
 
-        def add_stats_side_effect(hass, metadata, stats):
-            if metadata["statistic_id"] == "eau_grand_lyon:cost_REF1" and "unit_class" in metadata:
-                raise ValueError("Unsupported unit_class: 'monetary'")
-            return None
-
         with patch(
             "custom_components.eau_grand_lyon.coordinator.async_add_external_statistics",
-            new=MagicMock(side_effect=add_stats_side_effect),
+            new=MagicMock(return_value=None),
         ) as add_stats:
             await self.coord._inject_statistics(contract_data)
 
-        assert add_stats.call_count == 3
-        assert "unit_class" not in add_stats.call_args_list[2].args[1]
+        cost_calls = [
+            call for call in add_stats.call_args_list
+            if call.args[1]["statistic_id"] == "eau_grand_lyon:cost_REF1"
+        ]
+        assert cost_calls, "expected cost statistics to be injected"
+        cost_metadata = cost_calls[0].args[1]
+        assert "unit_class" not in cost_metadata
+        assert cost_metadata["unit_of_measurement"] == "EUR"
 
     @pytest.mark.asyncio
     async def test_offline_cache_persists_failure_context(self):

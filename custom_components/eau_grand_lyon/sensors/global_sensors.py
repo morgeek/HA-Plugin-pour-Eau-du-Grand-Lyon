@@ -101,9 +101,7 @@ class EauGrandLyonHealthSensor(_EauGrandLyonGlobalBase):
             "consecutive_failures": data.get("consecutive_failures", 0),
         }
         contracts = data.get("contracts") or {}
-        teleo_contracts = [
-            contract for contract in contracts.values() if contract.get("teleo_compatible")
-        ]
+        teleo_contracts = [contract for contract in contracts.values() if contract.get("teleo_compatible")]
         if contracts and not teleo_contracts:
             attrs["teleo_note"] = (
                 "Aucun contrat Téléo/TIC compatible détecté — les données journalières "

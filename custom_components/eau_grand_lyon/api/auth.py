@@ -19,9 +19,6 @@ from .endpoints import (
     CLIENT_ID,
     CODE_VERIFIER,
     LOGIN_URL,
-    NEW_AUTHORIZE_URL,
-    NEW_LOGIN_URL,
-    NEW_TOKEN_URL,
     REDIRECT_URI,
     TOKEN_REVOKE_URL,
     TOKEN_URL,
@@ -127,13 +124,10 @@ class EauGrandLyonAuth:
         session: aiohttp.ClientSession,
         email: str,
         password: str,
-        experimental: bool = False,
     ) -> None:
         self._session = session
         self._email = email
         self._password = password
-        self._experimental = experimental
-        self._auth_mode = "new" if experimental else "legacy"
         self._access_token: str | None = None
 
     @property
@@ -146,37 +140,11 @@ class EauGrandLyonAuth:
 
     async def authenticate(self, correlation_id: str | None = None) -> str:
         correlation_id = correlation_id or _new_correlation_id()
-        _LOGGER.debug("auth_start cid=%s mode=%s", correlation_id, self._auth_mode)
-        if self._experimental and self._auth_mode == "new":
-            try:
-                token = await self._authenticate_with_urls(
-                    AuthUrls(NEW_LOGIN_URL, NEW_AUTHORIZE_URL, NEW_TOKEN_URL),
-                    correlation_id,
-                )
-                _LOGGER.debug("auth_success cid=%s mode=new", correlation_id)
-                return token
-            except ApiError as err:
-                _LOGGER.warning(
-                    "[EXPERIMENTAL] auth_fallback cid=%s nouvelles URLs auth echouees (%s) -> fallback legacy",
-                    correlation_id,
-                    err,
-                )
-                self._auth_mode = "legacy"
-            except NetworkError as err:
-                _LOGGER.warning(
-                    "[EXPERIMENTAL] auth_fallback cid=%s erreur reseau nouvelles URLs auth (%s) -> fallback legacy",
-                    correlation_id,
-                    err,
-                )
-                self._auth_mode = "legacy"
-
-        token = await self._authenticate_with_urls(
+        _LOGGER.debug("auth_start cid=%s", correlation_id)
+        return await self._authenticate_with_urls(
             AuthUrls(LOGIN_URL, AUTHORIZE_URL, TOKEN_URL),
             correlation_id,
         )
-        if self._experimental:
-            _LOGGER.debug("auth_success cid=%s mode=legacy", correlation_id)
-        return token
 
     async def _authenticate_with_urls(self, urls: AuthUrls, correlation_id: str) -> str:
         start = time.perf_counter()

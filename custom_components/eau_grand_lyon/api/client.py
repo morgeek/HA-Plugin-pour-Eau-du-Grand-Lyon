@@ -31,24 +31,6 @@ from .endpoints import (
 _LOGGER = logging.getLogger(__name__)
 
 
-def _detect_month_offset(entries: list[dict]) -> int:
-    score_0indexed = 0
-    score_1indexed = 0
-    for entry in entries[:30]:
-        month = entry.get("mois")
-        if month is None:
-            continue
-        try:
-            month_int = int(month)
-        except (ValueError, TypeError):
-            continue
-        if month_int == 0:
-            score_0indexed += 3
-        elif month_int == 12:
-            score_1indexed += 3
-    return 1 if score_0indexed > score_1indexed else 0
-
-
 def _infer_unit_from_magnitude(entries: list[dict]) -> str:
     values: list[float] = []
     for entry in entries[:50]:
@@ -81,7 +63,7 @@ class EauGrandLyonApi:
     ) -> None:
         self._session = session
         self._experimental = experimental
-        self._auth = EauGrandLyonAuth(session, email, password, experimental=experimental)
+        self._auth = EauGrandLyonAuth(session, email, password)
         _LOGGER.debug(
             "EauGrandLyonApi initialise - mode=%s",
             "experimental" if experimental else "legacy",
@@ -744,7 +726,8 @@ class EauGrandLyonApi:
             return entries
 
         conso_unit = (unites.get("consommation") or "").upper()
-        month_offset = _detect_month_offset(entries)
+        # The postes/annee/mois/jour format always uses 0-indexed months (0=January)
+        month_offset = 1
         if not conso_unit:
             conso_unit = _infer_unit_from_magnitude(entries)
 

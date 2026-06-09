@@ -1012,7 +1012,6 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 "source": DOMAIN,
                 "statistic_id": cost_statistic_id,
                 "unit_of_measurement": "EUR",
-                "unit_class": "monetary",
             }
 
             cost_stats: list[StatisticData] = []
@@ -1043,26 +1042,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                         await result
                     _LOGGER.debug("Injected cost statistics: contract %s, %d months", ref, len(cost_stats))
                 except (HomeAssistantError, ValueError) as err:
-                    err_message = str(err).lower()
-                    if "unit_class" in err_message:
-                        fallback_metadata = {**cost_metadata}
-                        fallback_metadata.pop("unit_class", None)
-                        try:
-                            fallback_result = async_add_external_statistics(self.hass, fallback_metadata, cost_stats)
-                            if inspect.isawaitable(fallback_result):
-                                await fallback_result
-                            _LOGGER.warning(
-                                "Injected cost statistics for %s without unit_class because monetary unit_class is unsupported",
-                                ref,
-                            )
-                        except (HomeAssistantError, ValueError) as err2:
-                            _LOGGER.warning(
-                                "Failed to inject cost statistics for %s after removing unit_class: %s",
-                                ref,
-                                err2,
-                            )
-                    else:
-                        _LOGGER.warning("Failed to inject cost statistics for %s: %s", ref, err)
+                    _LOGGER.warning("Failed to inject cost statistics for %s: %s", ref, err)
 
     def _handle_alert_notifications(self, nb_alertes: int) -> None:
         """Crée ou supprime une notification HA persistante selon les alertes."""

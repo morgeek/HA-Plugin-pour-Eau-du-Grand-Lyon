@@ -10,13 +10,10 @@ LOGIN_URL = f"{BASE_URL}/application/auth/externe/authentification"
 AUTHORIZE_URL = f"{BASE_URL}/application/auth/authorize-internet"
 TOKEN_URL = f"{BASE_URL}/application/auth/tokenUtilisateurInternet"
 
-NEW_LOGIN_URL = f"{BASE_URL}/auth/externe/authentification"
-NEW_AUTHORIZE_URL = f"{BASE_URL}/auth/authorize-internet"
-NEW_TOKEN_URL = f"{BASE_URL}/auth/tokenUtilisateurInternet"
 TOKEN_REVOKE_URL = f"{BASE_URL}/auth/revoke"
 
-PRODUITS_BASE = f"{BASE_URL}/rest/produits"
-INTERFACES_AEL_BASE = f"{BASE_URL}/rest/interfaces/ael"
+PRODUITS_BASE = f"{BASE_URL}/application/rest/produits"
+INTERFACES_AEL_BASE = f"{BASE_URL}/application/rest/interfaces/ael"
 
 CODE_VERIFIER = "5"
 
