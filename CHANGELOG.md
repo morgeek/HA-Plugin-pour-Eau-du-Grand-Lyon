@@ -5,6 +5,23 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.2] - 2026-06-09
+
+### Corrections de Bugs
+
+- **Plantage à chaque rafraîchissement (`TypeError: _get() got an unexpected keyword argument 'params'`)** : la méthode `EauGrandLyonApi._get()` n'acceptait pas d'argument `params`, alors que `get_monthly_consumptions()` l'appelait avec `params=...`. Résultat : chaque cycle de mise à jour échouait et l'intégration apparaissait comme « cassée » (souvent perçu comme un problème d'authentification). Corrigé : `_get()` transmet désormais `params` à `_do_get()` (rétrocompatible). Un test de non-régression reproduit l'erreur exacte sans le correctif.
+- **Endpoints API corrigés** : les chemins `produits` et `interfaces/ael` utilisaient `/rest/...` qui renvoyait 404. Ils pointent désormais vers `/application/rest/...` (vérifié contre le serveur en production). Détection des compteurs communicants Téléo/TIC améliorée (gère les champs `{code, libelle}`) ; correction de l'offset de mois.
+- **Erreurs de traduction dans les options** (`formatjs MISSING_VALUE`) : le formulaire d'options était affiché sans `description_placeholders`, donc les chaînes `water_hardness` et `subscription_annual` ne pouvaient pas s'afficher. Les variables `hardness_lyon_avg` (30 °fH, moyenne Lyon) et `subscription_example` (~180 €/an) sont maintenant fournies.
+
+### CI / Empaquetage
+
+- **Validation HACS corrigée** : suppression de la clé invalide `category` dans `hacs.json` (`category` est un paramètre de l'action HACS, pas un champ du manifeste HACS). C'était la cause réelle de l'échec persistant de la validation HACS.
+- Suite de tests : `async-lru` est désormais simulé (stub) en environnement de test ; la vérification `brands` de HACS est ignorée (installation en dépôt personnalisé).
+
+### Note de version
+
+Les versions 3.0.0 et 3.0.1 n'ont pas été publiées ; 3.0.2 est la première release de la série 3.0.x.
+
 ## [2.9.5] - 2026-06-08
 
 ### Corrections de Bugs
