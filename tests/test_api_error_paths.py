@@ -154,9 +154,7 @@ class TestAuthPaths:
             await auth.authenticate()
 
     @pytest.mark.asyncio
-    async def test_authenticate_authorize_missing_code_raises_authentication_error(
-        self, patched_aiohttp
-    ):
+    async def test_authenticate_authorize_missing_code_raises_authentication_error(self, patched_aiohttp):
         auth = EauGrandLyonAuth(
             _FakeSession(
                 [
@@ -219,9 +217,7 @@ class TestAuthPaths:
             await auth.authenticate()
 
     @pytest.mark.asyncio
-    async def test_authenticate_token_missing_access_token_raises_authentication_error(
-        self, patched_aiohttp
-    ):
+    async def test_authenticate_token_missing_access_token_raises_authentication_error(self, patched_aiohttp):
         auth = EauGrandLyonAuth(
             _FakeSession(
                 [
@@ -254,13 +250,7 @@ class TestRequestPaths:
     @pytest.mark.asyncio
     async def test_request_client_response_error_maps_to_api_error(self, patched_aiohttp):
         api = self._make_api(
-            _FakeSession(
-                [
-                    _FakeContextManager(
-                        _FakeResponse(json_error=_ClientResponseError(500, "boom"))
-                    )
-                ]
-            )
+            _FakeSession([_FakeContextManager(_FakeResponse(json_error=_ClientResponseError(500, "boom")))])
         )
         with pytest.raises(ApiError):
             await api._request("GET", "https://example.test/data")
@@ -298,3 +288,18 @@ class TestRequestPaths:
         api = self._make_api(session)
         with pytest.raises(NetworkError):
             await api.get_invoice_pdf("INV-1")
+
+    @pytest.mark.asyncio
+    async def test_get_monthly_consumptions_forwards_params_to_get(self, patched_aiohttp):
+        """Regression: _get must accept params (was crashing get_monthly_consumptions)."""
+        session = _FakeSession([_FakeContextManager(_FakeResponse(status=200, text="{}"))])
+        api = self._make_api(session)
+
+        # Must not raise "TypeError: _get() got an unexpected keyword argument 'params'".
+        result = await api.get_monthly_consumptions("C1", nb_jours=30)
+
+        assert result == []
+        method, url, kwargs = session.calls[-1]
+        assert method == "GET"
+        assert url.endswith("/contrats/C1/consommationsMensuelles")
+        assert kwargs.get("params") == {"nbJours": 30}

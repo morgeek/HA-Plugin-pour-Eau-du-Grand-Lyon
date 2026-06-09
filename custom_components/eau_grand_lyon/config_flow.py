@@ -296,4 +296,8 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=options_schema,
+            description_placeholders={
+                "hardness_lyon_avg": "30",
+                "subscription_example": "180",
+            },
         )

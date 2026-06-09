@@ -156,8 +156,8 @@ class EauGrandLyonApi:
     async def _do_post(self, url: str, body: dict | None = None) -> Any:
         return await self._request("POST", url, json=body or {})
 
-    async def _get(self, path: str) -> Any:
-        return await self._do_get(f"{BASE_URL}{path}")
+    async def _get(self, path: str, params: dict | None = None) -> Any:
+        return await self._do_get(f"{BASE_URL}{path}", params)
 
     async def _post(self, path: str, body: dict | None = None) -> Any:
         return await self._do_post(f"{BASE_URL}{path}", body)

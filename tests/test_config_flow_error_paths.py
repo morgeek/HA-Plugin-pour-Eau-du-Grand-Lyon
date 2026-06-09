@@ -14,6 +14,7 @@ from custom_components.eau_grand_lyon.api import (
 )
 from custom_components.eau_grand_lyon.config_flow import (
     EauGrandLyonConfigFlow,
+    EauGrandLyonOptionsFlowHandler,
     _authenticate_and_handle_errors,
 )
 from custom_components.eau_grand_lyon.const import CONF_EMAIL, CONF_PASSWORD, CONF_TARIF_M3
@@ -283,3 +284,22 @@ class TestUserFlowErrors:
                 }
             )
         assert result["errors"] == {"base": "api_error"}
+
+
+class TestOptionsFlow:
+    @pytest.mark.asyncio
+    async def test_init_form_provides_description_placeholders(self):
+        """Regression: options form must supply every {placeholder} its translations use."""
+        flow = EauGrandLyonOptionsFlowHandler()
+        flow.config_entry = MagicMock()
+        flow.config_entry.options = {}
+        flow.config_entry.data = {}
+        flow.async_show_form = MagicMock(side_effect=lambda **kw: {"type": "form", **kw})
+
+        result = await flow.async_step_init()
+
+        placeholders = result["description_placeholders"]
+        # These keys are referenced by water_hardness / subscription_annual
+        # data_description strings; missing them raises formatjs MISSING_VALUE.
+        assert placeholders["hardness_lyon_avg"] == "30"
+        assert placeholders["subscription_example"] == "180"
