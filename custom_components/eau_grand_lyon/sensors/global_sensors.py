@@ -100,6 +100,24 @@ class EauGrandLyonHealthSensor(_EauGrandLyonGlobalBase):
             "api_mode": data.get("api_mode", "Legacy"),
             "consecutive_failures": data.get("consecutive_failures", 0),
         }
+        contracts = data.get("contracts") or {}
+        teleo_contracts = [
+            contract for contract in contracts.values() if contract.get("teleo_compatible")
+        ]
+        if contracts and not teleo_contracts:
+            attrs["teleo_note"] = (
+                "Aucun contrat Téléo/TIC compatible détecté — les données journalières "
+                "ne sont pas disponibles pour ces compteurs."
+            )
+        elif contracts and any(
+            contract.get("teleo_compatible") is False and contract.get("daily_nb_entries", 0) == 0
+            for contract in contracts.values()
+        ):
+            attrs["teleo_note"] = (
+                "Certains contrats ne renvoient pas de données journalières. "
+                "Ces compteurs peuvent ne pas être compatibles Téléo/TIC."
+            )
+
         if data.get("offline_mode"):
             attrs["offline_since"] = data.get("offline_since")
             attrs["cached_data_age_days"] = data.get("cache_age_days")

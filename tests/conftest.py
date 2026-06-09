@@ -130,6 +130,14 @@ def _stub_homeassistant() -> None:
     sys.modules["homeassistant.util.dt"] = _dt_util
     _make_module("homeassistant.util", dt=_dt_util)
     _make_module("aiohttp")
+
+    # async_lru stub — alru_cache used as a pass-through decorator (no caching in tests)
+    def _alru_cache(*args, **kwargs):
+        def _decorator(func):
+            return func
+        return _decorator
+
+    _make_module("async_lru", alru_cache=_alru_cache)
     _make_module("tenacity",
         retry=lambda **kw: (lambda f: f),
         stop_after_attempt=MagicMock(),

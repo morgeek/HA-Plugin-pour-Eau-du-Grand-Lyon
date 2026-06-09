@@ -4,4 +4,6 @@ custom_components/eau_grand_lyon/.DS_Store
 .continue
 .claude
 .pytest_cache
+__pycache__/
+*.pyc
 CLAUDE.md

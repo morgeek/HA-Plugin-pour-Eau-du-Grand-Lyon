@@ -226,6 +226,36 @@ class TestUpdateErrorPaths:
         assert sleep_mock.await_count == 3
 
     @pytest.mark.asyncio
+    async def test_inject_statistics_cost_falls_back_when_monetary_not_supported(self):
+        self.coord.hass = MagicMock()
+        self.coord._stats_month_counts = {}
+        self.coord._monthly_history = {}
+
+        contract_data = {
+            "REF1": {
+                "tarif_m3": 1.5,
+                "consommations": [
+                    {"mois_index": 0, "annee": 2025, "consommation_m3": 10.0},
+                    {"mois_index": 1, "annee": 2025, "consommation_m3": 12.0},
+                ],
+            }
+        }
+
+        def add_stats_side_effect(hass, metadata, stats):
+            if metadata["statistic_id"] == "eau_grand_lyon:cost_REF1" and "unit_class" in metadata:
+                raise ValueError("Unsupported unit_class: 'monetary'")
+            return None
+
+        with patch(
+            "custom_components.eau_grand_lyon.coordinator.async_add_external_statistics",
+            new=MagicMock(side_effect=add_stats_side_effect),
+        ) as add_stats:
+            await self.coord._inject_statistics(contract_data)
+
+        assert add_stats.call_count == 3
+        assert "unit_class" not in add_stats.call_args_list[2].args[1]
+
+    @pytest.mark.asyncio
     async def test_offline_cache_persists_failure_context(self):
         now = datetime.now(timezone.utc)
         self.coord._last_good_data = {

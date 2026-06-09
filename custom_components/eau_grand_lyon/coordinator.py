@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import random
 import time
@@ -988,7 +989,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                     continue
 
             try:
-                async_add_external_statistics(self.hass, metadata, stats)
+                result = async_add_external_statistics(self.hass, metadata, stats)
+                if inspect.isawaitable(result):
+                    await result
                 self._stats_month_counts[ref] = current_count
                 _LOGGER.debug("Injected statistics: contract %s, %d months", ref, len(stats))
             except (HomeAssistantError, ValueError) as err:
@@ -1035,10 +1038,31 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
             if cost_stats:
                 try:
-                    async_add_external_statistics(self.hass, cost_metadata, cost_stats)
+                    result = async_add_external_statistics(self.hass, cost_metadata, cost_stats)
+                    if inspect.isawaitable(result):
+                        await result
                     _LOGGER.debug("Injected cost statistics: contract %s, %d months", ref, len(cost_stats))
                 except (HomeAssistantError, ValueError) as err:
-                    _LOGGER.warning("Failed to inject cost statistics for %s: %s", ref, err)
+                    err_message = str(err).lower()
+                    if "unit_class" in err_message:
+                        fallback_metadata = {**cost_metadata}
+                        fallback_metadata.pop("unit_class", None)
+                        try:
+                            fallback_result = async_add_external_statistics(self.hass, fallback_metadata, cost_stats)
+                            if inspect.isawaitable(fallback_result):
+                                await fallback_result
+                            _LOGGER.warning(
+                                "Injected cost statistics for %s without unit_class because monetary unit_class is unsupported",
+                                ref,
+                            )
+                        except (HomeAssistantError, ValueError) as err2:
+                            _LOGGER.warning(
+                                "Failed to inject cost statistics for %s after removing unit_class: %s",
+                                ref,
+                                err2,
+                            )
+                    else:
+                        _LOGGER.warning("Failed to inject cost statistics for %s: %s", ref, err)
 
     def _handle_alert_notifications(self, nb_alertes: int) -> None:
         """Crée ou supprime une notification HA persistante selon les alertes."""
