@@ -111,3 +111,37 @@ class TestServiceHandlersExist:
         assert callable(check_drought_issue)
         assert callable(check_long_outage_issue)
         assert callable(async_create_fix_flow)
+
+
+class TestRepairIssueRegistry:
+    """Exercise the issue-registry calls (regression for awaiting sync callbacks)."""
+
+    @pytest.mark.asyncio
+    async def test_drought_issue_create_and_delete_do_not_await_sync_callbacks(self) -> None:
+        # ir.async_create_issue / async_delete_issue are sync in HA; awaiting them
+        # raises "'NoneType' object can't be awaited". This must run without error.
+        from custom_components.eau_grand_lyon.repairs import check_drought_issue
+
+        hass = MagicMock()
+        ir.async_create_issue.reset_mock()
+        ir.async_delete_issue.reset_mock()
+
+        await check_drought_issue(hass, "Vigilance")
+        assert ir.async_create_issue.called
+
+        await check_drought_issue(hass, "Normal")
+        assert ir.async_delete_issue.called
+
+    @pytest.mark.asyncio
+    async def test_long_outage_issue_create_and_delete(self) -> None:
+        from custom_components.eau_grand_lyon.repairs import check_long_outage_issue
+
+        hass = MagicMock()
+        ir.async_create_issue.reset_mock()
+        ir.async_delete_issue.reset_mock()
+
+        await check_long_outage_issue(hass, 9)
+        assert ir.async_create_issue.called
+
+        await check_long_outage_issue(hass, 0)
+        assert ir.async_delete_issue.called

@@ -5,6 +5,12 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.3] - 2026-06-09
+
+### Corrections de Bugs
+
+- **Plantage `'NoneType' object can't be awaited`** : `repairs.py` faisait `await` sur `ir.async_create_issue()` et `ir.async_delete_issue()`, qui sont des fonctions **synchrones** (`@callback`) dans Home Assistant et renvoient `None`. Attendre `None` provoquait l'erreur lors de la création/suppression d'une issue (sécheresse, panne prolongée). Corrigé : ces appels ne sont plus `await` (les fonctions `check_drought_issue` / `check_long_outage_issue` restent `async def` pour que le coordinateur puisse les attendre). Le stub de test `issue_registry` est passé de `AsyncMock` à `MagicMock` pour refléter le comportement réel de HA, et des tests de non-régression exercent désormais les deux branches.
+
 ## [3.0.2] - 2026-06-09
 
 ### Corrections de Bugs

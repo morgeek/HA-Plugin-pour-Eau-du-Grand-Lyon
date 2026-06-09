@@ -115,8 +115,10 @@ def _stub_homeassistant() -> None:
         RepairsFlow=object,
     )
     _make_module("homeassistant.helpers.issue_registry",
-        async_create_issue=AsyncMock(),
-        async_delete_issue=AsyncMock(),
+        # Sync @callback functions in real HA — MagicMock (not AsyncMock) so that
+        # awaiting them in component code fails in tests, matching production.
+        async_create_issue=MagicMock(),
+        async_delete_issue=MagicMock(),
         IssueSeverity=MagicMock(),
     )
     _make_module("homeassistant.helpers.aiohttp_client")

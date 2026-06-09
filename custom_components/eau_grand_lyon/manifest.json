@@ -11,5 +11,5 @@
   "issue_tracker": "https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/issues",
   "quality_scale": "gold",
   "requirements": ["async-lru>=2.0.4"],
-  "version": "3.0.2"
+  "version": "3.0.3"
 }

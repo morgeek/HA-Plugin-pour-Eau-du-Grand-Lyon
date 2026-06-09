@@ -8,6 +8,11 @@ from homeassistant.helpers import issue_registry as ir
 
 from .const import DOMAIN
 
+# NOTE: ir.async_create_issue / ir.async_delete_issue are synchronous @callback
+# functions in Home Assistant (they return None). Do NOT `await` them — doing so
+# raises "'NoneType' object can't be awaited". These wrappers stay `async def`
+# only so the coordinator can `await` them uniformly.
+
 
 async def async_create_fix_flow(
     hass: HomeAssistant,
@@ -24,7 +29,7 @@ async def check_drought_issue(hass: HomeAssistant, level: str) -> None:
     """Enregistre ou supprime une issue de sécheresse selon le niveau."""
     issue_id = "drought_alert"
     if level == "Vigilance":
-        await ir.async_create_issue(
+        ir.async_create_issue(
             hass,
             DOMAIN,
             issue_id,
@@ -35,14 +40,14 @@ async def check_drought_issue(hass: HomeAssistant, level: str) -> None:
             learn_more_url="https://www.rhone.gouv.fr/Politiques-publiques/Environnement/Eau/Secheresse",
         )
     else:
-        await ir.async_delete_issue(hass, DOMAIN, issue_id)
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
 
 
 async def check_long_outage_issue(hass: HomeAssistant, days: int) -> None:
     """Enregistre ou supprime une issue si la panne dure trop longtemps."""
     issue_id = "long_outage"
     if days >= 7:
-        await ir.async_create_issue(
+        ir.async_create_issue(
             hass,
             DOMAIN,
             issue_id,
@@ -51,4 +56,4 @@ async def check_long_outage_issue(hass: HomeAssistant, days: int) -> None:
             translation_key="long_outage",
         )
     else:
-        await ir.async_delete_issue(hass, DOMAIN, issue_id)
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
