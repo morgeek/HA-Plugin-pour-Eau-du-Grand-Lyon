@@ -1,30 +1,83 @@
-# OS / editor cruft
+# =============================================================================
+# .gitignore — keep the repo to the files needed to ship & validate the
+# integration. Home Assistant only ever loads custom_components/eau_grand_lyon/;
+# everything else tracked (hacs.json, README, icon/logo, tests/, .github/, docs/,
+# lovelace/, blueprints/) is required for HACS distribution, CI, or features.
+# The patterns below keep local/dev/runtime junk OUT of the repo.
+# =============================================================================
+
+# --- OS cruft ---
 .DS_Store
 custom_components/eau_grand_lyon/.DS_Store
+Thumbs.db
+desktop.ini
 
-# AI tool local state (personal, not shared)
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# --- AI tool local state (personal, not shared) ---
 .continue
 .claude
+.cursor/
+.aider*
 CLAUDE.md
 
-# Python
+# --- Python ---
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.egg
 *.egg-info/
+.eggs/
 build/
 dist/
+*.spec
 
-# Virtual environments
+# --- Virtual environments ---
 .venv/
 venv/
 env/
+.python-version
 
-# Test / coverage / type-check caches
+# --- Test / coverage / type-check / lint caches ---
 .pytest_cache/
 .coverage
+.coverage.*
 coverage.xml
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+.tox/
+.nox/
+.cache/
+
+# --- Secrets / credentials (never commit) ---
+.env
+.env.*
+secrets.yaml
+*.pem
+*.key
+credentials.json
+
+# --- Home Assistant runtime artifacts (in case the repo is tested inside a HA config) ---
+.storage/
+.cloud/
+.HA_VERSION
+home-assistant.log*
+home-assistant_v2.db*
+*.db
+*.db-*
+deps/
+tts/
+
+# --- Build / packaging / misc ---
+node_modules/
+*.bak
+*.orig
+*.rej
+*.tmp
