@@ -52,3 +52,7 @@ jobs:
         uses: hacs/action@main
         with:
           category: integration
+          # 'brands' requires the domain to be merged into home-assistant/brands,
+          # which is only needed for the official HACS default store, not for
+          # custom-repository installs. Ignore it until the brands PR is merged.
+          ignore: brands
