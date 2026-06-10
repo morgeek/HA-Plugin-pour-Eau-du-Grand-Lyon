@@ -44,6 +44,11 @@ def patch_config_flow_runtime(monkeypatch):
         raising=False,
     )
     monkeypatch.setattr(
+        "custom_components.eau_grand_lyon.config_flow.aiohttp.ClientTimeout",
+        lambda total=None: MagicMock(),
+        raising=False,
+    )
+    monkeypatch.setattr(
         "custom_components.eau_grand_lyon.config_flow.vol.Required",
         lambda key, default=None: key,
     )

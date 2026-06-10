@@ -19,7 +19,7 @@ class EauGrandLyonAlertesSensor(_EauGrandLyonGlobalBase):
     _attr_state_class = SensorStateClass.TOTAL
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
-    translation_key = "alertes"
+    _attr_translation_key = "alertes"
     _attr_native_unit_of_measurement = "alertes"
 
     def __init__(self, coordinator, entry):
@@ -39,7 +39,7 @@ class EauGrandLyonLastUpdateSensor(_EauGrandLyonGlobalBase):
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
-    translation_key = "last_update"
+    _attr_translation_key = "last_update"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
@@ -68,7 +68,7 @@ class EauGrandLyonHealthSensor(_EauGrandLyonGlobalBase):
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
-    translation_key = "health"
+    _attr_translation_key = "health"
 
     def __init__(self, coordinator: EauGrandLyonCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator, entry)
@@ -129,7 +129,7 @@ class EauGrandLyonGlobalConsoSensor(_EauGrandLyonGlobalBase):
     _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "m³"
-    translation_key = "global_conso"
+    _attr_translation_key = "global_conso"
     _attr_suggested_display_precision = 1
 
     def __init__(self, coordinator, entry):
@@ -146,8 +146,8 @@ class EauGrandLyonGlobalCostSensor(_EauGrandLyonGlobalBase):
 
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.TOTAL
-    _attr_native_unit_of_measurement = "€"
-    translation_key = "global_cost"
+    _attr_native_unit_of_measurement = "EUR"
+    _attr_translation_key = "global_cost"
     _attr_suggested_display_precision = 2
 
     def __init__(self, coordinator, entry):
@@ -164,8 +164,8 @@ class EauGrandLyonGlobalPredictionCostSensor(_EauGrandLyonGlobalBase):
 
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.TOTAL
-    _attr_native_unit_of_measurement = "€"
-    translation_key = "global_prediction"
+    _attr_native_unit_of_measurement = "EUR"
+    _attr_translation_key = "global_prediction"
     _attr_suggested_display_precision = 2
 
     def __init__(self, coordinator, entry):
@@ -178,9 +178,9 @@ class EauGrandLyonGlobalPredictionCostSensor(_EauGrandLyonGlobalBase):
 
 
 class EauGrandLyonDroughtSensor(_EauGrandLyonGlobalBase):
-    """Statut des restrictions d'eau (Sécheresse) dans le Rhône."""
+    """Indicateur saisonnier de risque sécheresse (heuristique, pas de donnée préfectorale)."""
 
-    translation_key = "drought"
+    _attr_translation_key = "drought"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
@@ -189,6 +189,16 @@ class EauGrandLyonDroughtSensor(_EauGrandLyonGlobalBase):
     @property
     def native_value(self) -> str:
         return (self.coordinator.data or {}).get("drought_level", "Normal")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "source": "Heuristique saisonnière (juin à septembre = Vigilance)",
+            "note": (
+                "Indicateur indicatif — ne reflète pas les arrêtés préfectoraux réels. "
+                "Consultez vigieau.gouv.fr pour les restrictions en vigueur."
+            ),
+        }
 
     @property
     def icon(self) -> str:
@@ -204,7 +214,7 @@ class EauGrandLyonNextOutageSensor(_EauGrandLyonGlobalBase):
     """Date de la prochaine interruption de service planifiée."""
 
     _attr_device_class = SensorDeviceClass.DATE
-    translation_key = "next_outage"
+    _attr_translation_key = "next_outage"
     _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry):

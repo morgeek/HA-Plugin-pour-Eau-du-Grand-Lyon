@@ -17,8 +17,9 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, LEAK_MULTIPLIER
+from .const import LEAK_MULTIPLIER
 from .coordinator import EauGrandLyonCoordinator
+from .device import account_device_info, contract_device_info
 
 if TYPE_CHECKING:
     from . import EauGrandLyonConfigEntry
@@ -73,25 +74,14 @@ class _EauGrandLyonBinaryBase(CoordinatorEntity[EauGrandLyonCoordinator], Binary
 
     @property
     def device_info(self) -> DeviceInfo:
-        calibre = self._contract.get("calibre_compteur", "")
-        usage = self._contract.get("usage", "")
-        model_parts = [p for p in [calibre and f"DN{calibre}", usage] if p]
-        numero_compteur = self._contract.get("reference_pds") or self._contract.get("reference", self._contract_ref)
-        return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._entry.entry_id}_{self._contract_ref}")},
-            name="Eau du Grand Lyon",
-            manufacturer="Morgeek",
-            model=", ".join(model_parts) or "Compteur eau",
-            serial_number=numero_compteur,
-            configuration_url="https://agence.eaudugrandlyon.com",
-        )
+        return contract_device_info(self.coordinator, self._entry, self._contract_ref)
 
 
 class EauGrandLyonLeakAlertSensor(_EauGrandLyonBinaryBase):
     """Alerte possible fuite basée sur surconsommation mensuelle."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    translation_key = "leak_alert"
+    _attr_translation_key = "leak_alert"
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -120,7 +110,7 @@ class EauGrandLyonRealTimeLeakSensor(_EauGrandLyonBinaryBase):
     """Alerte fuite en temps réel basée sur les données journalières (Téléo)."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    translation_key = "real_time_leak"
+    _attr_translation_key = "real_time_leak"
     _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry, contract_ref):
@@ -153,7 +143,7 @@ class EauGrandLyonLocalLeakSensor(_EauGrandLyonBinaryBase):
     """Alerte fuite basée sur une analyse de pattern locale (conso constante)."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    translation_key = "local_leak"
+    _attr_translation_key = "local_leak"
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -175,7 +165,7 @@ class EauGrandLyonBatterySensor(_EauGrandLyonBinaryBase):
     """État de la pile du module Téléo."""
 
     _attr_device_class = BinarySensorDeviceClass.BATTERY
-    translation_key = "battery"
+    _attr_translation_key = "battery"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator, entry, contract_ref):
@@ -192,7 +182,7 @@ class EauGrandLyonLimescaleAlertSensor(_EauGrandLyonBinaryBase):
     """Alerte accumulation excessive de calcaire."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    translation_key = "limescale_alert"
+    _attr_translation_key = "limescale_alert"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator, entry, contract_ref):
@@ -222,7 +212,7 @@ class EauGrandLyonOutageSensor(CoordinatorEntity[EauGrandLyonCoordinator], Binar
 
     _attr_has_entity_name = True
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    translation_key = "outage_alert"
+    _attr_translation_key = "outage_alert"
     _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: EauGrandLyonCoordinator, entry: ConfigEntry) -> None:
@@ -276,9 +266,4 @@ class EauGrandLyonOutageSensor(CoordinatorEntity[EauGrandLyonCoordinator], Binar
 
     @property
     def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._entry.entry_id)},
-            name="Eau du Grand Lyon",
-            manufacturer="Morgeek",
-            configuration_url="https://agence.eaudugrandlyon.com",
-        )
+        return account_device_info(self.coordinator, self._entry)

@@ -250,13 +250,24 @@ class TestUpdateErrorPaths:
 
         cost_calls = [
             call for call in add_stats.call_args_list
-            if call.args[1]["statistic_id"] == "eau_grand_lyon:cost_REF1"
+            if call.args[1]["statistic_id"] == "eau_grand_lyon:cost_ref1"
         ]
         assert cost_calls, "expected cost statistics to be injected"
         cost_metadata = cost_calls[0].args[1]
         assert "unit_class" in cost_metadata
         assert cost_metadata["unit_class"] is None
         assert cost_metadata["unit_of_measurement"] == "EUR"
+
+    def test_statistic_ref_sanitizes_invalid_characters(self):
+        """Recorder statistic ids only allow lowercase [a-z0-9_], no edge/double underscores.
+
+        Regression: refs with uppercase letters or dashes produced an invalid
+        statistic_id and statistics injection silently failed for those users.
+        """
+        assert EauGrandLyonCoordinator._statistic_ref("0123456789") == "0123456789"
+        assert EauGrandLyonCoordinator._statistic_ref("REF1") == "ref1"
+        assert EauGrandLyonCoordinator._statistic_ref("AB-12 34/X") == "ab_12_34_x"
+        assert EauGrandLyonCoordinator._statistic_ref("--") == "contract"
 
     @pytest.mark.asyncio
     async def test_offline_cache_persists_failure_context(self):

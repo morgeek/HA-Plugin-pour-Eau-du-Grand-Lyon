@@ -33,7 +33,8 @@
       "cannot_connect": "Unable to connect to the server. Check your network.",
       "waf_blocked": "Request blocked by web firewall. Increase the update interval (recommended: {recommended_interval}h) or wait a few minutes.",
       "api_error": "API error. Check the status of the Eau du Grand Lyon service.",
-      "unknown": "Unknown error. Check Home Assistant logs for details."
+      "unknown": "Unknown error. Check Home Assistant logs for details.",
+      "invalid_email": "Invalid email address"
     },
     "abort": {
       "already_configured": "This account is already configured.",
@@ -82,6 +83,7 @@
           "max_retries": "Max API retry attempts",
           "household_size": "Number of household occupants",
           "water_hardness": "Water hardness (°fH)",
+          "water_quality_commune": "Municipality (Open Data water quality)",
           "subscription_annual": "💶 Annual fixed subscription (€/yr)"
         },
         "data_description": {
@@ -90,6 +92,7 @@
           "max_retries": "Maximum number of attempts before switching to offline mode. Retry timing uses exponential backoff with jitter to reduce load on the API.",
           "household_size": "Used to calculate the Eco-Score and personalised Eco-Coach tips.",
           "water_hardness": "Water hardness in French degrees (°fH). Lyon average: {hardness_lyon_avg} °fH. If you have a softener, set to the output hardness (e.g. 10-15 °fH).",
+          "water_quality_commune": "Optional: name of your municipality to filter the Open Data water quality measurements (e.g. LYON, VILLEURBANNE). Empty = first available measurement on the network (arbitrary municipality).",
           "subscription_annual": "Annual fixed subscription cost (excluding consumption). Visible on your annual invoice. Ex. Grand Lyon 2024: ~{subscription_example} €/yr. Leave at 0 to exclude the subscription from cost calculations.",
           "update_interval_hours": "How often the integration polls the Eau du Grand Lyon servers. Since data is updated monthly, 24h is recommended to avoid WAF blocking.",
           "tarif_m3": "Water price in euros per m³, used for all estimated cost calculations. Check your latest invoice for the exact rate (Grand Lyon 2024: ~5.20 €/m³)."
@@ -245,6 +248,9 @@
       }
     },
     "button": {
+      "refresh": {
+        "name": "Force refresh"
+      },
       "download_invoice": {
         "name": "Download latest invoice"
       }
@@ -311,10 +317,6 @@
     }
   },
   "issues": {
-    "drought_alert": {
-      "title": "Drought Alert: Level {level}",
-      "description": "The Rhône department is currently at the **{level}** restriction level. Water usage restrictions (watering, car washing, etc.) apply. Check the prefecture's website for more details."
-    },
     "long_outage": {
       "title": "Prolonged API outage (Eau du Grand Lyon)",
       "description": "The integration has not been able to synchronize with the server for more than 7 days. Please check your credentials and the official website status."

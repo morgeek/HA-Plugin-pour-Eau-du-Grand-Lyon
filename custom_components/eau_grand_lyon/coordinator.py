@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import calendar
 import inspect
 import json
+import logging
 import random
+import re
 import time
 from datetime import datetime, timedelta, timezone
-import logging
 from typing import TYPE_CHECKING, TypedDict
 
 import aiohttp
 
-import calendar
-import re
-from async_lru import alru_cache
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.storage import Store
@@ -23,14 +22,18 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 try:
     from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
-    from homeassistant.components.recorder.statistics import (
-        async_add_external_statistics,
-        StatisticMeanType,
-    )
+    from homeassistant.components.recorder.statistics import async_add_external_statistics
 
     _HAS_RECORDER = True
 except ImportError:
     _HAS_RECORDER = False
+
+# Importé séparément : absent sur les versions HA plus anciennes, où l'on
+# retombe sur has_mean sans désactiver toute l'injection de statistiques.
+try:
+    from homeassistant.components.recorder.statistics import StatisticMeanType
+except ImportError:
+    StatisticMeanType = None
 
 if TYPE_CHECKING:
     from .__init__ import EauGrandLyonConfigEntry
@@ -42,7 +45,7 @@ from .api import (
     NetworkError,
     WafBlockedError,
 )
-from .repairs import check_drought_issue, check_long_outage_issue
+from .repairs import check_long_outage_issue
 from .const import (
     CONF_EMAIL,
     CONF_EXPERIMENTAL,
@@ -53,6 +56,7 @@ from .const import (
     CONF_UPDATE_INTERVAL_HOURS,
     CONF_HOUSEHOLD_SIZE,
     CONF_WATER_HARDNESS,
+    CONF_WATER_QUALITY_COMMUNE,
     CONF_SUBSCRIPTION_ANNUAL,
     DEFAULT_EXPERIMENTAL,
     DEFAULT_HOUSEHOLD_SIZE,
@@ -162,8 +166,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         experimental = bool(options.get(CONF_EXPERIMENTAL, DEFAULT_EXPERIMENTAL))
 
-        # Session dédiée — CookieJar(unsafe=True) pour conserver le cookie HttpOnly OAuth2
-        self._own_session = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
+        # Session dédiée — CookieJar(unsafe=True) pour conserver le cookie HttpOnly OAuth2.
+        # Timeout explicite : sans lui, une requête qui pend bloque le refresh
+        # pendant les 5 minutes du timeout aiohttp par défaut.
+        self._own_session = aiohttp.ClientSession(
+            cookie_jar=aiohttp.CookieJar(unsafe=True),
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
         self.api = EauGrandLyonApi(
             self._own_session,
             entry.data[CONF_EMAIL],
@@ -178,6 +187,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         # Cache du résultat de get_cumulative_index — invalidé à chaque mise à jour réussie
         self._cumulative_index_cache: dict[str, float | None] = {}
+
+        # Nombre de mois déjà injectés dans les statistiques, par contrat
+        self._stats_month_counts: dict[str, int] = {}
 
         # Dernières données valides connues (utilisées en mode hors-ligne)
         self._last_good_data: dict | None = None
@@ -473,7 +485,8 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         interruptions = _parse_outage_alertes(alertes)
         prochaine_coupure = interruptions[0] if interruptions else None
 
-        water_quality_task = asyncio.create_task(cycle_api.get_water_quality())
+        commune = (self._entry.options or {}).get(CONF_WATER_QUALITY_COMMUNE) or None
+        water_quality_task = asyncio.create_task(cycle_api.get_water_quality(commune))
         interventions_task = asyncio.create_task(cycle_api.get_interventions())
 
         tarif_m3 = self._calculate_tarif_m3()
@@ -529,7 +542,6 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             interventions_planifiees = []
 
         drought_level = self._get_drought_level()
-        await check_drought_issue(self.hass, drought_level)
 
         vacation_alert = self._check_vacation_alert(contracts_data)
 
@@ -932,19 +944,28 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
     # Injection historique statistiques
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _statistic_ref(ref: str) -> str:
+        """Normalise une référence contrat en object_id de statistique valide.
+
+        Le recorder n'accepte que [a-z0-9_] (minuscules, pas d'underscore en
+        bordure ni doublé) — une référence avec majuscules ou tirets rendait
+        le statistic_id invalide et l'injection échouait silencieusement.
+        Pour les références purement numériques (cas courant), no-op.
+        """
+        sanitized = re.sub(r"[^a-z0-9]+", "_", str(ref).lower()).strip("_")
+        return sanitized or "contract"
+
     async def _inject_statistics(self, contracts_data: dict) -> None:
         """Injecte l'historique mensuel dans les statistiques longues durée HA."""
         if not _HAS_RECORDER:
             return
 
-        # Tente d'utiliser StatisticMeanType (HA >= 2026.x) sinon fallback
-        try:
+        # StatisticMeanType sur les HA récents, has_mean en fallback sur les anciens
+        if StatisticMeanType is not None:
             _mean_kwargs: dict = {"mean_type": StatisticMeanType.NONE}
-        except (NameError, AttributeError):
+        else:
             _mean_kwargs = {"has_mean": False}
-
-        if not hasattr(self, "_stats_month_counts"):
-            self._stats_month_counts: dict[str, int] = {}
 
         for ref, contract in contracts_data.items():
             # Use merged history (up to 36 months) so past data is always injected,
@@ -957,7 +978,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             if self._stats_month_counts.get(ref) == current_count:
                 continue
 
-            statistic_id = f"{DOMAIN}:water_{ref}"
+            statistic_id = f"{DOMAIN}:water_{self._statistic_ref(ref)}"
             metadata: StatisticMetaData = {
                 **_mean_kwargs,
                 "has_sum": True,
@@ -1004,7 +1025,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             if not consos or tarif <= 0:
                 continue
 
-            cost_statistic_id = f"{DOMAIN}:cost_{ref}"
+            cost_statistic_id = f"{DOMAIN}:cost_{self._statistic_ref(ref)}"
             cost_metadata: StatisticMetaData = {
                 **_mean_kwargs,
                 "has_sum": True,
@@ -1110,54 +1131,57 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
 
 class _CycleCachedApi:
-    """Per-update-cycle cached facade around EauGrandLyonApi."""
+    """Per-update-cycle cached facade around EauGrandLyonApi.
+
+    Le cache (un dict de tasks) vit dans l'instance et meurt avec elle à la fin
+    du cycle. Un décorateur de cache au niveau classe (ex. alru_cache) garderait
+    une référence sur chaque instance et accumulerait les réponses API de tous
+    les cycles précédents. Les appels concurrents sur la même clé partagent la
+    même task (un seul appel API par clé et par cycle).
+    """
 
     def __init__(self, api: EauGrandLyonApi) -> None:
         self._api = api
+        self._tasks: dict[tuple, asyncio.Task] = {}
 
-    @alru_cache(maxsize=None)
+    def _cached(self, method: str, *args, **kwargs) -> asyncio.Task:
+        key = (method, args, tuple(sorted(kwargs.items())))
+        if key not in self._tasks:
+            self._tasks[key] = asyncio.ensure_future(getattr(self._api, method)(*args, **kwargs))
+        return self._tasks[key]
+
     async def get_contracts(self):
-        return await self._api.get_contracts()
+        return await self._cached("get_contracts")
 
-    @alru_cache(maxsize=None)
     async def get_alertes(self):
-        return await self._api.get_alertes()
+        return await self._cached("get_alertes")
 
-    @alru_cache(maxsize=None)
-    async def get_water_quality(self):
-        return await self._api.get_water_quality()
+    async def get_water_quality(self, commune: str | None = None):
+        return await self._cached("get_water_quality", commune)
 
-    @alru_cache(maxsize=None)
     async def get_interventions(self):
-        return await self._api.get_interventions()
+        return await self._cached("get_interventions")
 
-    @alru_cache(maxsize=None)
     async def get_factures(self):
-        return await self._api.get_factures()
+        return await self._cached("get_factures")
 
-    @alru_cache(maxsize=None)
     async def get_monthly_consumptions(self, contract_id: str):
-        return await self._api.get_monthly_consumptions(contract_id)
+        return await self._cached("get_monthly_consumptions", contract_id)
 
-    @alru_cache(maxsize=None)
     async def get_daily_consumptions(self, contract_id: str, nb_jours: int = 90):
-        return await self._api.get_daily_consumptions(contract_id, nb_jours=nb_jours)
+        return await self._cached("get_daily_consumptions", contract_id, nb_jours=nb_jours)
 
-    @alru_cache(maxsize=None)
     async def get_date_prochaine_facture(self, contract_id: str):
-        return await self._api.get_date_prochaine_facture(contract_id)
+        return await self._cached("get_date_prochaine_facture", contract_id)
 
-    @alru_cache(maxsize=None)
     async def get_point_de_service_etendu(self, contract_id: str):
-        return await self._api.get_point_de_service_etendu(contract_id)
+        return await self._cached("get_point_de_service_etendu", contract_id)
 
-    @alru_cache(maxsize=None)
     async def get_courbe_de_charge(self, contract_id: str, nb_jours: int = 7):
-        return await self._api.get_courbe_de_charge(contract_id, nb_jours=nb_jours)
+        return await self._cached("get_courbe_de_charge", contract_id, nb_jours=nb_jours)
 
-    @alru_cache(maxsize=None)
     async def get_derniere_releve_siamm(self, contract_id: str):
-        return await self._api.get_derniere_releve_siamm(contract_id)
+        return await self._cached("get_derniere_releve_siamm", contract_id)
 
 
 # ------------------------------------------------------------------

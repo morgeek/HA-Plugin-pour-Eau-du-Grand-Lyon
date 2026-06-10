@@ -1,52 +1,11 @@
 """Tests for repairs, diagnostics, and service handlers."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 import pytest
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import ServiceValidationError
 from homeassistant.helpers import issue_registry as ir
-from homeassistant.components.repairs import ConfirmRepairFlow
-
-from custom_components.eau_grand_lyon.const import DOMAIN
-
-
-class TestRepairFlow:
-    """Test repair flow creation."""
-
-    @pytest.mark.asyncio
-    async def test_drought_alert_returns_confirm_repair_flow(self) -> None:
-        """Test that drought_alert issue returns ConfirmRepairFlow."""
-        from custom_components.eau_grand_lyon.repairs import async_create_fix_flow
-
-        hass = MagicMock()
-        flow = await async_create_fix_flow(hass, "drought_alert", None)
-        assert isinstance(flow, ConfirmRepairFlow)
-
-    @pytest.mark.asyncio
-    async def test_unknown_issue_returns_none(self) -> None:
-        """Test that unknown issue returns None."""
-        from custom_components.eau_grand_lyon.repairs import async_create_fix_flow
-
-        hass = MagicMock()
-        flow = await async_create_fix_flow(hass, "unknown_issue", None)
-        assert flow is None
-
-
-class TestDroughtIssueLogic:
-    """Test drought alert issue creation logic."""
-
-    def test_drought_alert_levels_trigger_issue(self) -> None:
-        """Test which drought levels should create issues."""
-        alert_levels = ["Alerte", "Alerte Renforcée", "Crise"]
-        non_alert_levels = ["Vigilance", "UnknownLevel"]
-
-        # Just verify the levels are categorized correctly
-        for level in alert_levels:
-            assert level in alert_levels
-
-        for level in non_alert_levels:
-            assert level not in alert_levels
 
 
 class TestLongOutageIssueLogic:
@@ -89,6 +48,41 @@ class TestDiagnosticsModule:
         assert "reference" in sensitive_fields
         assert "id" in sensitive_fields
 
+    @pytest.mark.asyncio
+    async def test_diagnostics_omit_title_and_rekey_contracts(self, monkeypatch) -> None:
+        """Regression: entry.title contains the account email and contract dicts
+        are keyed by contract reference — neither must reach the export."""
+        import sys
+        import types
+
+        captured = {}
+
+        def _redact(data, to_redact):
+            captured["data"] = data
+            return data
+
+        sys.modules["homeassistant.components.diagnostics"] = types.SimpleNamespace(
+            async_redact_data=_redact
+        )
+        from custom_components.eau_grand_lyon.diagnostics import (
+            async_get_config_entry_diagnostics,
+        )
+
+        entry = MagicMock()
+        entry.title = "Eau du Grand Lyon (user@example.com)"
+        entry.version = 2
+        entry.options = {}
+        coordinator = MagicMock()
+        coordinator.data = {"contracts": {"SECRET-REF-123": {"solde_eur": 1.0}}}
+        entry.runtime_data = coordinator
+
+        result = await async_get_config_entry_diagnostics(MagicMock(), entry)
+
+        assert "title" not in result["entry"]
+        contracts = result["coordinator_data"]["contracts"]
+        assert "SECRET-REF-123" not in contracts
+        assert contracts == {"contract_1": {"solde_eur": 1.0}}
+
 
 class TestServiceHandlersExist:
     """Test that service handlers are properly defined."""
@@ -102,35 +96,40 @@ class TestServiceHandlersExist:
 
     def test_repairs_functions_exist(self) -> None:
         """Test that repairs functions exist and are callable."""
-        from custom_components.eau_grand_lyon.repairs import (
-            check_drought_issue,
-            check_long_outage_issue,
-            async_create_fix_flow,
-        )
+        from custom_components.eau_grand_lyon.repairs import check_long_outage_issue
 
-        assert callable(check_drought_issue)
         assert callable(check_long_outage_issue)
-        assert callable(async_create_fix_flow)
+
+
+class TestWritePathValidation:
+    """Services writing files must reject paths outside allowlist_external_dirs."""
+
+    def test_rejects_empty_path(self) -> None:
+        from custom_components.eau_grand_lyon import _validate_write_path
+
+        hass = MagicMock()
+        with pytest.raises(ServiceValidationError):
+            _validate_write_path(hass, "   ")
+
+    def test_rejects_disallowed_path(self) -> None:
+        from custom_components.eau_grand_lyon import _validate_write_path
+
+        hass = MagicMock()
+        hass.config.is_allowed_path = MagicMock(return_value=False)
+        with pytest.raises(ServiceValidationError):
+            _validate_write_path(hass, "/etc/passwd")
+        hass.config.is_allowed_path.assert_called_once_with("/etc/passwd")
+
+    def test_accepts_allowed_path(self) -> None:
+        from custom_components.eau_grand_lyon import _validate_write_path
+
+        hass = MagicMock()
+        hass.config.is_allowed_path = MagicMock(return_value=True)
+        _validate_write_path(hass, "/config/exports/eau.csv")
 
 
 class TestRepairIssueRegistry:
     """Exercise the issue-registry calls (regression for awaiting sync callbacks)."""
-
-    @pytest.mark.asyncio
-    async def test_drought_issue_create_and_delete_do_not_await_sync_callbacks(self) -> None:
-        # ir.async_create_issue / async_delete_issue are sync in HA; awaiting them
-        # raises "'NoneType' object can't be awaited". This must run without error.
-        from custom_components.eau_grand_lyon.repairs import check_drought_issue
-
-        hass = MagicMock()
-        ir.async_create_issue.reset_mock()
-        ir.async_delete_issue.reset_mock()
-
-        await check_drought_issue(hass, "Vigilance")
-        assert ir.async_create_issue.called
-
-        await check_drought_issue(hass, "Normal")
-        assert ir.async_delete_issue.called
 
     @pytest.mark.asyncio
     async def test_long_outage_issue_create_and_delete(self) -> None:

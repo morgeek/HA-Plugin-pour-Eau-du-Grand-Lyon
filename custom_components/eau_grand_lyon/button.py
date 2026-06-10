@@ -13,6 +13,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_EXPERIMENTAL, DOMAIN
 from .coordinator import EauGrandLyonCoordinator
+from .device import account_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class EauGrandLyonRefreshButton(CoordinatorEntity[EauGrandLyonCoordinator], Butt
     """Bouton pour forcer la mise à jour immédiate des données."""
 
     _attr_has_entity_name = True
-    _attr_name = "Forcer la mise à jour"
+    _attr_translation_key = "refresh"
 
     def __init__(
         self,
@@ -52,18 +53,7 @@ class EauGrandLyonRefreshButton(CoordinatorEntity[EauGrandLyonCoordinator], Butt
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Rattache le bouton au premier appareil (contrat) trouvé."""
-        contracts = (self.coordinator.data or {}).get("contracts", {})
-        first_ref = next(iter(contracts), None)
-        if first_ref:
-            return DeviceInfo(
-                identifiers={(DOMAIN, f"{self._entry.entry_id}_{first_ref}")},
-            )
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._entry.entry_id)},
-            name="Eau du Grand Lyon",
-            manufacturer="Eau du Grand Lyon",
-        )
+        return account_device_info(self.coordinator, self._entry)
 
     async def async_press(self) -> None:
         """Déclenche immédiatement une mise à jour des données."""
@@ -75,7 +65,7 @@ class EauGrandLyonDownloadInvoiceButton(CoordinatorEntity[EauGrandLyonCoordinato
     """Bouton pour télécharger la dernière facture PDF."""
 
     _attr_has_entity_name = True
-    translation_key = "download_invoice"
+    _attr_translation_key = "download_invoice"
 
     def __init__(
         self,
@@ -88,16 +78,7 @@ class EauGrandLyonDownloadInvoiceButton(CoordinatorEntity[EauGrandLyonCoordinato
 
     @property
     def device_info(self) -> DeviceInfo:
-        contracts = (self.coordinator.data or {}).get("contracts", {})
-        first_ref = next(iter(contracts), None)
-        if first_ref:
-            return DeviceInfo(
-                identifiers={(DOMAIN, f"{self._entry.entry_id}_{first_ref}")},
-            )
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._entry.entry_id)},
-            name="Eau du Grand Lyon",
-        )
+        return account_device_info(self.coordinator, self._entry)
 
     async def async_press(self) -> None:
         """Déclenche le téléchargement via le service."""

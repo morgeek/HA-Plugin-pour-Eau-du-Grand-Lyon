@@ -140,3 +140,16 @@ class TestCoachingSensor:
         })
         assert isinstance(s.native_value, str)
         assert len(s.native_value) > 0
+
+    def test_none_trend_does_not_crash(self):
+        """Regression: the coordinator always sets tendance_n1_pct, often to None.
+
+        `c.get("tendance_n1_pct", 0)` therefore returned None and `None > 20`
+        raised TypeError on every state write for grades C-G without N-1 data.
+        """
+        s = _make_sensor(EauGrandLyonCoachingSensor, {
+            "eco_score_grade": "C",
+            "tendance_n1_pct": None,
+        })
+        assert isinstance(s.native_value, str)
+        assert len(s.native_value) > 0

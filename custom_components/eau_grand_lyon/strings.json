@@ -83,6 +83,7 @@
           "max_retries": "Nombre max de tentatives API",
           "household_size": "Nombre d'habitants du foyer",
           "water_hardness": "Dureté de l'eau (°fH)",
+          "water_quality_commune": "Commune (qualité de l'eau Open Data)",
           "subscription_annual": "💶 Abonnement annuel fixe (€/an)"
         },
         "data_description": {
@@ -93,16 +94,13 @@
           "max_retries": "Nombre maximal de tentatives avant bascule en mode hors-ligne. Le délai de retry utilise un backoff exponentiel avec jitter pour ménager l'API.",
           "household_size": "Utilisé pour calculer l'Eco-Score et les conseils personnalisés de l'Eco-Coach.",
           "water_hardness": "Dureté en degrés Français (°fH). Moyenne Lyon : {hardness_lyon_avg} °fH. Si vous avez un adoucisseur, réglez sur la dureté de sortie (ex. 10-15 °fH).",
+          "water_quality_commune": "Optionnel : nom de votre commune pour filtrer les mesures Open Data de qualité de l'eau (ex. LYON, VILLEURBANNE). Vide = première mesure disponible du réseau (commune arbitraire).",
           "subscription_annual": "Montant annuel de la partie fixe de votre abonnement (hors consommation), visible sur votre facture. Ex. Grand Lyon 2024 : ~{subscription_example} €/an. Laissez à 0 pour ne pas inclure l'abonnement dans les calculs de coût."
         }
       }
     }
   },
   "issues": {
-    "drought_alert": {
-      "title": "Drought Alert: Level {level}",
-      "description": "The Rhône department is currently at restriction level **{level}**."
-    },
     "long_outage": {
       "title": "Prolonged API outage (Eau du Grand Lyon)",
       "description": "The integration has not been able to synchronize with the server for more than 7 days. Please check your credentials and the official website status."
@@ -286,6 +284,9 @@
       }
     },
     "button": {
+      "refresh": {
+        "name": "Forcer la mise à jour"
+      },
       "download_invoice": {
         "name": "Télécharger la dernière facture"
       }

@@ -16,7 +16,7 @@ class EauGrandLyonIndexSensor(_EauGrandLyonBase):
     _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = "m³"
-    translation_key = "water_index"
+    _attr_translation_key = "water_index"
     _attr_suggested_display_precision = 1
 
     def __init__(self, coordinator, entry, contract_ref):
@@ -53,7 +53,7 @@ class EauGrandLyonIndexJournalierSensor(_EauGrandLyonBase):
     _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = "m³"
-    translation_key = "index_journalier"
+    _attr_translation_key = "index_journalier"
     _attr_suggested_display_precision = 3
 
     def __init__(self, coordinator, entry, contract_ref):
@@ -94,7 +94,7 @@ class EauGrandLyonConsommationSensor(_EauGrandLyonBase):
     def __init__(self, coordinator, entry, contract_ref, period: str):
         super().__init__(coordinator, entry, contract_ref)
         self._period = period
-        self.translation_key = f"conso_{period}"
+        self._attr_translation_key = f"conso_{period}"
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_conso_{period}"
 
     @property
@@ -150,7 +150,7 @@ class EauGrandLyonConsommationAnnuelleSensor(_EauGrandLyonBase):
     _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "m³"
-    translation_key = "conso_annuelle"
+    _attr_translation_key = "conso_annuelle"
     _attr_suggested_display_precision = 1
 
     def __init__(self, coordinator, entry, contract_ref):
@@ -190,7 +190,7 @@ class EauGrandLyonYesterdaySensor(_EauGrandLyonDailyBase):
     _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "L"
-    translation_key = "conso_hier"
+    _attr_translation_key = "conso_hier"
     _attr_suggested_display_precision = 0
     _attr_entity_registry_enabled_default = True
 
@@ -225,7 +225,7 @@ class EauGrandLyonConso7JSensor(_EauGrandLyonDailyBase):
     _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "m³"
-    translation_key = "conso_7j"
+    _attr_translation_key = "conso_7j"
     _attr_suggested_display_precision = 2
     _attr_entity_registry_enabled_default = True
 
@@ -254,7 +254,7 @@ class EauGrandLyonConso30JSensor(_EauGrandLyonDailyBase):
     _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "m³"
-    translation_key = "conso_30j"
+    _attr_translation_key = "conso_30j"
     _attr_suggested_display_precision = 2
     _attr_entity_registry_enabled_default = True
 
@@ -283,7 +283,7 @@ class EauGrandLyonConsoMoyenne7JSensor(_EauGrandLyonDailyBase):
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "L"
-    translation_key = "conso_moyenne_7j"
+    _attr_translation_key = "conso_moyenne_7j"
     _attr_suggested_display_precision = 0
     _attr_entity_registry_enabled_default = True
 
@@ -306,7 +306,7 @@ class EauGrandLyonConsoMoyenne7JSensor(_EauGrandLyonDailyBase):
 class EauGrandLyonCompatibilitySensor(_EauGrandLyonBase):
     """Indique si le compteur est compatible avec la télé-relève (Téléo)."""
 
-    translation_key = "compatibilite_compteur"
+    _attr_translation_key = "compatibilite_compteur"
     _attr_entity_registry_enabled_default = False
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -335,7 +335,7 @@ class EauGrandLyonConsoAnnuelleRefSensor(_EauGrandLyonBase):
     _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "m³"
-    translation_key = "conso_annuelle_ref"
+    _attr_translation_key = "conso_annuelle_ref"
     _attr_suggested_display_precision = 0
     _attr_entity_registry_enabled_default = False
 

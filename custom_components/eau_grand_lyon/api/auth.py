@@ -202,6 +202,7 @@ class EauGrandLyonAuth:
             "client_id": CLIENT_ID,
         }
         start = time.perf_counter()
+        status: int | None = None
         try:
             async with self._session.get(
                 urls.authorize_url,
@@ -230,8 +231,7 @@ class EauGrandLyonAuth:
                 method="GET",
                 url=urls.authorize_url,
                 duration_ms=(time.perf_counter() - start) * 1000,
-                error=None,
-                status=403 if "403" in str(locals().get("resp", "")) else None,
+                status=status,
             )
             raise
         except aiohttp.ClientError as err:
@@ -260,6 +260,7 @@ class EauGrandLyonAuth:
             "redirect_uri": REDIRECT_URI,
         }
         start = time.perf_counter()
+        status: int | None = None
         try:
             async with self._session.post(
                 token_url,
@@ -290,8 +291,7 @@ class EauGrandLyonAuth:
                 method="POST",
                 url=token_url,
                 duration_ms=(time.perf_counter() - start) * 1000,
-                error=None,
-                status=locals().get("status"),
+                status=status,
             )
             raise
         except aiohttp.ClientError as err:

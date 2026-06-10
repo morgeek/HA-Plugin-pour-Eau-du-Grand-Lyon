@@ -12,8 +12,8 @@ from homeassistant.const import EntityCategory
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from ..const import DOMAIN
 from ..coordinator import EauGrandLyonCoordinator
+from ..device import account_device_info, contract_device_info
 
 if TYPE_CHECKING:
     from .. import EauGrandLyonConfigEntry
@@ -50,18 +50,7 @@ class _EauGrandLyonBase(CoordinatorEntity[EauGrandLyonCoordinator], SensorEntity
 
     @property
     def device_info(self) -> DeviceInfo:
-        calibre = self._contract.get("calibre_compteur", "")
-        usage = self._contract.get("usage", "")
-        model_parts = [p for p in [calibre and f"DN{calibre}", usage] if p]
-        numero_compteur = self._contract.get("reference_pds") or self._contract.get("reference", self._contract_ref)
-        return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._entry.entry_id}_{self._contract_ref}")},
-            name="Eau du Grand Lyon",
-            manufacturer="Eau du Grand Lyon",
-            model=", ".join(model_parts) or "Compteur eau",
-            serial_number=numero_compteur,
-            configuration_url="https://agence.eaudugrandlyon.com",
-        )
+        return contract_device_info(self.coordinator, self._entry, self._contract_ref)
 
 
 class _EauGrandLyonGlobalBase(CoordinatorEntity[EauGrandLyonCoordinator], SensorEntity):
@@ -75,17 +64,7 @@ class _EauGrandLyonGlobalBase(CoordinatorEntity[EauGrandLyonCoordinator], Sensor
 
     @property
     def device_info(self) -> DeviceInfo:
-        contracts = (self.coordinator.data or {}).get("contracts", {})
-        first_ref = next(iter(contracts), None)
-        if first_ref:
-            return DeviceInfo(
-                identifiers={(DOMAIN, f"{self._entry.entry_id}_{first_ref}")},
-            )
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._entry.entry_id)},
-            name="Eau du Grand Lyon",
-            manufacturer="Eau du Grand Lyon",
-        )
+        return account_device_info(self.coordinator, self._entry)
 
 
 class _EauGrandLyonDailyBase(_EauGrandLyonBase):

@@ -29,6 +29,7 @@ from .const import (
     CONF_UPDATE_INTERVAL_HOURS,
     CONF_HOUSEHOLD_SIZE,
     CONF_WATER_HARDNESS,
+    CONF_WATER_QUALITY_COMMUNE,
     CONF_SUBSCRIPTION_ANNUAL,
     DEFAULT_EXPERIMENTAL,
     DEFAULT_HOUSEHOLD_SIZE,
@@ -36,6 +37,7 @@ from .const import (
     DEFAULT_TARIF_M3,
     DEFAULT_UPDATE_INTERVAL_HOURS,
     DEFAULT_WATER_HARDNESS,
+    DEFAULT_WATER_QUALITY_COMMUNE,
     DEFAULT_SUBSCRIPTION_ANNUAL,
     DOMAIN,
 )
@@ -52,7 +54,10 @@ def _is_valid_email(value: str) -> bool:
 async def _authenticate_and_handle_errors(email: str, password: str, context: str = "") -> dict[str, str]:
     """Authenticate user and return error dict if authentication fails, or empty dict on success."""
     errors: dict[str, str] = {}
-    async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True)) as session:
+    async with aiohttp.ClientSession(
+        cookie_jar=aiohttp.CookieJar(unsafe=True),
+        timeout=aiohttp.ClientTimeout(total=30),
+    ) as session:
         api = EauGrandLyonApi(session, email, password)
         try:
             await api.authenticate()
@@ -254,6 +259,7 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
         current_price_entity = opts.get(CONF_PRICE_ENTITY, "")
         current_household = int(opts.get(CONF_HOUSEHOLD_SIZE, DEFAULT_HOUSEHOLD_SIZE))
         current_hardness = float(opts.get(CONF_WATER_HARDNESS, DEFAULT_WATER_HARDNESS))
+        current_commune = opts.get(CONF_WATER_QUALITY_COMMUNE, DEFAULT_WATER_QUALITY_COMMUNE)
         current_subscription = float(opts.get(CONF_SUBSCRIPTION_ANNUAL, DEFAULT_SUBSCRIPTION_ANNUAL))
 
         options_schema = vol.Schema(
@@ -286,6 +292,10 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_WATER_HARDNESS,
                     default=current_hardness,
                 ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=100.0)),
+                vol.Optional(
+                    CONF_WATER_QUALITY_COMMUNE,
+                    default=current_commune,
+                ): str,
                 vol.Optional(
                     CONF_SUBSCRIPTION_ANNUAL,
                     default=current_subscription,

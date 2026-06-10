@@ -92,7 +92,7 @@ Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
 - **Consommation Moyenne (L/j)** : Nouveau capteur glissant en **Litres** pour une vision plus concrète du quotidien.
 - **Capteur de Compatibilité** : Détection automatique Téléo vs Standard pour clarifier la disponibilité des données.
 - **Bouton Facture Direct** : Téléchargez votre dernière facture PDF en un clic depuis l'interface HA.
-- **Qualité de l'Eau Open Data** : Dureté, Nitrates et Chlore en temps réel via les données de la Métropole de Lyon, avec alertes sur les seuils sanitaires.
+- **Qualité de l'Eau Open Data** : Dureté, Nitrates et Chlore via les données de la Métropole de Lyon, avec alertes sur les seuils sanitaires. Renseignez votre commune dans les options pour filtrer les mesures (sinon, première mesure disponible du réseau — voir l'attribut `commune`).
 - **Consommation d'Hier** : Suivez votre volume consommé la veille directement en Litres.
 - **Index Journalier (Energy)** : Nouveau capteur d'index cumulé haute précision, idéal pour le panneau Énergie de HA.
 - **Courbe de Charge Horaire** : Visualisez votre consommation heure par heure (compteurs Téléo compatibles).
@@ -119,16 +119,23 @@ Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
 - **Détection Fuite Temps Réel (Téléo)** : Basé sur les alertes officielles du compteur.
 - **Détection Fuite Locale (Pattern)** : Analyse intelligente du flux constant (idéal pour compteurs legacy).
 - **Mode Vacances** : Switch de surveillance renforcée (alerte immédiate pour toute consommation > 1L).
-- **Suivi Sécheresse & Repairs** : Gestion native des niveaux de vigilance sécheresse du Rhône avec intégration dans la plateforme Repairs de HA.
+- **Indicateur Sécheresse (saisonnier)** : Capteur indicatif basé sur une heuristique saisonnière (juin–septembre = Vigilance). Il ne reflète pas les arrêtés préfectoraux réels — consultez [vigieau.gouv.fr](https://vigieau.gouv.fr) pour les restrictions en vigueur.
 - **Icônes Dynamiques** : Les capteurs (ex: Nitrates, Fuites) changent d'icône selon la sévérité des données.
 - **Courbe de Charge Horaire** : Support expérimental des données de consommation heure par heure pour les compteurs Téléo récents.
 - **Consommation d'Hier** : Nouveau capteur dédié affichant la consommation du dernier jour connu en **Litres**.
 - **Index Journalier Robuste** : Amélioration du parsing de l'index journalier avec support de 9 synonymes de clés API (inspiré du travail de @hufon).
-- **Repairs HA** : Intégration des alertes sécheresse critiques directement dans le tableau de bord "Réparations" de Home Assistant.
+- **Repairs HA** : Alerte dans le tableau de bord "Réparations" de Home Assistant en cas de panne API prolongée (> 7 jours).
 
 ### 🛠️ Services Pro & Utilitaires
 - **Export CSV** : Service `export_data` pour sauvegarder tout votre historique en local.
 - **Téléchargement Facture PDF** : Service `download_latest_invoice` pour récupérer votre facture officielle.
+  > ⚠️ Depuis la 3.1.0, le répertoire de destination de ces deux services doit être autorisé dans `configuration.yaml` :
+  > ```yaml
+  > homeassistant:
+  >   allowlist_external_dirs:
+  >     - /config/exports
+  >     - /config/www/eau_grand_lyon
+  > ```
 - **Santé Hardware** : Diagnostic du niveau de signal et de la pile du module Téléo.
 - **Calendrier des Échéances** : Entité calendrier avec dates de paiement et factures prévues.
 - **Blueprints d'Automation** : Modèles prêts à l'emploi pour les alertes fuite et budget.
@@ -232,7 +239,7 @@ Pour plus de détails : voir `lovelace/energy_config.yaml`
 L'intégration inclut désormais des **Blueprints** (modèles d'automatisation) pour configurer en un clic :
 - **Alerte Fuite Actionnable** : Notification sur mobile avec boutons "Rafraîchir" et "Voir Dashboard".
 - **Alerte Budget** : Notification si la prédiction de fin de mois dépasse un seuil choisi.
-- **Alerte Sécheresse** : Notification automatique dès que le département du Rhône change de niveau de restriction.
+- **Alerte Sécheresse** : Notification quand l'indicateur saisonnier de l'intégration change de niveau (heuristique — voir vigieau.gouv.fr pour les restrictions réelles).
 
 ## Appareils supportés
 

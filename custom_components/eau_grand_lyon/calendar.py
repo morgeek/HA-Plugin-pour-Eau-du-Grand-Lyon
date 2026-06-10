@@ -11,10 +11,15 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
 from .coordinator import EauGrandLyonCoordinator
+from .device import account_device_info
 
 PARALLEL_UPDATES = 0
+
+
+def _as_date(value: date | datetime) -> date:
+    """Convertit datetime → date (les événements sont tous all-day)."""
+    return value.date() if isinstance(value, datetime) else value
 
 
 async def async_setup_entry(
@@ -31,22 +36,32 @@ class EauGrandLyonCalendar(CoordinatorEntity[EauGrandLyonCoordinator], CalendarE
     """Calendrier des échéances Eau du Grand Lyon."""
 
     _attr_has_entity_name = True
-    translation_key = "billing_events"
+    _attr_translation_key = "billing_events"
 
     def __init__(self, coordinator: EauGrandLyonCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_calendar"
-        self._event: CalendarEvent | None = None
 
     @property
     def event(self) -> CalendarEvent | None:
-        return self._event
+        """Prochain événement à venir (calculé depuis les données du coordinator)."""
+        today = date.today()
+        upcoming = [e for e in self._build_events() if e.end > today]
+        return min(upcoming, key=lambda e: e.start) if upcoming else None
 
     async def async_get_events(
         self, hass: HomeAssistant, start_date: datetime, end_date: datetime
     ) -> list[CalendarEvent]:
         """Retourne les événements du calendrier dans la plage demandée."""
+        start_d = _as_date(start_date)
+        end_d = _as_date(end_date)
+        # end exclusif (événements all-day) : chevauchement si l'événement
+        # finit après le début de la plage et commence avant sa fin.
+        return [e for e in self._build_events() if e.end > start_d and e.start < end_d]
+
+    def _build_events(self) -> list[CalendarEvent]:
+        """Construit tous les événements depuis les données du coordinator."""
         events: list[CalendarEvent] = []
         data = self.coordinator.data or {}
 
@@ -157,16 +172,8 @@ class EauGrandLyonCalendar(CoordinatorEntity[EauGrandLyonCoordinator], CalendarE
             except (ValueError, TypeError, KeyError):
                 continue
 
-        # Mise à jour de l'événement courant (le prochain à venir)
-        today = date.today()
-        future_events = [e for e in events if e.start >= today]
-        self._event = min(future_events, key=lambda e: e.start) if future_events else None
-
         return events
 
     @property
     def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._entry.entry_id)},
-            name="Eau du Grand Lyon",
-        )
+        return account_device_info(self.coordinator, self._entry)

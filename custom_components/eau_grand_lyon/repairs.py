@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from homeassistant.components.repairs import ConfirmRepairFlow
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 
@@ -10,37 +9,8 @@ from .const import DOMAIN
 
 # NOTE: ir.async_create_issue / ir.async_delete_issue are synchronous @callback
 # functions in Home Assistant (they return None). Do NOT `await` them — doing so
-# raises "'NoneType' object can't be awaited". These wrappers stay `async def`
-# only so the coordinator can `await` them uniformly.
-
-
-async def async_create_fix_flow(
-    hass: HomeAssistant,
-    issue_id: str,
-    data: dict[str, str] | None,
-) -> ConfirmRepairFlow | None:
-    """Crée un flux de correction pour une issue."""
-    if issue_id == "drought_alert":
-        return ConfirmRepairFlow()
-    return None
-
-
-async def check_drought_issue(hass: HomeAssistant, level: str) -> None:
-    """Enregistre ou supprime une issue de sécheresse selon le niveau."""
-    issue_id = "drought_alert"
-    if level == "Vigilance":
-        ir.async_create_issue(
-            hass,
-            DOMAIN,
-            issue_id,
-            is_fixable=False,
-            severity=ir.IssueSeverity.WARNING,
-            translation_key="drought_alert",
-            translation_placeholders={"level": level},
-            learn_more_url="https://www.rhone.gouv.fr/Politiques-publiques/Environnement/Eau/Secheresse",
-        )
-    else:
-        ir.async_delete_issue(hass, DOMAIN, issue_id)
+# raises "'NoneType' object can't be awaited". This wrapper stays `async def`
+# only so the coordinator can `await` it uniformly.
 
 
 async def check_long_outage_issue(hass: HomeAssistant, days: int) -> None:

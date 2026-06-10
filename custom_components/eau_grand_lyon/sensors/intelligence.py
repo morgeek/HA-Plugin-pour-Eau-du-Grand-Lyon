@@ -17,7 +17,7 @@ class EauGrandLyonTrendSensor(_EauGrandLyonBase):
     _attr_native_unit_of_measurement = "%"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
-    translation_key = "trend"
+    _attr_translation_key = "trend"
     _attr_suggested_display_precision = 1
 
     def __init__(self, coordinator, entry, contract_ref):
@@ -44,7 +44,7 @@ class EauGrandLyonPredictionConsoSensor(_EauGrandLyonBase):
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "m³"
     _attr_entity_registry_enabled_default = False
-    translation_key = "prediction_conso"
+    _attr_translation_key = "prediction_conso"
     _attr_suggested_display_precision = 1
 
     def __init__(self, coordinator, entry, contract_ref):
@@ -61,9 +61,9 @@ class EauGrandLyonPredictionCostSensor(_EauGrandLyonBase):
 
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.TOTAL
-    _attr_native_unit_of_measurement = "€"
+    _attr_native_unit_of_measurement = "EUR"
     _attr_entity_registry_enabled_default = False
-    translation_key = "prediction_cost"
+    _attr_translation_key = "prediction_cost"
     _attr_suggested_display_precision = 2
 
     def __init__(self, coordinator, entry, contract_ref):
@@ -78,7 +78,7 @@ class EauGrandLyonPredictionCostSensor(_EauGrandLyonBase):
 class EauGrandLyonEcoScoreSensor(_EauGrandLyonBase):
     """Note de performance environnementale (A-G)."""
 
-    translation_key = "eco_score"
+    _attr_translation_key = "eco_score"
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -102,7 +102,7 @@ class EauGrandLyonCO2FootprintSensor(_EauGrandLyonBase):
 
     _attr_state_class = SensorStateClass.TOTAL
     _attr_entity_registry_enabled_default = False
-    translation_key = "co2_footprint"
+    _attr_translation_key = "co2_footprint"
     _attr_native_unit_of_measurement = "kg CO2e"
     _attr_suggested_display_precision = 2
 
@@ -129,7 +129,7 @@ class EauGrandLyonLimescaleSensor(_EauGrandLyonBase):
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "g"
     _attr_entity_registry_enabled_default = False
-    translation_key = "limescale"
+    _attr_translation_key = "limescale"
     _attr_suggested_display_precision = 0
 
     def __init__(self, coordinator, entry, contract_ref):
@@ -151,7 +151,7 @@ class EauGrandLyonLimescaleSensor(_EauGrandLyonBase):
 class EauGrandLyonCoachingSensor(_EauGrandLyonBase):
     """Conseils personnalisés basés sur l'analyse de consommation."""
 
-    translation_key = "coaching"
+    _attr_translation_key = "coaching"
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -161,7 +161,8 @@ class EauGrandLyonCoachingSensor(_EauGrandLyonBase):
     def native_value(self) -> str:
         c = self._contract
         score = c.get("eco_score_grade", "Inconnu")
-        trend = c.get("tendance_n1_pct", 0)
+        # La clé existe toujours mais vaut None sans donnée N-1 — `or 0`, pas un default
+        trend = c.get("tendance_n1_pct") or 0
 
         if score == "A":
             return "Excellent ! Votre consommation est exemplaire. Continuez ainsi."
@@ -183,7 +184,7 @@ class EauGrandLyonSignalSensor(_EauGrandLyonBase):
     _attr_native_unit_of_measurement = "%"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
-    translation_key = "signal"
+    _attr_translation_key = "signal"
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)

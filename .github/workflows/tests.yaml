@@ -12,7 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        # Home Assistant 2024.11+ only runs on Python 3.12+
+        python-version: ["3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +27,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pytest pytest-asyncio voluptuous
+          pip install pytest pytest-asyncio voluptuous flake8 black
+
+      - name: Lint with flake8
+        run: |
+          flake8 custom_components/eau_grand_lyon/ --max-line-length=120 --extend-ignore=E203,W503 --count --show-source
+
+      - name: Format check with black
+        run: |
+          black --check custom_components/eau_grand_lyon/ --line-length=120
 
       - name: Run tests
         run: pytest tests/ -v --tb=short

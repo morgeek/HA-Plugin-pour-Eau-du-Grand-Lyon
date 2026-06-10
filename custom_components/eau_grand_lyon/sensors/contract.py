@@ -13,7 +13,7 @@ from .base import _EauGrandLyonBase
 class EauGrandLyonStatutSensor(_EauGrandLyonBase):
     """Statut du contrat (actif, résilié, etc.)."""
 
-    translation_key = "statut"
+    _attr_translation_key = "statut"
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -41,7 +41,7 @@ class EauGrandLyonDateEcheanceSensor(_EauGrandLyonBase):
     """Date d'échéance (fin) du contrat."""
 
     _attr_device_class = SensorDeviceClass.DATE
-    translation_key = "date_echeance"
+    _attr_translation_key = "date_echeance"
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -66,7 +66,7 @@ class EauGrandLyonProchaineFactureSensor(_EauGrandLyonBase):
     """Date de la prochaine facture — issue de l'API /dateProchaineFacture."""
 
     _attr_device_class = SensorDeviceClass.DATE
-    translation_key = "prochaine_facture"
+    _attr_translation_key = "prochaine_facture"
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -93,7 +93,7 @@ class EauGrandLyonProchaineReleveSensor(_EauGrandLyonBase):
     """Date du prochain relevé compteur — issue de /pointDeService."""
 
     _attr_device_class = SensorDeviceClass.DATE
-    translation_key = "prochaine_releve"
+    _attr_translation_key = "prochaine_releve"
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)

@@ -547,10 +547,16 @@ class EauGrandLyonApi:
             )
             raise NetworkError(f"Erreur reseau lors du telechargement PDF: {err}") from err
 
-    async def get_water_quality(self) -> dict:
+    async def get_water_quality(self, commune: str | None = None) -> dict:
+        """Qualité de l'eau depuis l'Open Data Métropole de Lyon.
+
+        Sans `commune`, retourne la première mesure du jeu de données (commune
+        arbitraire du réseau). Avec `commune`, filtre côté client sur le nom.
+        """
+        maxfeatures = 1000 if commune else 1
         opendata_url = (
             "https://data.grandlyon.com/fr/datapusher/ws/grandlyon"
-            "/eau_eau.eauqualite/json/?maxfeatures=1&start=1"
+            f"/eau_eau.eauqualite/json/?maxfeatures={maxfeatures}&start=1"
             "&fields=commune,durete,nitrates,chloreresiduel,turbidite,dateanalyse"
         )
         empty: dict = {
@@ -577,6 +583,20 @@ class EauGrandLyonApi:
                 _LOGGER.debug("[OPEN DATA] Qualite eau -> reponse vide")
                 return empty
             row = values[0]
+            if commune:
+                wanted = commune.strip().casefold()
+                match = next(
+                    (r for r in values if wanted in str(r.get("commune") or "").casefold()),
+                    None,
+                )
+                if match is not None:
+                    row = match
+                else:
+                    _LOGGER.warning(
+                        "[OPEN DATA] Commune '%s' introuvable dans les mesures qualite eau — "
+                        "premiere mesure du reseau utilisee (voir l'attribut 'commune')",
+                        commune,
+                    )
 
             def _safe_float(val: object) -> float | None:
                 try:

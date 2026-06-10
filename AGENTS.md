@@ -16,16 +16,17 @@ intelligence sensors, and injects long-term statistics into HA's recorder. Domai
 
 ```
 custom_components/eau_grand_lyon/
-  api/            auth.py, client.py, endpoints.py, methods.py   ← HTTP + OAuth/PKCE
+  api/            auth.py, client.py, endpoints.py   ← HTTP + OAuth/PKCE
   sensors/        consumption.py, cost.py, quality.py, intelligence.py,
-                  global_sensors.py, base.py
+                  global_sensors.py, experimental.py, contract.py, base.py
   coordinator.py  DataUpdateCoordinator: fetch, merge history, inject statistics
   config_flow.py  setup + options + reauth flows
+  device.py       shared DeviceInfo helpers (single source for all platforms)
   manifest.json   version lives here (HA + HACS read it)
   strings.json + translations/{fr,en}.json
 hacs.json         HACS manifest (NOT the same schema as the action inputs)
 tests/            pytest suite, self-contained (no real HA needed)
-.github/workflows/ test.yml + tests.yaml (tests + hassfest + HACS validation)
+.github/workflows/tests.yaml   tests + lint + hassfest + HACS validation
 ```
 
 ## Golden rules — do NOT break these
@@ -49,15 +50,17 @@ tests/            pytest suite, self-contained (no real HA needed)
    validation with "extra keys not allowed". This blocked the HACS check for many commits.
 
 4. **Tests run WITHOUT a real Home Assistant install.** `tests/conftest.py` stubs
-   `homeassistant.*`, `aiohttp`, `async_lru`, `voluptuous`, and `tenacity` in `sys.modules`.
-   The `tests.yaml` CI job installs **only** `pytest pytest-asyncio voluptuous`. Therefore:
+   `homeassistant.*`, `aiohttp`, and `voluptuous` in `sys.modules`. The `tests.yaml` CI
+   job installs **only** `pytest pytest-asyncio voluptuous` (plus flake8/black). Therefore:
    **any new third-party import in `custom_components/` must be stubbed in `conftest.py`**,
    or collection fails across the whole Python matrix. (`async-lru` once wasn't stubbed and
    broke all of CI.)
 
-5. **`async-lru` is a runtime dependency** (`manifest.json` → `requirements`). A manual
-   file-copy deploy must still get it installed in the HA venv, or `coordinator.py`'s
-   `from async_lru import alru_cache` fails and the integration won't load (no logs).
+5. **No third-party runtime dependencies.** `manifest.json` → `requirements` is empty
+   (`async-lru` was removed in 3.1.0 — its class-level cache leaked memory across update
+   cycles; the per-cycle cache now lives in `_CycleCachedApi._tasks`). If you add a runtime
+   dependency, it must go into `requirements`, be stubbed in `conftest.py`, and survive a
+   manual file-copy deploy (HA installs `requirements` automatically, plain copies don't).
 
 6. **Config/options flow + translations.** Any `async_show_form` whose translation strings
    contain `{placeholders}` (see `data_description` in `strings.json`/`translations/*.json`)
@@ -76,7 +79,7 @@ Run from the repo root.
 # Tests (mirror CI)
 pytest tests/ -v                      # 200+ tests; must stay green
 
-# Lint (CI scope = custom_components only; continue-on-error in CI but keep clean)
+# Lint (CI scope = custom_components only; ENFORCED in CI — must be clean)
 flake8 custom_components/eau_grand_lyon/ --max-line-length=120 --extend-ignore=E203,W503
 
 # Format (CI black-checks custom_components/ only; tests/ is not black-enforced)
@@ -85,19 +88,25 @@ black custom_components/eau_grand_lyon/ --line-length=120
 
 - Never commit `.venv/`, `__pycache__/`, `*.pyc`, coverage artifacts (see `.gitignore`).
 - When fixing a bug, add a regression test that fails before the fix.
+- **Real-HA smoke tests** live in `smoke_tests/` (NOT collected by CI — CI runs `pytest tests/`
+  only). They run the integration against a genuine Home Assistant install
+  (`pip install pytest-homeassistant-custom-component`) with only the HTTP layer mocked:
+  full entry setup, entities, real recorder statistics, options flow, unload. Run them
+  before releases that touch coordinator/setup/statistics code — the stub suite cannot
+  catch HA-API misuse (see `smoke_tests/test_real_ha.py` header for how to run).
 
 ## CI checks that must stay green (run on push/PR to `main`)
 
-- **Tests Python** + **test** (3.9–3.13, two workflows) — pytest
+- **Tests Python** (3.12 & 3.13, single workflow `tests.yaml`) — flake8 + black + pytest,
+  all enforced (no `continue-on-error`)
 - **Validation HA (hassfest)** — manifest/translation correctness
 - **Validation HACS** — repo structure + `hacs.json`
 - **CodeQL** (Analyze actions/python)
 
-flake8/black steps are `continue-on-error`, but keep them clean anyway.
-
 ## Release process (HACS installs by release tag, not by branch)
 
-1. Bump `version` in `custom_components/eau_grand_lyon/manifest.json` (semver).
+1. Bump `version` in `custom_components/eau_grand_lyon/manifest.json` (semver) **and keep
+   `pyproject.toml` `version` in sync** (they drifted once: 2.9.5 vs 3.0.4).
 2. Add a dated entry at the top of `CHANGELOG.md` (French, Keep-a-Changelog style).
 3. Commit, push `main`, **wait for all CI checks to go green**.
 4. Tag the green commit: `git tag -a vX.Y.Z -m "..."` then `git push origin vX.Y.Z`.

@@ -11,8 +11,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
 from .coordinator import EauGrandLyonCoordinator
+from .device import account_device_info
 
 PARALLEL_UPDATES = 0
 
@@ -58,7 +58,4 @@ class EauGrandLyonVacationSwitch(CoordinatorEntity[EauGrandLyonCoordinator], Swi
 
     @property
     def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._entry.entry_id)},
-            name="Eau du Grand Lyon",
-        )
+        return account_device_info(self.coordinator, self._entry)

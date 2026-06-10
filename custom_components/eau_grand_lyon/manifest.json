@@ -10,6 +10,6 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/issues",
   "quality_scale": "gold",
-  "requirements": ["async-lru>=2.0.4"],
-  "version": "3.0.4"
+  "requirements": [],
+  "version": "3.1.0"
 }

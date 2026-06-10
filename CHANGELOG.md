@@ -5,6 +5,43 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-06-10
+
+Version issue d'un audit complet du projet : corrections de bugs, durcissement sécurité/vie privée, nettoyage du code mort et simplification de la CI.
+
+### Corrections de Bugs
+
+- **Plantage du capteur Eco-Coach** (`TypeError: '>' not supported between NoneType and int`) : le coordinateur renseigne toujours la clé `tendance_n1_pct`, souvent à `None` (pas de donnée N-1). `c.get("tendance_n1_pct", 0)` renvoyait donc `None` et `trend > 20` plantait à chaque écriture d'état pour les scores C à G. Corrigé (`or 0`) + test de non-régression.
+- **Fuite de session aiohttp à chaque tentative de setup échouée** : le coordinateur crée sa propre `ClientSession` ; si le premier rafraîchissement échouait (`ConfigEntryNotReady`, réauthentification), elle n'était jamais fermée — et HA réessaie le setup en boucle. La session est désormais fermée si le setup échoue.
+- **Fuite mémoire du cache par cycle** : `_CycleCachedApi` utilisait `@alru_cache(maxsize=None)` sur des méthodes d'instance — le cache, porté par la classe, gardait une référence sur chaque instance (une par cycle) et accumulait les réponses API de tous les cycles. Remplacé par un cache de tasks porté par l'instance (même coalescence des appels concurrents), ce qui supprime aussi la dépendance `async-lru`.
+- **Statistiques silencieusement désactivées sur les HA plus anciens** : `StatisticMeanType` était importé dans le même `try` que le reste du recorder ; son absence désactivait toute l'injection de statistiques et le fallback `has_mean` était du code mort. L'import est désormais séparé et le fallback fonctionne (vérifié contre un vrai recorder HA 2025.1).
+- **Statistiques jamais injectées pour les références de contrat non numériques** : le recorder n'accepte que `[a-z0-9_]` dans un `statistic_id` ; une référence contenant des majuscules ou des tirets (ex. `REF-123A`) produisait `Invalid statistic_id` et l'injection échouait silencieusement depuis toujours. Les références sont désormais normalisées (`_statistic_ref`) — no-op pour les références purement numériques, donc aucun impact sur les statistiques existantes.
+- **Service `download_latest_invoice`** : les erreurs réseau/API (`NetworkError`, `WafBlockedError`, `ApiError`, `AuthenticationError`) levées par le téléchargement du PDF n'étaient pas interceptées et remontaient en exception brute. Elles sont maintenant converties en `HomeAssistantError` lisible.
+- **Calendrier** : `async_get_events` ignorait la plage `start_date`/`end_date` demandée (tous les événements étaient toujours renvoyés) ; la propriété `event` n'était renseignée que par effet de bord d'un appel UI. Les événements sont filtrés par plage et le prochain événement est calculé directement depuis les données du coordinateur.
+- **Timeout réseau** : aucune des sessions aiohttp n'avait de timeout (défaut aiohttp : 5 minutes par requête). Timeout explicite de 30 s sur la session du coordinateur et celle du config flow.
+
+### Sécurité / Vie privée
+
+- **Diagnostics** : l'export contenait l'email du compte (via `entry.title`) et les références de contrat (clés du dict `contracts`, non couvertes par la redaction). Le titre n'est plus exporté et les contrats sont ré-indexés en `contract_1`, `contract_2`, …
+- **Services d'écriture de fichiers** (`export_data`, `download_latest_invoice`) : les chemins fournis sont désormais validés avec `hass.config.is_allowed_path()`. ⚠️ **Action requise** : ajoutez le répertoire cible (ex. `/config/exports`) à `allowlist_external_dirs` dans `configuration.yaml` pour continuer à utiliser ces services.
+
+### Améliorations
+
+- **Option « Commune (qualité de l'eau) »** : les capteurs qualité de l'eau (dureté, nitrates, chlore) utilisaient la première mesure du jeu Open Data — c'est-à-dire une commune arbitraire du réseau. Une nouvelle option permet de filtrer sur votre commune ; sans filtre, le comportement reste inchangé (l'attribut `commune` indique la commune réellement mesurée).
+- **Capteur sécheresse assumé comme heuristique** : le niveau « Vigilance » est purement saisonnier (juin–septembre). L'issue de réparation HA correspondante — qui alertait tous les utilisateurs la moitié de l'année — est supprimée ; le capteur reste, avec des attributs `source`/`note` renvoyant vers vigieau.gouv.fr.
+- **Devices unifiés** (`device.py`) : même fabricant (« Eau du Grand Lyon ») sur toutes les plateformes (le binary_sensor déclarait « Morgeek »), switch/calendrier/boutons rattachés au device du compteur (plus de second device orphelin), et nom du device suffixé par la référence de contrat en multi-contrats.
+- **Unité monétaire unifiée** : `EUR` partout (certains capteurs globaux utilisaient `€`, ce que les statistiques long terme traitent comme une unité différente).
+- **Localisation** : le bouton « Forcer la mise à jour » utilise une clé de traduction (le nom était codé en dur en français) ; ajout de `invalid_email` manquant dans `en.json` ; idiome `_attr_translation_key` partout.
+
+### Maintenance interne / CI
+
+- **Code mort supprimé** : `api/methods.py` (jamais importé, et cassé), flux de réparation `ConfirmRepairFlow` inutilisé, stubs de test `async_lru`/`tenacity`/`repairs` obsolètes, hack `locals()` dans la journalisation d'auth, blueprints dupliqués à la racine (`budget_notification.yaml`, `leak_notification.yaml` — les versions à jour sont dans `blueprints/automation/eau_grand_lyon/`).
+- **CI simplifiée** : un seul workflow (`tests.yaml`) au lieu de deux quasi-identiques ; matrice Python réduite à 3.12/3.13 (HA ne tourne que sur 3.12+) ; flake8 et black désormais **bloquants** ; suppression de l'upload codecov cassé (le fichier `coverage.xml` n'était jamais généré).
+- **Versions cohérentes** : `pyproject.toml` resynchronisé avec `manifest.json` (il était resté à 2.9.5) ; `pytest.ini` supprimé (doublon de `[tool.pytest.ini_options]`) ; `requires-python >= 3.12`.
+- **Version minimale de HA relevée à 2024.11.0** dans `hacs.json` : le code requiert la propriété automatique `OptionsFlow.config_entry` (HA 2024.11+) ; la valeur précédente (2024.4.0) ne pouvait pas fonctionner.
+- Suite de tests : **222 tests** au vert, avec nouveaux tests de non-régression (Eco-Coach `None`, validation des chemins, diagnostics sans email, normalisation des `statistic_id`).
+- **Nouveaux smoke tests « vrai Home Assistant »** (`smoke_tests/`, hors CI) : setup complet de la config entry, création des entités, injection des statistiques dans un vrai recorder, options flow, validation des chemins et unload — exécutés contre HA 2025.1 réel avec seul le HTTP mocké. Voir l'en-tête de `smoke_tests/test_real_ha.py` pour les lancer.
+
 ## [3.0.4] - 2026-06-10
 
 ### Corrections de Bugs

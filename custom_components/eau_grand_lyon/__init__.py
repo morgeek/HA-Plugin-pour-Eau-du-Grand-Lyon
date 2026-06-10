@@ -18,6 +18,7 @@ from homeassistant.core import (
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
+from .api import ApiError, AuthenticationError, NetworkError, WafBlockedError
 from .const import DOMAIN
 from .coordinator import EauGrandLyonCoordinator
 
@@ -57,8 +58,14 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> bool:
     """Set up an integration instance from a config entry."""
     coordinator = EauGrandLyonCoordinator(hass, entry)
-    await coordinator.async_initialize()
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_initialize()
+        await coordinator.async_config_entry_first_refresh()
+    except Exception:
+        # Le coordinator possède sa propre ClientSession ; sans fermeture ici,
+        # chaque tentative de setup échouée (ConfigEntryNotReady, reauth) en fuit une.
+        await coordinator.async_close()
+        raise
 
     entry.runtime_data = coordinator
 
@@ -78,6 +85,16 @@ def _iter_coordinators(hass: HomeAssistant):
             yield coord
 
 
+def _validate_write_path(hass: HomeAssistant, path: str) -> None:
+    """Refuse les chemins vides ou hors des répertoires autorisés."""
+    if not isinstance(path, str) or not path.strip():
+        raise ServiceValidationError("path must be a non-empty string")
+    if not hass.config.is_allowed_path(path):
+        raise ServiceValidationError(
+            f"Path '{path}' is not allowed. Add its directory to " "'allowlist_external_dirs' in configuration.yaml."
+        )
+
+
 def _async_setup_services(hass: HomeAssistant) -> None:
     """Register integration-wide services (idempotent)."""
     if hass.services.has_service(DOMAIN, "clear_cache"):
@@ -93,8 +110,7 @@ def _async_setup_services(hass: HomeAssistant) -> None:
 
     async def async_handle_export_data(call: ServiceCall) -> None:
         export_path = call.data.get("path", "/config/exports/eau_grand_lyon_history.csv")
-        if not isinstance(export_path, str) or not export_path.strip():
-            raise ServiceValidationError("path must be a non-empty string")
+        _validate_write_path(hass, export_path)
 
         coordinators = list(_iter_coordinators(hass))
 
@@ -138,8 +154,7 @@ def _async_setup_services(hass: HomeAssistant) -> None:
     async def async_handle_download_invoice(call: ServiceCall) -> None:
         target_path = call.data.get("path", "/config/www/eau_grand_lyon/latest_invoice.pdf")
         contract_ref_filter = call.data.get("contract_reference")
-        if not isinstance(target_path, str) or not target_path.strip():
-            raise ServiceValidationError("path must be a non-empty string")
+        _validate_write_path(hass, target_path)
 
         for coord in _iter_coordinators(hass):
             if not coord.data:
@@ -153,7 +168,15 @@ def _async_setup_services(hass: HomeAssistant) -> None:
                 ref = factures[0]["reference"]
                 try:
                     pdf_data = await coord.api.get_invoice_pdf(ref)
-                except (OSError, ValueError, KeyError) as err:
+                except (
+                    NetworkError,
+                    WafBlockedError,
+                    ApiError,
+                    AuthenticationError,
+                    OSError,
+                    ValueError,
+                    KeyError,
+                ) as err:
                     raise HomeAssistantError(f"Failed to download invoice {ref}: {err}") from err
 
                 def _save_pdf() -> None:

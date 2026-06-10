@@ -25,14 +25,24 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
     }
 
     coordinator = entry.runtime_data
+    coordinator_data: dict[str, Any] = dict(coordinator.data or {})
+    if coordinator_data:
+        # Le dict contracts est indexé par référence de contrat : async_redact_data
+        # ne masque que les valeurs, pas les clés — on ré-indexe en contract_N.
+        contracts = coordinator_data.get("contracts") or {}
+        coordinator_data["contracts"] = {
+            f"contract_{i}": contract for i, contract in enumerate(contracts.values(), start=1)
+        }
+    else:
+        coordinator_data = {"status": "no_data_available"}
 
+    # entry.title contient l'email du compte — ne pas l'exporter
     diagnostics_data = {
         "entry": {
-            "title": entry.title,
             "version": entry.version,
             "options": entry.options,
         },
-        "coordinator_data": coordinator.data or {"status": "no_data_available"},
+        "coordinator_data": coordinator_data,
     }
 
     return async_redact_data(diagnostics_data, to_redact)

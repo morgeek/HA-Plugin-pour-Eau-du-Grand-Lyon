@@ -83,6 +83,7 @@
           "max_retries": "Nombre max de tentatives API",
           "household_size": "Nombre d'habitants du foyer",
           "water_hardness": "Dureté de l'eau (°fH)",
+          "water_quality_commune": "Commune (qualité de l'eau Open Data)",
           "subscription_annual": "💶 Abonnement annuel fixe (€/an)"
         },
         "data_description": {
@@ -91,6 +92,7 @@
           "max_retries": "Nombre maximal de tentatives avant bascule en mode hors-ligne. Le délai de retry utilise un backoff exponentiel avec jitter pour ménager l'API.",
           "household_size": "Utilisé pour calculer l'Eco-Score et les conseils personnalisés de l'Eco-Coach.",
           "water_hardness": "Dureté en degrés Français (°fH). Moyenne Lyon : {hardness_lyon_avg} °fH. Si vous avez un adoucisseur, réglez sur la dureté de sortie (ex. 10-15 °fH).",
+          "water_quality_commune": "Optionnel : nom de votre commune pour filtrer les mesures Open Data de qualité de l'eau (ex. LYON, VILLEURBANNE). Vide = première mesure disponible du réseau (commune arbitraire).",
           "subscription_annual": "Montant annuel de la partie fixe de votre abonnement eau (hors consommation). Visible sur votre facture annuelle. Ex. Grand Lyon 2024 : ~{subscription_example} €/an. Laissez à 0 pour ne pas inclure l'abonnement dans les calculs de coût.",
           "update_interval_hours": "Fréquence à laquelle l'intégration interroge les serveurs Eau du Grand Lyon. Les données étant mises à jour mensuellement, 24h est recommandé pour éviter tout blocage WAF.",
           "tarif_m3": "Prix de l'eau en euros par m³, utilisé pour tous les calculs de coût estimés. Consultez votre dernière facture pour le tarif exact (Grand Lyon 2024 : ~5,20 €/m³)."
@@ -99,10 +101,6 @@
     }
   },
   "issues": {
-    "drought_alert": {
-      "title": "Alerte Sécheresse : Niveau {level}",
-      "description": "Le département du Rhône est actuellement en niveau de restriction **{level}**. Des restrictions sur l'usage de l'eau (arrosage, lavage, etc.) s'appliquent. Consultez le site de la préfecture pour plus de détails."
-    },
     "long_outage": {
       "title": "Panne API prolongée (Eau du Grand Lyon)",
       "description": "L'intégration n'a pas pu se synchroniser avec le serveur depuis plus de 7 jours. \n\n**Actions recommandées :**\n1. Vérifiez que vos identifiants sont toujours valides sur le site officiel.\n2. Vérifiez si le site `agence.eaudugrandlyon.com` est en maintenance.\n3. Essayez de recharger l'intégration."
@@ -256,6 +254,9 @@
       }
     },
     "button": {
+      "refresh": {
+        "name": "Forcer la mise à jour"
+      },
       "download_invoice": {
         "name": "Télécharger la dernière facture"
       }

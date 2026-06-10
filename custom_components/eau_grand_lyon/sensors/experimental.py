@@ -19,7 +19,7 @@ class EauGrandLyonDerniereFactureSensor(_EauGrandLyonBase):
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "EUR"
-    translation_key = "derniere_facture"
+    _attr_translation_key = "derniere_facture"
     _attr_suggested_display_precision = 2
     # Désactivé par défaut — l'utilisateur active manuellement après vérification
     _attr_entity_registry_enabled_default = False
@@ -80,7 +80,7 @@ class EauGrandLyonFuiteEstimeeSensor(_EauGrandLyonBase):
     _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "m³"
-    translation_key = "fuite_estimee"
+    _attr_translation_key = "fuite_estimee"
     _attr_suggested_display_precision = 3
     _attr_entity_registry_enabled_default = False
 
@@ -126,7 +126,7 @@ class EauGrandLyonHourlyConsoSensor(_EauGrandLyonHourlyBase):
     _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "m³"
-    translation_key = "hourly_conso"
+    _attr_translation_key = "hourly_conso"
     _attr_suggested_display_precision = 4
 
     def __init__(self, coordinator, entry, contract_ref):
@@ -141,7 +141,7 @@ class EauGrandLyonHourlyConsoSensor(_EauGrandLyonHourlyBase):
 class EauGrandLyonPeakHourSensor(_EauGrandLyonHourlyBase):
     """Heure de pic de consommation sur les derniers 7 jours (HH:MM)."""
 
-    translation_key = "peak_hour"
+    _attr_translation_key = "peak_hour"
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -161,7 +161,7 @@ class EauGrandLyonAvgFlowSensor(_EauGrandLyonHourlyBase):
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "m³/h"
-    translation_key = "avg_flow"
+    _attr_translation_key = "avg_flow"
     _attr_suggested_display_precision = 4
 
     def __init__(self, coordinator, entry, contract_ref):
