@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -303,3 +304,24 @@ class TestRequestPaths:
         assert method == "GET"
         assert url.endswith("/contrats/C1/consommationsMensuelles")
         assert kwargs.get("params") == {"nbJours": 30}
+
+    @pytest.mark.asyncio
+    async def test_get_derniere_releve_siamm_500_is_optional_debug_only(self, patched_aiohttp, caplog):
+        session = _FakeSession(
+            [
+                _FakeContextManager(
+                    _FakeResponse(status=500, json_error=_ClientResponseError(500, "provider down"))
+                )
+            ]
+        )
+        api = self._make_api(session)
+
+        with caplog.at_level(logging.WARNING, logger="custom_components.eau_grand_lyon.api.client"):
+            result = await api.get_derniere_releve_siamm("C1")
+
+        assert result is None
+        assert "api_request_failed" not in caplog.text
+        method, url, kwargs = session.calls[-1]
+        assert method == "GET"
+        assert url.endswith("/application/rest/produits/contrats/C1/derniereReleveSIAMM")
+        assert kwargs.get("params") == {"expand": "grandeursPhysiques(modeleGrandeurPhysique)"}

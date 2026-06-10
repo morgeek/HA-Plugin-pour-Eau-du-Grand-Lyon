@@ -87,7 +87,7 @@ class EauGrandLyonApi:
         if not self._auth.access_token:
             await self._auth.authenticate(correlation_id=correlation_id)
 
-    async def _request(self, method: str, url: str, **kwargs) -> Any:
+    async def _request(self, method: str, url: str, *, log_response_errors: bool = True, **kwargs) -> Any:
         correlation_id = _new_correlation_id()
         await self._ensure_auth(correlation_id=correlation_id)
         headers = {"Authorization": f"Bearer {self._auth.access_token}"}
@@ -131,14 +131,15 @@ class EauGrandLyonApi:
         except (WafBlockedError, AuthenticationError):
             raise
         except aiohttp.ClientResponseError as err:
-            _LOGGER.warning(
-                "api_request_failed cid=%s method=%s url=%s status=%s error=%s",
-                correlation_id,
-                method,
-                url,
-                err.status,
-                type(err).__name__,
-            )
+            if log_response_errors:
+                _LOGGER.warning(
+                    "api_request_failed cid=%s method=%s url=%s status=%s error=%s",
+                    correlation_id,
+                    method,
+                    url,
+                    err.status,
+                    type(err).__name__,
+                )
             raise ApiError(f"HTTP {err.status} sur {method} {url}: {err.message}") from err
         except aiohttp.ClientError as err:
             _LOGGER.warning(
@@ -150,8 +151,8 @@ class EauGrandLyonApi:
             )
             raise NetworkError(f"Erreur reseau sur {method} {url}: {err}") from err
 
-    async def _do_get(self, url: str, params: dict | None = None) -> Any:
-        return await self._request("GET", url, params=params)
+    async def _do_get(self, url: str, params: dict | None = None, *, log_response_errors: bool = True) -> Any:
+        return await self._request("GET", url, params=params, log_response_errors=log_response_errors)
 
     async def _do_post(self, url: str, body: dict | None = None) -> Any:
         return await self._request("POST", url, json=body or {})
@@ -162,8 +163,18 @@ class EauGrandLyonApi:
     async def _post(self, path: str, body: dict | None = None) -> Any:
         return await self._do_post(f"{BASE_URL}{path}", body)
 
-    async def _get_produits(self, sub_path: str, params: dict | None = None) -> Any:
-        return await self._do_get(f"{PRODUITS_BASE}/{sub_path.lstrip('/')}", params)
+    async def _get_produits(
+        self,
+        sub_path: str,
+        params: dict | None = None,
+        *,
+        log_response_errors: bool = True,
+    ) -> Any:
+        return await self._do_get(
+            f"{PRODUITS_BASE}/{sub_path.lstrip('/')}",
+            params,
+            log_response_errors=log_response_errors,
+        )
 
     async def _get_interfaces(self, sub_path: str, params: dict | None = None) -> Any:
         return await self._do_get(f"{INTERFACES_AEL_BASE}/{sub_path.lstrip('/')}", params)
@@ -493,11 +504,13 @@ class EauGrandLyonApi:
     async def get_derniere_releve_siamm(self, contract_id: str) -> dict | None:
         try:
             data = await self._get_produits(
-                f"contrats/{contract_id}/derniereReleveSIAMM" "?expand=grandeursPhysiques(modeleGrandeurPhysique)"
+                f"contrats/{contract_id}/derniereReleveSIAMM",
+                params={"expand": "grandeursPhysiques(modeleGrandeurPhysique)"},
+                log_response_errors=False,
             )
             return data if isinstance(data, dict) else None
         except ApiError as err:
-            if "404" in str(err):
+            if "404" in str(err) or "500" in str(err):
                 _LOGGER.debug(
                     "[EXPERIMENTAL] Derniere releve SIAMM non dispo (contrat %s)",
                     contract_id,
