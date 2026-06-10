@@ -1012,6 +1012,10 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 "source": DOMAIN,
                 "statistic_id": cost_statistic_id,
                 "unit_of_measurement": "EUR",
+                # Currency has no unit converter -> unit_class must be None (not
+                # "monetary"). Omitting it entirely is deprecated (removed in HA
+                # 2025.11); "monetary" is rejected as an unsupported converter.
+                "unit_class": None,
             }
 
             cost_stats: list[StatisticData] = []

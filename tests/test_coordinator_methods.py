@@ -226,8 +226,8 @@ class TestUpdateErrorPaths:
         assert sleep_mock.await_count == 3
 
     @pytest.mark.asyncio
-    async def test_inject_statistics_cost_metadata_has_no_unit_class(self):
-        """Cost stats must omit unit_class — the recorder rejects monetary unit_class."""
+    async def test_inject_statistics_cost_metadata_unit_class_is_none(self):
+        """Cost stats must set unit_class=None (currency has no converter; omitting it is deprecated)."""
         self.coord.hass = MagicMock()
         self.coord._stats_month_counts = {}
         self.coord._monthly_history = {}
@@ -254,7 +254,8 @@ class TestUpdateErrorPaths:
         ]
         assert cost_calls, "expected cost statistics to be injected"
         cost_metadata = cost_calls[0].args[1]
-        assert "unit_class" not in cost_metadata
+        assert "unit_class" in cost_metadata
+        assert cost_metadata["unit_class"] is None
         assert cost_metadata["unit_of_measurement"] == "EUR"
 
     @pytest.mark.asyncio

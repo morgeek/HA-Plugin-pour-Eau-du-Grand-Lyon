@@ -143,3 +143,22 @@ class TestCoutReelAnnuelSensor:
     def test_missing_returns_none(self):
         s = _make_sensor(EauGrandLyonCoutReelAnnuelSensor, {})
         assert s.native_value is None
+
+
+def test_monetary_sensors_never_use_total_increasing():
+    """HA forbids state_class TOTAL_INCREASING with device_class MONETARY (None or TOTAL only)."""
+    import inspect as _inspect
+    from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
+    import custom_components.eau_grand_lyon.sensors.cost as cost_mod
+
+    monetary = [
+        (name, cls)
+        for name, cls in _inspect.getmembers(cost_mod, _inspect.isclass)
+        if getattr(cls, "_attr_device_class", None) is SensorDeviceClass.MONETARY
+    ]
+    assert monetary, "expected at least one monetary sensor"
+    for name, cls in monetary:
+        state_class = getattr(cls, "_attr_state_class", None)
+        assert state_class is not SensorStateClass.TOTAL_INCREASING, (
+            f"{name} uses TOTAL_INCREASING with MONETARY device_class"
+        )

@@ -6,7 +6,7 @@
 
 Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](https://www.home-assistant.io/) qui fournit des capteurs pour les données de consommation d'eau du service Eau du Grand Lyon.
 
-> 🌟 **Gold Tier Certified** — Cette intégration satisfait tous les critères de qualité Home Assistant Gold : gestion d'erreurs robuste, flux de configuration avancés, traductions complètes, documentation détaillée, et 219 tests automatisés.
+> 🌟 **Gold Tier Certified** — Cette intégration satisfait tous les critères de qualité Home Assistant Gold : gestion d'erreurs robuste, flux de configuration avancés, traductions complètes, documentation détaillée, et 220 tests automatisés.
 
 ![alt text](https://raw.githubusercontent.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/main/docs/screenshots/HA-Eau-Grand-Lyon.png)
 
@@ -26,7 +26,7 @@ Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
 - **Correctifs de plantage** : résolution de plusieurs erreurs au rafraîchissement et lors des notifications/alertes — `TypeError: _get() ... 'params'`, `'NoneType' object can't be awaited`, `a coroutine was expected, got None` (appel correct des fonctions synchrones `@callback` de Home Assistant).
 - **Options** : correction de l'affichage des libellés de configuration (dureté de l'eau, abonnement annuel) qui provoquaient une erreur de traduction.
 - **Détection Téléo/TIC** améliorée (gère les nouveaux formats de champs de l'API).
-- **Qualité & packaging** : 219 tests automatisés ; validations HACS et hassfest au vert ; nettoyage du dépôt (suppression du `.venv` versionné) et ajout d'un guide `AGENTS.md` pour les contributeurs et agents IA.
+- **Qualité & packaging** : 220 tests automatisés ; validations HACS et hassfest au vert ; nettoyage du dépôt (suppression du `.venv` versionné) et ajout d'un guide `AGENTS.md` pour les contributeurs et agents IA.
 
 ### 🐛 Correctif Graphique Historique (v2.9.3)
 

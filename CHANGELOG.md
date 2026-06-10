@@ -5,6 +5,13 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.4] - 2026-06-10
+
+### Corrections de Bugs
+
+- **`state_class` invalide pour les capteurs de coût** (`state class 'total_increasing' which is impossible considering device class 'monetary'`) : `EauGrandLyonEnergyCostSensor` et `EauGrandLyonCoutCumuleSensor` combinaient `device_class: monetary` avec `state_class: total_increasing`, interdit par Home Assistant (seuls `None` ou `total` sont autorisés pour `monetary`). Corrigé : `state_class` passe à `TOTAL` (avec `last_reset`, conforme au tableau de bord Énergie). Test de non-régression couvrant tous les capteurs monétaires.
+- **`unit_class` manquant pour les statistiques de coût** (déprécié, supprimé en HA 2025.11) : l'appel `async_add_external_statistics` pour les statistiques de coût ne précisait pas `unit_class`. Corrigé : `unit_class` est désormais `None` (une devise n'a pas de convertisseur d'unité ; la valeur `"monetary"` est rejetée comme convertisseur inconnu). Le remplacement `has_mean` → `mean_type` était déjà géré.
+
 ## [3.0.3] - 2026-06-09
 
 ### Corrections de Bugs

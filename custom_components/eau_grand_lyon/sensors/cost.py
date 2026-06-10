@@ -80,7 +80,8 @@ class EauGrandLyonCoutCumuleSensor(_EauGrandLyonBase):
     """Coût cumulé depuis le début de l'année (€)."""
 
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    # MONETARY n'autorise que None ou TOTAL (pas TOTAL_INCREASING).
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "EUR"
     translation_key = "cout_cumule"
     _attr_suggested_display_precision = 2
@@ -278,7 +279,9 @@ class EauGrandLyonEnergyCostSensor(_EauGrandLyonBase):
     """Coûts énergétiques pour le tableau de bord Énergie (€ cumulés)."""
 
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    # MONETARY n'autorise que None ou TOTAL (pas TOTAL_INCREASING). Le tableau de
+    # bord Énergie HA attend TOTAL + last_reset pour les coûts.
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "EUR"
     translation_key = "energy_cost"
     _attr_suggested_display_precision = 2
@@ -303,7 +306,7 @@ class EauGrandLyonEnergyCostSensor(_EauGrandLyonBase):
         c = self._contract
         return {
             "device_class": "monetary",
-            "state_class": "total_increasing",
+            "state_class": "total",
             "last_reset": c.get("date_reset_cout", self._current_year_str),
             "tarif_eur_m3": c.get("tarif_m3"),
             "note": "Sensor optimisé pour le tableau de bord Énergie HA",
