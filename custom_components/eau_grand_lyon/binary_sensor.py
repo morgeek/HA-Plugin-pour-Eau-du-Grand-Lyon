@@ -140,10 +140,16 @@ class EauGrandLyonRealTimeLeakSensor(_EauGrandLyonBinaryBase):
 
 
 class EauGrandLyonLocalLeakSensor(_EauGrandLyonBinaryBase):
-    """Alerte fuite basée sur une analyse de pattern locale (conso constante)."""
+    """Alerte fuite basée sur une analyse de pattern locale (spike statistique).
+
+    Désactivé par défaut : l'algorithme nécessite au moins 7 jours d'historique
+    journalier et peut produire des faux positifs sur les compteurs sans courbe
+    intra-journalière (un seul relevé par 24h).
+    """
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _attr_translation_key = "local_leak"
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
