@@ -201,7 +201,8 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         # Historique mensuel cumulatif — accumule jusqu'à 36 mois pour le calcul N-1
         # (l'API ne retourne que 12 mois ; ce store persiste les mois précédents entre mises à jour)
-        self._monthly_history_store = Store(hass, 1, f"{DOMAIN}_{entry.entry_id}_monthly_history")
+        # Version 2 : correction du bug mois base-0 (v1 avait des mois_index décalés d'un rang).
+        self._monthly_history_store = Store(hass, 2, f"{DOMAIN}_{entry.entry_id}_monthly_history")
         self._monthly_history: dict[str, list[dict]] = {}
 
         if experimental:
@@ -878,15 +879,30 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         return round(sum(valeurs), 3) if valeurs else None
 
     def _detect_local_leak(self, courbe: list[dict], daily: list[dict], ref: str) -> bool:
-        """Détecte une fuite locale par analyse de pattern."""
+        """Détecte une fuite locale par analyse de pattern.
+
+        L'API Téléo ne pousse qu'un index par 24h, donc la règle "jamais à 0 sur
+        24h" est toujours vraie dans un logement habité. On utilise à la place un
+        seuil statistique : alerte si la conso du dernier jour dépasse 2,5× la
+        moyenne glissante des 7 derniers jours (minimum 50 L/j pour éviter les
+        faux positifs sur de très faibles consos).
+        """
         if courbe:
             vals = [e.get("valeur", 0) for e in courbe if "valeur" in e]
+            # Courbe intra-journalière : flux non-nul en permanence sur 24h+ = fuite probable.
             if len(vals) >= 24 and all(v > 0 for v in vals):
                 _LOGGER.warning("Suspected leak (flat 24h+ pattern): %s", ref)
                 return True
-        elif daily:
-            recent_7 = [e["consommation_m3"] for e in daily[-7:]]
-            if len(recent_7) >= 7 and all(v > 0.05 for v in recent_7):
+        elif daily and len(daily) >= 7:
+            recent = [e["consommation_m3"] for e in daily[-7:]]
+            moyenne_7j = sum(recent) / len(recent)
+            last = recent[-1]
+            seuil = max(moyenne_7j * 2.5, 0.5)   # au moins 500 L/j pour déclencher
+            if moyenne_7j > 0 and last > seuil:
+                _LOGGER.warning(
+                    "Suspected leak (daily spike): %s — last=%.3f m³, avg7j=%.3f m³",
+                    ref, last, moyenne_7j,
+                )
                 return True
         return False
 
@@ -1118,14 +1134,14 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         # Priority 1: real index from experimental SIAMM endpoint
         real = contract.get("real_index")
         if real is not None:
-            result = round(real, 1)
+            result = round(real, 3)
         # Priority 2: last known meter index from daily Téléo data (no experimental needed)
         elif contract.get("index_journalier_dernier") is not None:
-            result = round(contract["index_journalier_dernier"], 1)
+            result = round(contract["index_journalier_dernier"], 3)
         # Priority 3: sum of monthly consumptions (relative, but works for Energy dashboard)
         else:
             consos = contract.get("consommations", [])
-            result = round(sum(e["consommation_m3"] for e in consos), 1) if consos else None
+            result = round(sum(e["consommation_m3"] for e in consos), 3) if consos else None
         self._cumulative_index_cache[contract_ref] = result
         return result
 

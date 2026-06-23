@@ -267,7 +267,7 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_UPDATE_INTERVAL_HOURS,
                     default=current_interval,
-                ): vol.In(_INTERVAL_OPTIONS),
+                ): vol.All(vol.Coerce(int), vol.In(_INTERVAL_OPTIONS)),
                 vol.Optional(
                     CONF_TARIF_M3,
                     default=current_tarif,

@@ -639,9 +639,12 @@ class EauGrandLyonApi:
         for entry in raw_entries:
             try:
                 month_raw = int(entry["mois"])
-                if not 1 <= month_raw <= 12:
+                # L'API Téléo envoie les mois en base-0 (0=Janvier … 11=Décembre).
+                # Ancienne validation 1-12 sautait Janvier (mois=0) et décalait tous
+                # les autres d'un rang (Décembre mois=11 → MONTHS_FR[10]="Novembre").
+                if not 0 <= month_raw <= 11:
                     continue
-                month_idx = month_raw - 1
+                month_idx = month_raw  # déjà base-0, pas de soustraction
                 year = int(entry["annee"])
                 result.append(
                     {

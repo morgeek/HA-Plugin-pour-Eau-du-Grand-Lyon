@@ -87,7 +87,7 @@ class EauGrandLyonConsommationSensor(_EauGrandLyonBase):
     """Consommation du mois courant ou précédent (m³)."""
 
     _attr_device_class = SensorDeviceClass.WATER
-    _attr_state_class = SensorStateClass.TOTAL
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = "m³"
     _attr_suggested_display_precision = 1
 
