@@ -6,7 +6,7 @@
 
 Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](https://www.home-assistant.io/) qui fournit des capteurs pour les données de consommation d'eau du service Eau du Grand Lyon.
 
-> 🌟 **Gold Tier Certified** — Cette intégration satisfait tous les critères de qualité Home Assistant Gold : gestion d'erreurs robuste, flux de configuration avancés, traductions complètes, documentation détaillée, et 220 tests automatisés.
+> 🌟 **Gold Tier Certified** — Cette intégration satisfait tous les critères de qualité Home Assistant Gold : gestion d'erreurs robuste, flux de configuration avancés, traductions complètes, documentation détaillée, et 245 tests automatisés.
 
 ![alt text](https://raw.githubusercontent.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/main/docs/screenshots/HA-Eau-Grand-Lyon.png)
 
@@ -19,6 +19,15 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
 ## Historique des versions
 
 Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
+
+### 🐛 Retours utilisateurs — Labels, Précision, Fuite (v3.2.0)
+
+- **Labels mensuels corrigés** : l'API Téléo envoie les mois en base-0 (0 = Janvier) — le décalage d'un rang est corrigé, Janvier n'est plus "manquant".
+- **Précision index** : `round(x, 1)` → `round(x, 3)` — 326.014 m³ n'est plus affiché comme 326.0.
+- **Fuite locale** : seuil statistique (2,5× la moyenne 7j) remplace la règle qui déclenchait en permanence ; capteur désactivé par défaut.
+- **Fréquence de mise à jour** : la modification via les options HA ne renvoie plus d'erreur de validation.
+- **Seuil fuite configurable** : multiplicateur réglable de 1,5× à 10× dans les options de l'intégration.
+- **245 tests** au vert.
 
 ### 🩹 Stabilité & Endpoints (v3.0.x)
 

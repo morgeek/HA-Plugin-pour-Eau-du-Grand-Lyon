@@ -37,6 +37,11 @@ class TestConsommationSensor:
         s._period = "courant"
         assert s.native_value == 8.5
 
+    def test_state_class_is_total_increasing(self):
+        """TOTAL_INCREASING requis pour le dashboard Énergie HA (fix bug state_class)."""
+        from homeassistant.components.sensor import SensorStateClass
+        assert EauGrandLyonConsommationSensor._attr_state_class == SensorStateClass.TOTAL_INCREASING
+
     def test_precedent(self):
         s = _make_sensor(EauGrandLyonConsommationSensor,
                          {"consommation_mois_precedent": 7.2})

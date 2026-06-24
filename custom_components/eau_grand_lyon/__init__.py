@@ -52,7 +52,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.debug("Migrating config entry from version %s", entry.version)
     if entry.version == 1:
         hass.config_entries.async_update_entry(entry, version=2)
-    return True
+        return True
+    _LOGGER.error("Cannot migrate config entry from unknown version %s", entry.version)
+    return False
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> bool:
@@ -226,11 +228,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         await entry.runtime_data.async_close()
-
-    if not hass.config_entries.async_entries(DOMAIN):
-        for service_name in SERVICE_NAMES:
-            if hass.services.has_service(DOMAIN, service_name):
-                hass.services.async_remove(DOMAIN, service_name)
+        if not hass.config_entries.async_entries(DOMAIN):
+            for service_name in SERVICE_NAMES:
+                if hass.services.has_service(DOMAIN, service_name):
+                    hass.services.async_remove(DOMAIN, service_name)
 
     return unload_ok
 

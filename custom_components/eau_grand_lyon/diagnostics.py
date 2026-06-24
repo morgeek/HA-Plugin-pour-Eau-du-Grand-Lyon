@@ -15,9 +15,22 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
     from .const import CONF_EMAIL, CONF_PASSWORD
 
     # Champs à masquer dans les exports de diagnostic pour préserver la vie privée
+    from .const import (
+        CONF_TARIF_M3,
+        CONF_HOUSEHOLD_SIZE,
+        CONF_WATER_QUALITY_COMMUNE,
+        CONF_SUBSCRIPTION_ANNUAL,
+        CONF_LEAK_MULTIPLIER,
+    )
+
     to_redact = {
         CONF_EMAIL,
         CONF_PASSWORD,
+        CONF_TARIF_M3,
+        CONF_HOUSEHOLD_SIZE,
+        CONF_WATER_QUALITY_COMMUNE,
+        CONF_SUBSCRIPTION_ANNUAL,
+        CONF_LEAK_MULTIPLIER,
         "reference",
         "reference_pds",
         "id",

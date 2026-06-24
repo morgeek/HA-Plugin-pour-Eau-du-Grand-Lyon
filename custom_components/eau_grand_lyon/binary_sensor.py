@@ -17,7 +17,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import LEAK_MULTIPLIER
+from .const import CONF_LEAK_MULTIPLIER, DEFAULT_LEAK_MULTIPLIER
 from .coordinator import EauGrandLyonCoordinator
 from .device import account_device_info, contract_device_info
 
@@ -93,7 +93,12 @@ class EauGrandLyonLeakAlertSensor(_EauGrandLyonBinaryBase):
         conso_courant = c.get("consommation_mois_courant")
         conso_precedent = c.get("consommation_mois_precedent")
         if conso_courant and conso_precedent:
-            return conso_courant > LEAK_MULTIPLIER * conso_precedent
+            multiplier = float(
+                (self.coordinator.config_entry.options or {}).get(
+                    CONF_LEAK_MULTIPLIER, DEFAULT_LEAK_MULTIPLIER
+                )
+            )
+            return conso_courant > multiplier * conso_precedent
         return False
 
     @property
@@ -102,7 +107,7 @@ class EauGrandLyonLeakAlertSensor(_EauGrandLyonBinaryBase):
         return {
             "consommation_courant_m3": c.get("consommation_mois_courant"),
             "consommation_precedent_m3": c.get("consommation_mois_precedent"),
-            "seuil_alerte": f"Consommation actuelle > {LEAK_MULTIPLIER}x precedente",
+            "seuil_alerte": f"Consommation actuelle > {DEFAULT_LEAK_MULTIPLIER}x precedente (configurable)",
         }
 
 

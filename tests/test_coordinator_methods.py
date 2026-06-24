@@ -69,13 +69,13 @@ class TestGetCumulativeIndex:
         self.coord.data = {
             "contracts": {"REF1": {"real_index": 1234.567, "consommations": []}}
         }
-        assert self.coord.get_cumulative_index("REF1") == 1234.6
+        assert self.coord.get_cumulative_index("REF1") == 1234.567
 
     def test_sum_used_when_no_real_index(self, sample_consos):
         self.coord.data = {
             "contracts": {"REF1": {"consommations": sample_consos}}
         }
-        expected = round(sum(e["consommation_m3"] for e in sample_consos), 1)
+        expected = round(sum(e["consommation_m3"] for e in sample_consos), 3)
         assert self.coord.get_cumulative_index("REF1") == expected
 
     def test_empty_consos_returns_none(self):

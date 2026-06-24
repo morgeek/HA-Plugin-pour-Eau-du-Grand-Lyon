@@ -5,6 +5,34 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-06-24
+
+Version issue des premiers retours utilisateurs : correction de 5 bugs, seuil fuite configurable, couverture de tests étendue.
+
+### Corrections de Bugs
+
+- **Décalage systématique des labels mensuels** (`api/client.py`) : l'API Téléo encode les mois en base-0 (0 = Janvier, 11 = Décembre). L'ancienne validation `1 ≤ mois ≤ 12` rejetait Janvier (mois=0) et décalait tous les autres d'un rang (Mai affiché comme Avril, Décembre introuvable → marqué "manquant"). **Fix** : `month_idx = month_raw` sans soustraction, validation corrigée à `0 ≤ mois ≤ 11`.
+- **Cache corrompu invalidé** (`coordinator.py`) : bump Store version 1 → 2 pour forcer le recalcul de l'historique mensuel au prochain démarrage (les `mois_index` stockés en v1 étaient tous décalés d'un rang).
+- **Perte de précision sur l'index compteur** (`coordinator.py`) : `round(x, 1)` → `round(x, 3)` dans `get_cumulative_index()` — un index brut de 326.014 m³ n'est plus tronqué à 326.0.
+- **Faux positif permanent — capteur fuite locale** (`coordinator.py`, `binary_sensor.py`) : la règle `all(v > 0.05 m³ sur 7 jours)` était toujours vraie dans un logement habité. Remplacée par un seuil statistique : alerte uniquement si la consommation du dernier jour dépasse `max(moyenne_7j × 2,5 ; 500 L/j)`. Le capteur est désormais désactivé par défaut (`entity_registry_enabled_default = False`).
+- **Impossible de changer la fréquence de mise à jour** (`config_flow.py`) : `vol.In(...)` → `vol.All(vol.Coerce(int), vol.In(...))` — Home Assistant soumet les valeurs de selector sous forme de string.
+- **`state_class` incorrect** (`sensors/consumption.py`) : `TOTAL` → `TOTAL_INCREASING` sur `EauGrandLyonConsommationSensor` pour compatibilité avec le dashboard Énergie natif HA.
+
+### Améliorations
+
+- **Seuil fuite configurable** (`binary_sensor.py`, `config_flow.py`, `const.py`) : le multiplicateur de détection de fuite mensuelle (`LEAK_MULTIPLIER`) est désormais exposé dans les options de l'intégration (plage : 1,5× – 10×, défaut : 2×). Utile pour les foyers avec une consommation saisonnière élevée (piscine, arrosage).
+
+### Tests
+
+- 27 nouveaux cas de test couvrant tous les bugs corrigés :
+  - `TestFormatConsumptions` (8 tests) — encodage base-0, Janvier inclus, Mai sans décalage, mois=12 rejeté
+  - `TestDetectLocalLeak` (7 tests) — spike statistique, seuil plancher 500 L, courbe 24h
+  - `TestIntervalSchema` (5 tests) — coercition string→int dans l'options flow
+  - `TestConsommationSensor.test_state_class_is_total_increasing`
+  - `TestLocalLeakSensor.test_disabled_by_default`
+- Mise à jour du test `test_real_index_used_when_present` pour refléter la précision à 3 décimales.
+- **245 tests** au vert (vs 218 en v3.1.0).
+
 ## [3.1.0] - 2026-06-10
 
 Version issue d'un audit complet du projet : corrections de bugs, durcissement sécurité/vie privée, nettoyage du code mort et simplification de la CI.

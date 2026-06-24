@@ -1141,7 +1141,8 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         # Priority 3: sum of monthly consumptions (relative, but works for Energy dashboard)
         else:
             consos = contract.get("consommations", [])
-            result = round(sum(e["consommation_m3"] for e in consos), 3) if consos else None
+            valid = [e["consommation_m3"] for e in consos if e.get("consommation_m3") is not None]
+            result = round(sum(valid), 3) if valid else None
         self._cumulative_index_cache[contract_ref] = result
         return result
 

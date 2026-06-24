@@ -75,6 +75,11 @@ def _stub_homeassistant() -> None:
     class _GenericBase:
         def __class_getitem__(cls, item): return cls
 
+        @property
+        def available(self) -> bool:
+            # Mirrors CoordinatorEntity.available — True unless coordinator says otherwise.
+            return True
+
     _make_module(
         "homeassistant.helpers.update_coordinator",
         DataUpdateCoordinator=_GenericBase,

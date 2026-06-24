@@ -22,6 +22,7 @@ from .api import (
 from .const import (
     CONF_EMAIL,
     CONF_EXPERIMENTAL,
+    CONF_LEAK_MULTIPLIER,
     CONF_PASSWORD,
     CONF_MAX_RETRIES,
     CONF_PRICE_ENTITY,
@@ -33,6 +34,7 @@ from .const import (
     CONF_SUBSCRIPTION_ANNUAL,
     DEFAULT_EXPERIMENTAL,
     DEFAULT_HOUSEHOLD_SIZE,
+    DEFAULT_LEAK_MULTIPLIER,
     DEFAULT_MAX_RETRIES,
     DEFAULT_TARIF_M3,
     DEFAULT_UPDATE_INTERVAL_HOURS,
@@ -261,6 +263,7 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
         current_hardness = float(opts.get(CONF_WATER_HARDNESS, DEFAULT_WATER_HARDNESS))
         current_commune = opts.get(CONF_WATER_QUALITY_COMMUNE, DEFAULT_WATER_QUALITY_COMMUNE)
         current_subscription = float(opts.get(CONF_SUBSCRIPTION_ANNUAL, DEFAULT_SUBSCRIPTION_ANNUAL))
+        current_leak_multiplier = float(opts.get(CONF_LEAK_MULTIPLIER, DEFAULT_LEAK_MULTIPLIER))
 
         options_schema = vol.Schema(
             {
@@ -300,6 +303,10 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_SUBSCRIPTION_ANNUAL,
                     default=current_subscription,
                 ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=2000.0)),
+                vol.Optional(
+                    CONF_LEAK_MULTIPLIER,
+                    default=current_leak_multiplier,
+                ): vol.All(vol.Coerce(float), vol.Range(min=1.5, max=10.0)),
             }
         )
 

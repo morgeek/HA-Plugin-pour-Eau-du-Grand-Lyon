@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 import logging
+import secrets
 import time
 import uuid
 from dataclasses import dataclass
@@ -17,7 +18,6 @@ from .endpoints import (
     AUTHORIZE_URL,
     BROWSER_NAV_HEADERS,
     CLIENT_ID,
-    CODE_VERIFIER,
     LOGIN_URL,
     REDIRECT_URI,
     TOKEN_REVOKE_URL,
@@ -193,7 +193,9 @@ class EauGrandLyonAuth:
         if login_status not in (200, 204):
             raise ApiError(f"Login echoue ({login_status}): {login_body[:200]}")
 
-        code_challenge = _compute_code_challenge(CODE_VERIFIER)
+        # RFC 7636 §4.1 : verifier aléatoire de 43–128 chars, unique par session.
+        code_verifier = secrets.token_urlsafe(32)  # 43 chars base64url, cryptographiquement sûr
+        code_challenge = _compute_code_challenge(code_verifier)
         params = {
             "redirect_uri": REDIRECT_URI,
             "response_type": "code",
@@ -249,13 +251,13 @@ class EauGrandLyonAuth:
         if not code:
             raise AuthenticationError(f"Pas de code d'autorisation dans l'URL de callback: {final_url[:200]}")
 
-        return await self._exchange_code(code, urls.token_url, correlation_id)
+        return await self._exchange_code(code, code_verifier, urls.token_url, correlation_id)
 
-    async def _exchange_code(self, code: str, token_url: str, correlation_id: str) -> str:
+    async def _exchange_code(self, code: str, code_verifier: str, token_url: str, correlation_id: str) -> str:
         token_data = {
             "grant_type": "authorization_code",
             "code": code,
-            "code_verifier": CODE_VERIFIER,
+            "code_verifier": code_verifier,
             "client_id": CLIENT_ID,
             "redirect_uri": REDIRECT_URI,
         }
@@ -306,10 +308,11 @@ class EauGrandLyonAuth:
             raise NetworkError(f"Requete token echouee: {err}") from err
 
         if "access_token" not in result:
-            raise AuthenticationError(f"Pas d'access_token dans la reponse: {result}")
+            keys = list(result.keys()) if isinstance(result, dict) else type(result).__name__
+            raise AuthenticationError(f"Pas d'access_token dans la reponse (clés: {keys})")
 
         self._access_token = result["access_token"]
-        _LOGGER.debug("Authentification reussie cid=%s pour %s", correlation_id, self._email)
+        _LOGGER.debug("Authentification reussie cid=%s", correlation_id)
         return self._access_token
 
     async def revoke_token(self, correlation_id: str | None = None) -> None:

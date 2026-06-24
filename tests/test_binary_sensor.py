@@ -11,10 +11,11 @@ from custom_components.eau_grand_lyon.binary_sensor import (
 )
 
 
-def _make_binary_sensor(cls, coordinator_data, contract_ref="REF1"):
+def _make_binary_sensor(cls, coordinator_data, contract_ref="REF1", options=None):
     """Helper to create a binary sensor with mocked coordinator."""
     coordinator = MagicMock()
     coordinator.data = coordinator_data
+    coordinator.config_entry.options = options or {}
     entry = MagicMock()
     entry.entry_id = "test_entry"
 
@@ -62,6 +63,21 @@ class TestLeakAlertSensor:
         s = _make_binary_sensor(EauGrandLyonLeakAlertSensor, {"contracts": {"REF1": {}}})
         assert s.is_on is False
 
+    def test_custom_multiplier_from_options(self):
+        """CONF_LEAK_MULTIPLIER=3 → alerte seulement si conso > 3× précédent."""
+        from custom_components.eau_grand_lyon.const import CONF_LEAK_MULTIPLIER
+        data = {"contracts": {"REF1": {
+            "consommation_mois_courant": 25.0,
+            "consommation_mois_precedent": 10.0,  # 25 > 2×10=20 mais < 3×10=30
+        }}}
+        # Default (×2) → alerte
+        s_default = _make_binary_sensor(EauGrandLyonLeakAlertSensor, data)
+        assert s_default.is_on is True
+        # Multiplier ×3 → pas d'alerte
+        s_custom = _make_binary_sensor(EauGrandLyonLeakAlertSensor, data,
+                                       options={CONF_LEAK_MULTIPLIER: 3.0})
+        assert s_custom.is_on is False
+
 
 # ── EauGrandLyonRealTimeLeakSensor ──────────────────────────────────────────
 
@@ -102,6 +118,10 @@ class TestLocalLeakSensor:
             "contracts": {"REF1": {"local_leak_pattern": False}}
         })
         assert s.is_on is False
+
+    def test_disabled_by_default(self):
+        """Capteur désactivé par défaut — trop de faux positifs sans courbe intra-jour."""
+        assert EauGrandLyonLocalLeakSensor._attr_entity_registry_enabled_default is False
 
 
 # ── EauGrandLyonBatterySensor ───────────────────────────────────────────────
