@@ -245,6 +245,12 @@
       },
       "conso_annuelle_ref": {
         "name": "Annual reference consumption"
+      },
+      "seuil_surconso_jour": {
+        "name": "Over-consumption threshold (daily)"
+      },
+      "seuil_surconso_mois": {
+        "name": "Over-consumption threshold (monthly)"
       }
     },
     "button": {
@@ -283,6 +289,15 @@
       },
       "outage_alert": {
         "name": "Service interruption (Works/Outage)"
+      },
+      "leak_subscription": {
+        "name": "Leak alert subscription"
+      },
+      "surconso_jour": {
+        "name": "Daily over-consumption"
+      },
+      "surconso_mois": {
+        "name": "Monthly over-consumption"
       }
     }
   },

@@ -8,13 +8,12 @@ from typing import Any
 
 import aiohttp
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
 
 from .api import (
-    AuthenticationError,
     ApiError,
+    AuthenticationError,
     EauGrandLyonApi,
     NetworkError,
     WafBlockedError,
@@ -22,25 +21,25 @@ from .api import (
 from .const import (
     CONF_EMAIL,
     CONF_EXPERIMENTAL,
+    CONF_HOUSEHOLD_SIZE,
     CONF_LEAK_MULTIPLIER,
-    CONF_PASSWORD,
     CONF_MAX_RETRIES,
+    CONF_PASSWORD,
     CONF_PRICE_ENTITY,
+    CONF_SUBSCRIPTION_ANNUAL,
     CONF_TARIF_M3,
     CONF_UPDATE_INTERVAL_HOURS,
-    CONF_HOUSEHOLD_SIZE,
     CONF_WATER_HARDNESS,
     CONF_WATER_QUALITY_COMMUNE,
-    CONF_SUBSCRIPTION_ANNUAL,
     DEFAULT_EXPERIMENTAL,
     DEFAULT_HOUSEHOLD_SIZE,
     DEFAULT_LEAK_MULTIPLIER,
     DEFAULT_MAX_RETRIES,
+    DEFAULT_SUBSCRIPTION_ANNUAL,
     DEFAULT_TARIF_M3,
     DEFAULT_UPDATE_INTERVAL_HOURS,
     DEFAULT_WATER_HARDNESS,
     DEFAULT_WATER_QUALITY_COMMUNE,
-    DEFAULT_SUBSCRIPTION_ANNUAL,
     DOMAIN,
 )
 

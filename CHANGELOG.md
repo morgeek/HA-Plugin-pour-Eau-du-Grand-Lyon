@@ -5,6 +5,25 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-07-18
+
+Validation sur données réelles capturées depuis l'espace client : correction d'un bug d'unité et exploitation des seuils d'alerte configurés côté serveur.
+
+### Corrections de Bugs
+
+- **Crash au démarrage sur montée de version du cache** (`coordinator.py`) : `async_setup_entry` levait `NotImplementedError` lorsqu'un fichier `.storage` d'une installation antérieure portait une version différente (ex. historique mensuel v1 → v2), car le `Store` n'avait aucune fonction de migration. **Fix** : `_RebuildableStore` migre en repartant d'un cache vide (les données sont reconstruites depuis l'API), et `_load_persistent_data` intercepte désormais aussi `NotImplementedError` / `ValueError`. Corrige `NotImplementedError` au chargement de `_monthly_history_store`.
+- **Unités fuite / débit journaliers non converties** (`api/client.py`, `_parse_daily_response`) : seul le champ `consommation` était divisé par 1000 pour passer des litres aux m³. Les champs `volumeEstimeFuite` (unité API `"l"`) et `debitMin` (unité `"L/h"`) étaient stockés tels quels dans `volume_fuite_estime_m3` et `debit_min_m3h` — soit des valeurs **1000× trop grandes** dès qu'une fuite réelle était détectée (ex. 1500 L affichés comme « 1500 m³ »). **Fix** : conversion ÷1000 de ces deux champs selon leur unité déclarée. Sans impact visible sur un compteur sans fuite (valeurs toujours 0), mais faux pour tout compteur avec fuite estimée.
+
+### Ajouté
+
+- **Seuils d'alerte surconsommation serveur** : nouvelle méthode API `get_alerte_surconsommation()` lisant les endpoints `seuilAlerteSurconsommation/journaliere` et `.../mensuelle` (m³) ainsi que `abonneAlerteFuite`. Ces seuils reflètent la configuration réelle de l'abonné plutôt qu'une heuristique locale.
+- **Nouveaux capteurs** (compteurs disposant de ces services) : `Seuil surconsommation (jour)` et `Seuil surconsommation (mois)` (diagnostic, m³).
+- **Nouveaux binary_sensors** : `Surconsommation journalière` et `Surconsommation mensuelle` (comparaison de la conso au seuil serveur), et `Abonnement alerte fuite` (statut d'abonnement).
+
+### Interne
+
+- Rétablissement de la configuration pytest `asyncio_mode = auto` (`pytest.ini`) supprimée avec `pyproject.toml` — sans elle 9 tests `async` étaient collectés en échec. Correction du `cache-dependency-path` de la CI.
+
 ## [3.2.0] - 2026-06-24
 
 Version issue des premiers retours utilisateurs : correction de 5 bugs, seuil fuite configurable, couverture de tests étendue.

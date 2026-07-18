@@ -85,6 +85,13 @@ def _patch_api():
         "get_daily_consumptions": AsyncMock(return_value=NO_DAILY),
         "get_date_prochaine_facture": AsyncMock(return_value="2026-09-01"),
         "get_point_de_service_etendu": AsyncMock(return_value={}),
+        "get_alerte_surconsommation": AsyncMock(
+            return_value={
+                "seuil_surconso_jour_m3": 4.6,
+                "seuil_surconso_mois_m3": 138.0,
+                "abonne_alerte_fuite": True,
+            }
+        ),
     }
     return [patch.object(EauGrandLyonApi, name, mock) for name, mock in patches.items()]
 

@@ -232,6 +232,51 @@ class EauGrandLyonApi:
             result = await self._fetch_daily_raw(contract_id, 30)
         return result
 
+    async def get_alerte_surconsommation(self, contract_id: str) -> dict[str, Any]:
+        """Recupere les seuils d'alerte surconsommation configures cote serveur.
+
+        Trois endpoints (espace client, compteur communicant) :
+          - seuilAlerteSurconsommation/journaliere -> {"seuilAlerteSurconsommationJournaliere": <m3/jour>}
+          - seuilAlerteSurconsommation/mensuelle   -> {"seuilAlerteSurconsommationMensuelle": <m3/mois>}
+          - abonneAlerteFuite                        -> booleen (abonnement alerte fuite)
+
+        Chaque appel est protege individuellement : un contrat sans ces services
+        renvoie simplement None sur la cle concernee, sans casser le cycle.
+        """
+
+        async def _safe(sub_path: str, label: str) -> Any:
+            try:
+                return await self._get_produits(f"contrats/{contract_id}/{sub_path}", log_response_errors=False)
+            except Exception as err:  # noqa: BLE001 - endpoint optionnel selon le contrat
+                _LOGGER.debug("Endpoint %s indisponible (contrat %s) : %s", label, contract_id, err)
+                return None
+
+        raw_jour = await _safe("seuilAlerteSurconsommation/journaliere", "seuil journalier")
+        raw_mois = await _safe("seuilAlerteSurconsommation/mensuelle", "seuil mensuel")
+        raw_abonne = await _safe("abonneAlerteFuite", "abonnement alerte fuite")
+
+        def _num(payload: Any, key: str) -> float | None:
+            value = payload.get(key) if isinstance(payload, dict) else payload
+            try:
+                return round(float(value), 3) if value is not None else None
+            except (ValueError, TypeError):
+                return None
+
+        abonne: bool | None = None
+        if isinstance(raw_abonne, bool):
+            abonne = raw_abonne
+        elif isinstance(raw_abonne, dict):
+            for cle in ("abonne", "value", "valeur", "actif"):
+                if isinstance(raw_abonne.get(cle), bool):
+                    abonne = raw_abonne[cle]
+                    break
+
+        return {
+            "seuil_surconso_jour_m3": _num(raw_jour, "seuilAlerteSurconsommationJournaliere"),
+            "seuil_surconso_mois_m3": _num(raw_mois, "seuilAlerteSurconsommationMensuelle"),
+            "abonne_alerte_fuite": abonne,
+        }
+
     async def _fetch_daily_raw(self, contract_id: str, nb_jours: int) -> dict[str, Any]:
         entries = await self._get_daily_new(contract_id, nb_jours)
         source = "Produits (2026)" if entries else "Aucune"
@@ -767,6 +812,17 @@ class EauGrandLyonApi:
         if not conso_unit:
             conso_unit = _infer_unit_from_magnitude(entries)
 
+        # Les champs volumeEstimeFuite (unite "l") et debitMin (unite "L/h") sont
+        # renvoyes en litres par l'API. Ils doivent etre convertis en m3 (et m3/h)
+        # pour rester coherents avec les cles *_m3 / *_m3h produites en aval —
+        # sinon les capteurs fuite/debit affichent des valeurs 1000x trop grandes.
+        fuite_en_litres = (unites.get("volumeEstimeFuite") or "").strip().lower() in ("l", "litre", "litres")
+        debit_en_litres = (unites.get("debitMin") or "").strip().lower().replace(" ", "") in (
+            "l/h",
+            "litre/h",
+            "litres/h",
+        )
+
         normalized: list[dict] = []
         for entry in entries:
             item = dict(entry)
@@ -786,6 +842,16 @@ class EauGrandLyonApi:
                     pass
             if "volumeEstimeFuite" in item and "volumeFuiteEstime" not in item:
                 item["volumeFuiteEstime"] = item.pop("volumeEstimeFuite")
+            if fuite_en_litres and item.get("volumeFuiteEstime") is not None:
+                try:
+                    item["volumeFuiteEstime"] = float(item["volumeFuiteEstime"]) / 1000.0
+                except (ValueError, TypeError):
+                    pass
+            if debit_en_litres and item.get("debitMin") is not None:
+                try:
+                    item["debitMin"] = float(item["debitMin"]) / 1000.0
+                except (ValueError, TypeError):
+                    pass
             normalized.append(item)
         return normalized
 

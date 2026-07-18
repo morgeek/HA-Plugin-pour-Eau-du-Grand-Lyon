@@ -12,15 +12,15 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
     """Retourne les diagnostics pour une config entry (redacté)."""
     from homeassistant.components.diagnostics import async_redact_data
 
-    from .const import CONF_EMAIL, CONF_PASSWORD
-
     # Champs à masquer dans les exports de diagnostic pour préserver la vie privée
     from .const import (
-        CONF_TARIF_M3,
+        CONF_EMAIL,
         CONF_HOUSEHOLD_SIZE,
-        CONF_WATER_QUALITY_COMMUNE,
-        CONF_SUBSCRIPTION_ANNUAL,
         CONF_LEAK_MULTIPLIER,
+        CONF_PASSWORD,
+        CONF_SUBSCRIPTION_ANNUAL,
+        CONF_TARIF_M3,
+        CONF_WATER_QUALITY_COMMUNE,
     )
 
     to_redact = {
