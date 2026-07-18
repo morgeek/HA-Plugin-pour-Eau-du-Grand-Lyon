@@ -9,14 +9,53 @@ from homeassistant.helpers import issue_registry as ir
 
 
 class TestLongOutageIssueLogic:
-    """Test long outage issue creation logic."""
+    """Test le vrai comportement de check_long_outage_issue (repairs.py)."""
 
-    def test_long_outage_threshold_is_7_days(self) -> None:
-        """Test that 7 days is the threshold for long outage alerts."""
-        # Just verify the threshold logic
-        assert 7 >= 7  # Should trigger
-        assert 6 < 7   # Should not trigger
-        assert 8 >= 7  # Should trigger
+    @pytest.mark.asyncio
+    async def test_creates_issue_at_or_above_7_days(self, monkeypatch) -> None:
+        from custom_components.eau_grand_lyon import repairs
+
+        created: list = []
+        deleted: list = []
+        monkeypatch.setattr(repairs.ir, "async_create_issue", lambda *a, **k: created.append((a, k)))
+        monkeypatch.setattr(repairs.ir, "async_delete_issue", lambda *a, **k: deleted.append((a, k)))
+
+        await repairs.check_long_outage_issue(MagicMock(), 7)
+        assert len(created) == 1
+        assert not deleted
+
+        await repairs.check_long_outage_issue(MagicMock(), 30)
+        assert len(created) == 2
+
+    @pytest.mark.asyncio
+    async def test_deletes_issue_below_7_days(self, monkeypatch) -> None:
+        from custom_components.eau_grand_lyon import repairs
+
+        created: list = []
+        deleted: list = []
+        monkeypatch.setattr(repairs.ir, "async_create_issue", lambda *a, **k: created.append((a, k)))
+        monkeypatch.setattr(repairs.ir, "async_delete_issue", lambda *a, **k: deleted.append((a, k)))
+
+        await repairs.check_long_outage_issue(MagicMock(), 6)
+        assert len(deleted) == 1
+        assert not created
+
+    @pytest.mark.asyncio
+    async def test_create_issue_uses_expected_metadata(self, monkeypatch) -> None:
+        """L'issue longue panne : id stable, non-fixable, translation_key correct."""
+        from custom_components.eau_grand_lyon import repairs
+
+        captured: dict = {}
+
+        def _capture(hass, domain, issue_id, **kwargs):
+            captured.update(kwargs)
+            captured["issue_id"] = issue_id
+
+        monkeypatch.setattr(repairs.ir, "async_create_issue", _capture)
+        await repairs.check_long_outage_issue(MagicMock(), 10)
+        assert captured["issue_id"] == "long_outage"
+        assert captured["is_fixable"] is False
+        assert captured["translation_key"] == "long_outage"
 
 
 class TestDiagnosticsModule:
@@ -27,26 +66,6 @@ class TestDiagnosticsModule:
         from custom_components.eau_grand_lyon import diagnostics
 
         assert hasattr(diagnostics, "async_get_config_entry_diagnostics")
-
-    def test_diagnostics_redaction_fields_defined(self) -> None:
-        """Test that redaction fields are properly defined."""
-        from custom_components.eau_grand_lyon.const import CONF_EMAIL, CONF_PASSWORD
-
-        # These are the fields that should be redacted
-        sensitive_fields = {
-            CONF_EMAIL,
-            CONF_PASSWORD,
-            "reference",
-            "reference_pds",
-            "id",
-            "contrat_id",
-        }
-
-        # Verify the sensitive fields are properly defined
-        assert CONF_EMAIL in sensitive_fields
-        assert CONF_PASSWORD in sensitive_fields
-        assert "reference" in sensitive_fields
-        assert "id" in sensitive_fields
 
     @pytest.mark.asyncio
     async def test_diagnostics_omit_title_and_rekey_contracts(self, monkeypatch) -> None:

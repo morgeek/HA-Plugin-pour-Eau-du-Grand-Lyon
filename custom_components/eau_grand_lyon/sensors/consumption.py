@@ -96,6 +96,14 @@ class EauGrandLyonConsommationSensor(_EauGrandLyonBase):
         self._period = period
         self._attr_translation_key = f"conso_{period}"
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_conso_{period}"
+        if period == "precedent":
+            # Valeur figée d'un mois révolu : c'est une MEASUREMENT, pas un
+            # compteur cumulatif. En TOTAL_INCREASING, chaque baisse mensuelle
+            # était lue comme un reset de compteur et gonflait les statistiques
+            # long terme. WATER n'autorisant pas MEASUREMENT, on retire aussi le
+            # device_class pour éviter la combinaison invalide.
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+            self._attr_device_class = None
 
     @property
     def native_value(self) -> float | None:

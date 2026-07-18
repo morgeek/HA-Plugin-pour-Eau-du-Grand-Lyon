@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -87,6 +88,19 @@ class EauGrandLyonApi:
         if not self._auth.access_token:
             await self._auth.authenticate(correlation_id=correlation_id)
 
+    @staticmethod
+    def _parse_json(text: str, method: str, url: str) -> Any:
+        """Parse une réponse JSON, en convertissant un corps malformé en ApiError.
+
+        Un HTTP 200 renvoyant une page HTML (WAF, portail de maintenance) ferait
+        sinon remonter un json.JSONDecodeError brut jusqu'au except générique du
+        coordinator, court-circuitant retry + cache offline.
+        """
+        try:
+            return json.loads(text)
+        except (json.JSONDecodeError, ValueError) as err:
+            raise ApiError(f"Réponse non-JSON sur {method} {url}: {err}") from err
+
     async def _request(self, method: str, url: str, *, log_response_errors: bool = True, **kwargs) -> Any:
         correlation_id = _new_correlation_id()
         await self._ensure_auth(correlation_id=correlation_id)
@@ -123,13 +137,24 @@ class EauGrandLyonApi:
                         if retry_resp.status == 403:
                             raise WafBlockedError(f"WAF 403 sur {method} {url} (apres re-auth).")
                         retry_resp.raise_for_status()
-                        return json.loads(await retry_resp.text())
+                        return self._parse_json(await retry_resp.text(), method, url)
                 if resp.status == 403:
                     raise WafBlockedError(f"WAF 403 sur {method} {url}.")
                 resp.raise_for_status()
-                return json.loads(await resp.text())
-        except (WafBlockedError, AuthenticationError):
+                return self._parse_json(await resp.text(), method, url)
+        except (WafBlockedError, AuthenticationError, ApiError):
             raise
+        except (TimeoutError, asyncio.TimeoutError) as err:
+            # aiohttp.ClientTimeout lève asyncio.TimeoutError, qui n'est PAS un
+            # aiohttp.ClientError — sans ce bloc il remonterait brut jusqu'au
+            # except générique du coordinator et court-circuiterait retry + cache.
+            _LOGGER.warning(
+                "api_request_timeout cid=%s method=%s url=%s",
+                correlation_id,
+                method,
+                url,
+            )
+            raise NetworkError(f"Timeout sur {method} {url}: {err}") from err
         except aiohttp.ClientResponseError as err:
             if log_response_errors:
                 _LOGGER.warning(
@@ -578,7 +603,7 @@ class EauGrandLyonApi:
     async def get_invoice_pdf(self, invoice_ref: str) -> bytes:
         correlation_id = _new_correlation_id()
         await self._ensure_auth(correlation_id=correlation_id)
-        url = f"{BASE_URL}/rest/produits/factures/{invoice_ref}/document"
+        url = f"{PRODUITS_BASE}/factures/{invoice_ref}/document"
         headers = {"Authorization": f"Bearer {self._auth.access_token}"}
         start = time.perf_counter()
         try:

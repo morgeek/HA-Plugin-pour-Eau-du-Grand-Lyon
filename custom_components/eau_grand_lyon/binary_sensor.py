@@ -109,10 +109,13 @@ class EauGrandLyonLeakAlertSensor(_EauGrandLyonBinaryBase):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         c = self._contract
+        multiplier = float(
+            (self.coordinator.config_entry.options or {}).get(CONF_LEAK_MULTIPLIER, DEFAULT_LEAK_MULTIPLIER)
+        )
         return {
             "consommation_courant_m3": c.get("consommation_mois_courant"),
             "consommation_precedent_m3": c.get("consommation_mois_precedent"),
-            "seuil_alerte": f"Consommation actuelle > {DEFAULT_LEAK_MULTIPLIER}x precedente (configurable)",
+            "seuil_alerte": f"Consommation actuelle > {multiplier}x precedente (configurable)",
         }
 
 

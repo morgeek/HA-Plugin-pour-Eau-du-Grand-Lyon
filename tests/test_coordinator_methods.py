@@ -108,10 +108,50 @@ class TestUpdateErrorPaths:
             await self.coord._async_update_data()
 
     @pytest.mark.asyncio
-    async def test_unexpected_error_raises_update_failed(self):
-        self.coord._fetch_all_data.side_effect = ApiError("server exploded")
+    async def test_unexpected_error_without_cache_raises_update_failed(self):
+        # Une erreur vraiment inattendue (bug) sans cache → UpdateFailed, sans retry.
+        self.coord._fetch_all_data.side_effect = RuntimeError("boom")
         with pytest.raises(UpdateFailed):
             await self.coord._async_update_data()
+
+    @pytest.mark.asyncio
+    async def test_unexpected_error_with_cache_falls_back_offline(self):
+        # Une erreur inattendue ne doit pas faire tomber les entités si un cache existe.
+        self.coord._last_good_data = {
+            "contracts": {"REF1": {"reference": "REF1"}},
+            "last_update_success_time": datetime(2026, 4, 20, tzinfo=timezone.utc),
+        }
+        self.coord.data = None
+        self.coord._fetch_all_data.side_effect = RuntimeError("boom")
+        with patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
+            result = await self.coord._async_update_data()
+        assert result["offline_mode"] is True
+        assert result["last_error_type"] == "RuntimeError"
+
+    @pytest.mark.asyncio
+    async def test_api_error_retries_then_raises_update_failed(self):
+        # HTTP 5xx / réponse malformée : retenté comme une erreur réseau puis UpdateFailed.
+        self.coord._fetch_all_data.side_effect = ApiError("server exploded")
+        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), \
+             patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]):
+            with pytest.raises(UpdateFailed):
+                await self.coord._async_update_data()
+        assert self.coord._consecutive_failures == 3
+
+    @pytest.mark.asyncio
+    async def test_api_error_with_cache_enables_offline_mode(self):
+        self.coord._last_good_data = {
+            "contracts": {"REF1": {"reference": "REF1"}},
+            "last_update_success_time": datetime(2026, 4, 20, tzinfo=timezone.utc),
+        }
+        self.coord.data = None
+        self.coord._fetch_all_data.side_effect = ApiError("server exploded")
+        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), \
+             patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]), \
+             patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
+            result = await self.coord._async_update_data()
+        assert result["offline_mode"] is True
+        assert result["last_error_type"] == "ApiError"
 
     @pytest.mark.asyncio
     async def test_waf_failures_without_cache_raise_update_failed(self):
@@ -257,6 +297,41 @@ class TestUpdateErrorPaths:
         assert "unit_class" in cost_metadata
         assert cost_metadata["unit_class"] is None
         assert cost_metadata["unit_of_measurement"] == "EUR"
+
+    def test_build_stat_series_without_anchor_cumulates_from_zero(self):
+        consos = [
+            {"mois_index": 0, "annee": 2025, "consommation_m3": 10.0},
+            {"mois_index": 1, "annee": 2025, "consommation_m3": 12.0},
+            {"mois_index": 2, "annee": 2025, "consommation_m3": 8.0},
+        ]
+        with patch("custom_components.eau_grand_lyon.coordinator.StatisticData", new=lambda **kw: kw):
+            series = EauGrandLyonCoordinator._build_stat_series(consos, lambda c: c, None, 3)
+        assert [s["sum"] for s in series] == [10.0, 22.0, 30.0]
+        assert [s["state"] for s in series] == [10.0, 12.0, 8.0]
+
+    def test_build_stat_series_anchor_prevents_negative_delta(self):
+        """Fenêtre glissante : le cumul repart de la base recorder, pas de 0 → jamais de delta négatif."""
+        consos = [
+            {"mois_index": 0, "annee": 2025, "consommation_m3": 10.0},  # Jan, déjà enregistré
+            {"mois_index": 1, "annee": 2025, "consommation_m3": 12.0},  # Fév = dernier enregistré
+            {"mois_index": 2, "annee": 2025, "consommation_m3": 8.0},   # Mars = nouveau
+        ]
+        # Recorder : dernier point = Fév 2025, somme cumulée 122 (base avant Fév = 110).
+        anchor = ((2025, 2), 110.0)
+        with patch("custom_components.eau_grand_lyon.coordinator.StatisticData", new=lambda **kw: kw):
+            series = EauGrandLyonCoordinator._build_stat_series(consos, lambda c: c, anchor, 3)
+        # Janvier (antérieur au dernier point) est préservé, pas ré-injecté.
+        assert len(series) == 2
+        # Fév repart de 110 (+12=122), Mars continue (+8=130) : suite strictement croissante.
+        assert [s["sum"] for s in series] == [122.0, 130.0]
+        assert all(series[i]["sum"] < series[i + 1]["sum"] for i in range(len(series) - 1))
+
+    def test_build_stat_series_applies_value_fn_and_rounding(self):
+        consos = [{"mois_index": 0, "annee": 2025, "consommation_m3": 10.0}]
+        with patch("custom_components.eau_grand_lyon.coordinator.StatisticData", new=lambda **kw: kw):
+            series = EauGrandLyonCoordinator._build_stat_series(consos, lambda c: round(c * 1.5, 2), None, 2)
+        assert series[0]["state"] == 15.0
+        assert series[0]["sum"] == 15.0
 
     def test_statistic_ref_sanitizes_invalid_characters(self):
         """Recorder statistic ids only allow lowercase [a-z0-9_], no edge/double underscores.

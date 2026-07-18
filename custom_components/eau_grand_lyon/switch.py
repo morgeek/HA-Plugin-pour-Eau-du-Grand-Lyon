@@ -46,6 +46,9 @@ class EauGrandLyonVacationSwitch(CoordinatorEntity[EauGrandLyonCoordinator], Swi
         last_state = await self.async_get_last_state()
         if last_state is not None:
             self._attr_is_on = last_state.state == "on"
+            # Resynchroniser le coordinator : sans ça, le switch affiche "on"
+            # après un redémarrage mais la surveillance vacances reste inactive.
+            self.coordinator.vacation_mode = self._attr_is_on
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         self._attr_is_on = True

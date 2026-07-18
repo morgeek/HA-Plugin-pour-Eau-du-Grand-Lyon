@@ -31,7 +31,7 @@
     "error": {
       "invalid_auth": "Incorrect credentials. Please check your email and password.",
       "cannot_connect": "Unable to connect to the server. Check your network.",
-      "waf_blocked": "Request blocked by web firewall. Increase the update interval (recommended: {recommended_interval}h) or wait a few minutes.",
+      "waf_blocked": "Request blocked by web firewall. Increase the update interval (recommended: 24h) or wait a few minutes.",
       "api_error": "API error. Check the status of the Eau du Grand Lyon service.",
       "unknown": "Unknown error. Check Home Assistant logs for details.",
       "invalid_email": "Invalid email address"

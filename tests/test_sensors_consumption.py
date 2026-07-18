@@ -48,6 +48,24 @@ class TestConsommationSensor:
         s._period = "precedent"
         assert s.native_value == 7.2
 
+    def test_precedent_is_measurement_without_water_device_class(self):
+        """Mois précédent : MEASUREMENT (valeur figée), pas TOTAL_INCREASING → pas de faux reset LTS."""
+        from homeassistant.components.sensor import SensorStateClass
+        coordinator = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+        s = EauGrandLyonConsommationSensor(coordinator, entry, "REF1", "precedent")
+        assert s._attr_state_class == SensorStateClass.MEASUREMENT
+        assert s._attr_device_class is None
+
+    def test_courant_keeps_total_increasing(self):
+        from homeassistant.components.sensor import SensorStateClass
+        coordinator = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+        s = EauGrandLyonConsommationSensor(coordinator, entry, "REF1", "courant")
+        assert s._attr_state_class == SensorStateClass.TOTAL_INCREASING
+
     def test_courant_missing_returns_none(self):
         s = _make_sensor(EauGrandLyonConsommationSensor, {})
         s._period = "courant"

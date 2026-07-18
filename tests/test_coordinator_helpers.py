@@ -1,5 +1,6 @@
 """Tests for pure coordinator helper functions."""
 import pytest
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from custom_components.eau_grand_lyon.api.client import EauGrandLyonApi
@@ -173,8 +174,10 @@ class TestFormatConsumptions:
 class TestDetectLocalLeak:
     """Couvre le fix du faux positif permanent sur le capteur fuite locale."""
 
-    def _call(self, courbe, daily):
+    def _call(self, courbe, daily, multiplier=None):
         coord = MagicMock(spec=EauGrandLyonCoordinator)
+        options = {} if multiplier is None else {"leak_multiplier": multiplier}
+        coord._entry = SimpleNamespace(options=options)
         return EauGrandLyonCoordinator._detect_local_leak(coord, courbe, daily, "TEST_REF")
 
     def _make_daily(self, values):
@@ -203,6 +206,15 @@ class TestDetectLocalLeak:
         # moyenne=0.05, seuil=max(0.125, 0.5)=0.5 ; last=0.4 < 0.5
         daily = self._make_daily([0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.4])
         assert self._call([], daily) is False
+
+    def test_multiplicateur_configurable(self):
+        """Le seuil suit CONF_LEAK_MULTIPLIER (unifié avec la détection mensuelle)."""
+        # 6 jours à 0.5 + dernier à 1.6 → moyenne 7j = 4.6/7 ≈ 0.657.
+        daily = self._make_daily([0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1.6])
+        # mult=2.0 → seuil ≈ 1.31, last 1.6 > 1.31 → alerte
+        assert self._call([], daily, multiplier=2.0) is True
+        # mult=3.0 → seuil ≈ 1.97, last 1.6 < 1.97 → pas d'alerte
+        assert self._call([], daily, multiplier=3.0) is False
 
     def test_courbe_24h_flux_constant_alerte(self):
         """Courbe intra-journalière : flux non-nul 24h+ → fuite probable."""

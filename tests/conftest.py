@@ -73,6 +73,11 @@ def _stub_homeassistant() -> None:
     _make_module("homeassistant.helpers.device_registry", DeviceInfo=MagicMock)
     _make_module("homeassistant.helpers.entity_platform", AddEntitiesCallback=MagicMock)
     class _GenericBase:
+        def __init__(self, *args, **kwargs):
+            # CoordinatorEntity(coordinator) — accepte l'argument pour que les
+            # constructeurs réels des entités soient exerçables en test.
+            self.coordinator = args[0] if args else None
+
         def __class_getitem__(cls, item): return cls
 
         @property
