@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import json
@@ -129,6 +130,11 @@ class EauGrandLyonAuth:
         self._email = email
         self._password = password
         self._access_token: str | None = None
+        # Sérialise les ré-authentifications : lors d'un cycle, plusieurs requêtes
+        # concurrentes reçoivent un 401 en même temps et déclenchent chacune un
+        # flux OAuth complet — tempête de login contre un WAF agressif. Le premier
+        # ré-authentifie, les suivants réutilisent le token fraîchement obtenu.
+        self._auth_lock = asyncio.Lock()
 
     @property
     def access_token(self) -> str | None:
@@ -139,12 +145,18 @@ class EauGrandLyonAuth:
         self._access_token = value
 
     async def authenticate(self, correlation_id: str | None = None) -> str:
-        correlation_id = correlation_id or _new_correlation_id()
-        _LOGGER.debug("auth_start cid=%s", correlation_id)
-        return await self._authenticate_with_urls(
-            AuthUrls(LOGIN_URL, AUTHORIZE_URL, TOKEN_URL),
-            correlation_id,
-        )
+        # Snapshot AVANT le lock : si un autre appel concurrent rafraîchit le token
+        # pendant qu'on attend, on réutilise le sien au lieu de relancer un login.
+        token_before = self._access_token
+        async with self._auth_lock:
+            if self._access_token and self._access_token != token_before:
+                return self._access_token
+            correlation_id = correlation_id or _new_correlation_id()
+            _LOGGER.debug("auth_start cid=%s", correlation_id)
+            return await self._authenticate_with_urls(
+                AuthUrls(LOGIN_URL, AUTHORIZE_URL, TOKEN_URL),
+                correlation_id,
+            )
 
     async def _authenticate_with_urls(self, urls: AuthUrls, correlation_id: str) -> str:
         start = time.perf_counter()
@@ -171,7 +183,7 @@ class EauGrandLyonAuth:
                 duration_ms=(time.perf_counter() - start) * 1000,
                 status=login_status,
             )
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError) as err:
             _log_http_event(
                 phase="auth_login",
                 correlation_id=correlation_id,
@@ -236,7 +248,7 @@ class EauGrandLyonAuth:
                 status=status,
             )
             raise
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError) as err:
             _log_http_event(
                 phase="auth_authorize",
                 correlation_id=correlation_id,
@@ -296,7 +308,7 @@ class EauGrandLyonAuth:
                 status=status,
             )
             raise
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError) as err:
             _log_http_event(
                 phase="auth_token",
                 correlation_id=correlation_id,

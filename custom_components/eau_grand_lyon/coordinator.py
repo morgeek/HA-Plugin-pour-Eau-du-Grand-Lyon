@@ -39,11 +39,23 @@ try:
 except ImportError:
     StatisticMeanType = None
 
+# Lecture de la dernière somme connue du recorder pour ancrer le cumul et éviter
+# les deltas négatifs quand la fenêtre glissante de 36 mois perd son plus vieux
+# mois. Optionnel : toute absence/erreur retombe sur un cumul à partir de 0.
+try:
+    from homeassistant.components.recorder import get_instance as _get_recorder_instance
+    from homeassistant.components.recorder.statistics import get_last_statistics as _get_last_statistics
+
+    _HAS_LAST_STATS = True
+except ImportError:
+    _HAS_LAST_STATS = False
+
 if TYPE_CHECKING:
     from .__init__ import EauGrandLyonConfigEntry
 
 from .api import (
     MONTHS_FR,
+    ApiError,
     AuthenticationError,
     EauGrandLyonApi,
     NetworkError,
@@ -54,6 +66,7 @@ from .const import (
     CONF_EMAIL,
     CONF_EXPERIMENTAL,
     CONF_HOUSEHOLD_SIZE,
+    CONF_LEAK_MULTIPLIER,
     CONF_MAX_RETRIES,
     CONF_PASSWORD,
     CONF_PRICE_ENTITY,
@@ -64,6 +77,7 @@ from .const import (
     CONF_WATER_QUALITY_COMMUNE,
     DEFAULT_EXPERIMENTAL,
     DEFAULT_HOUSEHOLD_SIZE,
+    DEFAULT_LEAK_MULTIPLIER,
     DEFAULT_MAX_RETRIES,
     DEFAULT_SUBSCRIPTION_ANNUAL,
     DEFAULT_TARIF_M3,
@@ -464,11 +478,34 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                     )
                     await asyncio.sleep(delay)
 
+            except ApiError as err:
+                # HTTP 5xx / réponse malformée : transitoire côté serveur.
+                # On retente comme une erreur réseau, puis on bascule sur le cache.
+                last_exc = err
+                last_err_type = "ApiError"
+                self._consecutive_failures += 1
+                if attempt < self._max_retries - 1:
+                    delay = self._compute_retry_delay(NETWORK_RETRY_BASE_DELAY_S, attempt)
+                    _LOGGER.warning(
+                        "API error (attempt %d/%d), retrying in %.1fs — %s",
+                        attempt + 1,
+                        self._max_retries,
+                        delay,
+                        err,
+                    )
+                    await asyncio.sleep(delay)
+
             except AuthenticationError as err:
                 raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
 
             except Exception as err:  # noqa: BLE001
-                raise UpdateFailed(f"Unexpected error: {err}") from err
+                # Erreur inattendue : plutôt que de faire tomber toutes les entités,
+                # on mémorise l'erreur et on tente le cache offline ci-dessous.
+                last_exc = err
+                last_err_type = type(err).__name__
+                self._consecutive_failures += 1
+                _LOGGER.exception("Unexpected error during update — falling back to cache if available")
+                break
 
         # Toutes les tentatives ont échoué — mode hors-ligne si cache disponible
         cache = self._last_good_data
@@ -549,12 +586,26 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             *[
                 self._process_contract(cycle_api, details, tarif_m3, factures, experimental)
                 for details in valid_contracts
-            ]
+            ],
+            return_exceptions=True,
         )
 
+        first_contract_error: BaseException | None = None
         for details, contract_data in zip(valid_contracts, contract_results):
             ref = details["reference"]
+            # Un contrat en échec ne doit pas faire tomber les autres du compte.
+            if isinstance(contract_data, BaseException):
+                _LOGGER.warning("Contrat %s ignoré ce cycle (erreur : %s)", ref, contract_data)
+                if first_contract_error is None:
+                    first_contract_error = contract_data
+                continue
             contracts_data[ref] = contract_data
+
+        # Si TOUS les contrats ont échoué, propager l'erreur pour que le
+        # coordinator déclenche retry + cache offline plutôt que d'écraser le
+        # cache avec des données vides.
+        if valid_contracts and not contracts_data and first_contract_error is not None:
+            raise first_contract_error
 
             # Mise à jour des agrégats globaux
             global_data["total_conso_courant"] += contract_data.get("consommation_mois_courant") or 0
@@ -932,9 +983,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         L'API Téléo ne pousse qu'un index par 24h, donc la règle "jamais à 0 sur
         24h" est toujours vraie dans un logement habité. On utilise à la place un
-        seuil statistique : alerte si la conso du dernier jour dépasse 2,5× la
-        moyenne glissante des 7 derniers jours (minimum 50 L/j pour éviter les
-        faux positifs sur de très faibles consos).
+        seuil statistique : alerte si la conso du dernier jour dépasse
+        `CONF_LEAK_MULTIPLIER`× la moyenne glissante des 7 derniers jours (minimum
+        500 L/j pour éviter les faux positifs sur de très faibles consos). Le
+        multiplicateur est celui configuré dans les options, unifié avec la
+        détection mensuelle du binary_sensor.
         """
         if courbe:
             vals = [e.get("valeur", 0) for e in courbe if "valeur" in e]
@@ -946,7 +999,8 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             recent = [e["consommation_m3"] for e in daily[-7:]]
             moyenne_7j = sum(recent) / len(recent)
             last = recent[-1]
-            seuil = max(moyenne_7j * 2.5, 0.5)  # au moins 500 L/j pour déclencher
+            multiplier = float((self._entry.options or {}).get(CONF_LEAK_MULTIPLIER, DEFAULT_LEAK_MULTIPLIER))
+            seuil = max(moyenne_7j * multiplier, 0.5)  # au moins 500 L/j pour déclencher
             if moyenne_7j > 0 and last > seuil:
                 _LOGGER.warning(
                     "Suspected leak (daily spike): %s — last=%.3f m³, avg7j=%.3f m³",
@@ -1023,6 +1077,81 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         sanitized = re.sub(r"[^a-z0-9]+", "_", str(ref).lower()).strip("_")
         return sanitized or "contract"
 
+    @staticmethod
+    def _build_stat_series(
+        consos: list[dict],
+        value_fn,
+        anchor: tuple[tuple[int, int], float] | None,
+        ndigits: int,
+    ) -> list["StatisticData"]:
+        """Construit une série cumulative (state + sum) prête pour le recorder.
+
+        `value_fn(conso_m3) -> valeur du mois` (m³ ou EUR). `anchor`, s'il est
+        fourni, vaut ((année, mois) du dernier mois déjà enregistré, somme cumulée
+        AVANT ce mois) : le cumul repart de cette base et les mois antérieurs sont
+        laissés intacts. Sans ancrage, le cumul part de 0 sur toute la fenêtre.
+        Ancrer sur le recorder évite les deltas négatifs quand la fenêtre glissante
+        de 36 mois perd son plus ancien mois (le cumul repartait sinon de 0).
+        """
+        series: list["StatisticData"] = []
+        cumulative = anchor[1] if anchor else 0.0
+        last_ym = anchor[0] if anchor else None
+        for entry in sorted(consos, key=lambda e: (e.get("annee", 0), e.get("mois_index", 0))):
+            try:
+                mois_num = entry["mois_index"] + 1
+                annee = entry["annee"]
+                value = value_fn(entry["consommation_m3"])
+                dt = datetime(annee, mois_num, 1, 0, 0, 0, tzinfo=timezone.utc)
+            except (KeyError, ValueError, TypeError) as err:
+                _LOGGER.debug("Skipping statistic entry: %s — %s", entry, err)
+                continue
+            if last_ym is not None and (annee, mois_num) < last_ym:
+                continue  # déjà enregistré : préserver la somme existante
+            cumulative += value
+            series.append(StatisticData(start=dt, sum=round(cumulative, ndigits), state=round(value, ndigits)))
+        return series
+
+    async def _last_recorded_anchor(self, statistic_id: str) -> tuple[tuple[int, int], float] | None:
+        """Retourne ((année, mois), somme cumulée avant ce mois) du dernier point enregistré.
+
+        Best-effort : toute absence de recorder ou erreur renvoie None, et
+        l'injection retombe alors sur un cumul depuis 0 (comportement historique).
+        """
+        if not _HAS_LAST_STATS:
+            return None
+        try:
+            recorder = _get_recorder_instance(self.hass)
+            rows = await recorder.async_add_executor_job(
+                _get_last_statistics, self.hass, 1, statistic_id, True, {"sum", "state"}
+            )
+            points = rows.get(statistic_id) if rows else None
+            if not points:
+                return None
+            last = points[0]
+            raw_start = last["start"]
+            if isinstance(raw_start, datetime):
+                start = raw_start
+            else:
+                start = datetime.fromtimestamp(float(raw_start), tz=timezone.utc)
+            last_sum = float(last.get("sum") or 0.0)
+            last_state = float(last.get("state") or 0.0)
+            # baseline = cumul jusqu'au mois PRÉCÉDENT ce dernier point.
+            return ((start.year, start.month), last_sum - last_state)
+        except Exception as err:  # noqa: BLE001 - lecture optionnelle, jamais bloquante
+            _LOGGER.debug("Lecture last_statistics indisponible pour %s : %s", statistic_id, err)
+            return None
+
+    async def _inject_series(self, metadata: "StatisticMetaData", series: list["StatisticData"], label: str) -> None:
+        if not series:
+            return
+        try:
+            result = async_add_external_statistics(self.hass, metadata, series)
+            if inspect.isawaitable(result):
+                await result
+            _LOGGER.debug("Injected %s statistics: %d months", label, len(series))
+        except (HomeAssistantError, ValueError) as err:
+            _LOGGER.warning("Failed to inject %s statistics: %s", label, err)
+
     async def _inject_statistics(self, contracts_data: dict) -> None:
         """Injecte l'historique mensuel dans les statistiques longues durée HA."""
         if not _HAS_RECORDER:
@@ -1035,14 +1164,10 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             _mean_kwargs = {"has_mean": False}
 
         for ref, contract in contracts_data.items():
-            # Use merged history (up to 36 months) so past data is always injected,
-            # not just the ~12 months the API returns on each call.
+            # Historique fusionné (jusqu'à 36 mois) pour que le passé soit toujours
+            # injecté, pas seulement les ~12 mois renvoyés par l'API à chaque appel.
             consos = self._monthly_history.get(ref) or contract.get("consommations", [])
             if not consos:
-                continue
-
-            current_count = len(consos)
-            if self._stats_month_counts.get(ref) == current_count:
                 continue
 
             statistic_id = f"{DOMAIN}:water_{self._statistic_ref(ref)}"
@@ -1055,43 +1180,14 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 "unit_of_measurement": "m³",
                 "unit_class": "volume",
             }
+            anchor = await self._last_recorded_anchor(statistic_id)
+            water_series = self._build_stat_series(consos, lambda conso: conso, anchor, 3)
+            await self._inject_series(metadata, water_series, f"contrat {ref}")
 
-            stats: list[StatisticData] = []
-            cumulative = 0.0
-            for entry in consos:
-                try:
-                    mois_num = entry["mois_index"] + 1
-                    annee = entry["annee"]
-                    conso = entry["consommation_m3"]
-                    dt = datetime(annee, mois_num, 1, 0, 0, 0, tzinfo=timezone.utc)
-                    cumulative += conso
-                    stats.append(
-                        StatisticData(
-                            start=dt,
-                            sum=round(cumulative, 3),
-                            state=round(conso, 3),
-                        )
-                    )
-                except (KeyError, ValueError, TypeError) as err:
-                    _LOGGER.debug("Skipping statistic entry: %s — %s", entry, err)
-                    continue
-
-            try:
-                result = async_add_external_statistics(self.hass, metadata, stats)
-                if inspect.isawaitable(result):
-                    await result
-                self._stats_month_counts[ref] = current_count
-                _LOGGER.debug("Injected statistics: contract %s, %d months", ref, len(stats))
-            except (HomeAssistantError, ValueError) as err:
-                _LOGGER.warning("Failed to inject statistics for %s: %s", ref, err)
-
-        # Inject cost statistics (EUR per month) if tarif is configured
-        for ref, contract in contracts_data.items():
-            consos = self._monthly_history.get(ref) or contract.get("consommations", [])
+            # Statistiques de coût (EUR/mois) si un tarif est configuré.
             tarif = contract.get("tarif_m3", 0)
-            if not consos or tarif <= 0:
+            if tarif <= 0:
                 continue
-
             cost_statistic_id = f"{DOMAIN}:cost_{self._statistic_ref(ref)}"
             cost_metadata: StatisticMetaData = {
                 **_mean_kwargs,
@@ -1105,36 +1201,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 # 2025.11); "monetary" is rejected as an unsupported converter.
                 "unit_class": None,
             }
-
-            cost_stats: list[StatisticData] = []
-            cost_cumulative = 0.0
-            for entry in consos:
-                try:
-                    mois_num = entry["mois_index"] + 1
-                    annee = entry["annee"]
-                    conso = entry["consommation_m3"]
-                    dt = datetime(annee, mois_num, 1, 0, 0, 0, tzinfo=timezone.utc)
-                    cost_month = round(conso * tarif, 2)
-                    cost_cumulative += cost_month
-                    cost_stats.append(
-                        StatisticData(
-                            start=dt,
-                            sum=round(cost_cumulative, 2),
-                            state=round(cost_month, 2),
-                        )
-                    )
-                except (KeyError, ValueError, TypeError) as err:
-                    _LOGGER.debug("Skipping cost entry: %s — %s", entry, err)
-                    continue
-
-            if cost_stats:
-                try:
-                    result = async_add_external_statistics(self.hass, cost_metadata, cost_stats)
-                    if inspect.isawaitable(result):
-                        await result
-                    _LOGGER.debug("Injected cost statistics: contract %s, %d months", ref, len(cost_stats))
-                except (HomeAssistantError, ValueError) as err:
-                    _LOGGER.warning("Failed to inject cost statistics for %s: %s", ref, err)
+            cost_anchor = await self._last_recorded_anchor(cost_statistic_id)
+            cost_series = self._build_stat_series(consos, lambda conso: round(conso * tarif, 2), cost_anchor, 2)
+            await self._inject_series(cost_metadata, cost_series, f"coût {ref}")
 
     def _handle_alert_notifications(self, nb_alertes: int) -> None:
         """Crée ou supprime une notification HA persistante selon les alertes."""

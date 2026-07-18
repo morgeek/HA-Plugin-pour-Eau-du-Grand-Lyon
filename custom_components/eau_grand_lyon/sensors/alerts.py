@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
+from homeassistant.components.sensor import SensorStateClass
 from homeassistant.const import EntityCategory
 
 from .base import _EauGrandLyonBase
@@ -19,7 +19,8 @@ from .base import _EauGrandLyonBase
 class _EauGrandLyonSeuilBase(_EauGrandLyonBase):
     """Base commune aux capteurs de seuil de surconsommation (m³, diagnostic)."""
 
-    _attr_device_class = SensorDeviceClass.WATER
+    # Pas de device_class WATER : un seuil configuré n'est pas un volume consommé,
+    # et WATER interdit la state_class MEASUREMENT (combinaison rejetée par HA).
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "m³"
     _attr_entity_category = EntityCategory.DIAGNOSTIC

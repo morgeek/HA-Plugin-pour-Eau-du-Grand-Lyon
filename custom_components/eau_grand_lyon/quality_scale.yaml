@@ -1,8 +1,18 @@
 rules:
   # Bronze
-  action-setup: done
+  action-setup:
+    status: todo
+    comment: >-
+      Les services sont enregistrés dans async_setup_entry, pas dans
+      async_setup. À déplacer pour qu'un appel échoue proprement quand
+      l'entrée n'est pas chargée.
   appropriate-polling: done
-  brands: done
+  brands:
+    status: todo
+    comment: >-
+      Le domaine n'est pas encore fusionné dans home-assistant/brands
+      (validation HACS lancée avec ignore: brands). Dossier brand/ local
+      uniquement.
   common-modules: done
   config-flow: done
   config-flow-test-coverage: done
@@ -53,14 +63,25 @@ rules:
   entity-category: done
   entity-device-class: done
   entity-disabled-by-default: done
-  entity-translations: done
-  exception-translations: done
+  entity-translations:
+    status: todo
+    comment: >-
+      Les noms d'entités sont traduits, mais plusieurs états sont encore
+      codés en dur en français (santé OK/KO, sécheresse, coaching) sans
+      device_class ENUM + states de traduction.
+  exception-translations:
+    status: todo
+    comment: >-
+      La section exceptions de strings.json existe mais n'est reliée à aucun
+      translation_key dans le code ; les exceptions sont levées en dur.
   icon-translations: done
   reconfiguration-flow: done
   repair-issues: done
   stale-devices:
-    status: exempt
-    comment: Contracts are returned by API; orphan cleanup happens on entry reload.
+    status: todo
+    comment: >-
+      Aucun retrait des devices/entités orphelins quand un contrat disparaît
+      de l'API — un contrat clôturé laisse son device en place.
 
   # Platinum
   async-dependency: done

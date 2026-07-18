@@ -1,10 +1,22 @@
 # =============================================================================
-# .gitignore — keep the repo to the files needed to ship & validate the
-# integration. Home Assistant only ever loads custom_components/eau_grand_lyon/;
-# everything else tracked (hacs.json, README, icon/logo, tests/, .github/, docs/,
-# lovelace/, blueprints/) is required for HACS distribution, CI, or features.
-# The patterns below keep local/dev/runtime junk OUT of the repo.
+# .gitignore — le dépôt GitHub ne contient que ce qui sert au fonctionnement du
+# plugin dans Home Assistant / HACS : custom_components/eau_grand_lyon/, hacs.json,
+# README, CHANGELOG, docs/screenshots/, blueprints/, lovelace/. L'outillage de
+# développement (tests, CI, pré-commit, guide agents) est conservé EN LOCAL mais
+# exclu du suivi Git. Les patterns ci-dessous gardent le junk local/dev hors du dépôt.
 # =============================================================================
+
+# --- Outillage de développement (local uniquement, hors dépôt GitHub) ---
+tests/
+smoke_tests/
+.github/
+pytest.ini
+.pre-commit-config.yaml
+AGENTS.md
+# Doublons non utilisés par HA/HACS (les images de marque sont dans
+# custom_components/eau_grand_lyon/brand/ ; les captures dans docs/screenshots/).
+/icon.png
+/logo.png
 
 # --- OS cruft ---
 .DS_Store

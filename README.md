@@ -1,12 +1,11 @@
 # Intégration Eau du Grand Lyon pour Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![Tests & Validation](https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/actions/workflows/tests.yaml/badge.svg?branch=main)](https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/actions/workflows/tests.yaml)
-[![Quality Scale - Gold](https://img.shields.io/badge/Quality%20Scale-Gold-4CAF50)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
+[![Quality Scale - Silver](https://img.shields.io/badge/Quality%20Scale-Silver-9E9E9E)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
 
 Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](https://www.home-assistant.io/) qui fournit des capteurs pour les données de consommation d'eau du service Eau du Grand Lyon.
 
-> 🌟 **Gold Tier Certified** — Cette intégration satisfait tous les critères de qualité Home Assistant Gold : gestion d'erreurs robuste, flux de configuration avancés, traductions complètes, documentation détaillée, et 245 tests automatisés.
+> 🥈 **Quality Scale : Silver** — Intégration robuste au quotidien : gestion d'erreurs et mode hors-ligne, flux de configuration / options / ré-authentification, traductions FR/EN, documentation détaillée et large couverture de tests. Plusieurs critères Gold restent en cours (voir [`quality_scale.yaml`](custom_components/eau_grand_lyon/quality_scale.yaml)) : traduction des états d'entités, `exception-translations`, nettoyage des appareils obsolètes et enregistrement des services via `async_setup`.
 
 ![alt text](https://raw.githubusercontent.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/main/docs/screenshots/HA-Eau-Grand-Lyon.png)
 
@@ -19,6 +18,17 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
 ## Historique des versions
 
 Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
+
+### 🛡️ Robustesse réseau & statistiques — Audit (v3.4.0)
+
+- **Timeouts et erreurs serveur gérés** : un timeout ou une erreur HTTP 5xx / réponse malformée déclenche désormais le retry puis le mode hors-ligne (cache) au lieu de faire tomber toutes les entités.
+- **Ré-authentification sérialisée** : lors d'un cycle, une expiration de token ne déclenche plus qu'un seul flux OAuth au lieu d'une rafale contre le pare-feu (WAF).
+- **Un contrat en erreur n'impacte plus les autres** du même compte.
+- **URLs corrigées** : téléchargement de facture et révocation de token passent enfin par le préfixe `/application/...` (les anciennes routes renvoyaient 404).
+- **Statistiques long terme fiabilisées** : le cumul s'ancre sur la dernière valeur du recorder (plus de pics négatifs quand la fenêtre glisse) et la consommation du mois courant est rafraîchie à chaque cycle.
+- **Corrections capteurs** : mode vacances restauré au redémarrage, multiplicateur de fuite configurable pris en compte partout, `state_class` / `device_class` corrigés (mois précédent, seuils).
+- **Config flow** : l'erreur WAF ne provoque plus de message cassé (placeholder manquant).
+- **Qualité affichée honnête** : Quality Scale ramené de Gold à **Silver** pour refléter la réalité.
 
 ### 🐛 Retours utilisateurs — Labels, Précision, Fuite (v3.2.0)
 

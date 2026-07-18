@@ -5,6 +5,37 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-07-19
+
+Audit de robustesse : correction de la chaîne de gestion d'erreurs (qui court-circuitait le mode hors-ligne), de deux URLs invalides, et fiabilisation des statistiques long terme. Quality Scale ajusté de Gold à Silver pour refléter la réalité.
+
+### Corrections de Bugs
+
+- **Timeouts non gérés** (`api/client.py`, `api/auth.py`) : `aiohttp.ClientTimeout` lève `asyncio.TimeoutError`, qui n'est pas un `aiohttp.ClientError` — il échappait aux blocs de gestion et remontait en `UpdateFailed` sec, **sans retry ni bascule sur le cache hors-ligne**, alors que le timeout est le mode d'échec réseau le plus courant. **Fix** : converti en `NetworkError` dans `_request` et les trois blocs d'authentification.
+- **Erreurs serveur / réponses malformées** (`api/client.py`, `coordinator.py`) : un HTTP 5xx (`ApiError`) ou un corps non-JSON (page WAF/maintenance renvoyée en 200) tombait aussi dans le `except` générique → échec immédiat, cache ignoré. **Fix** : nouveau parseur `_parse_json` (corps non-JSON → `ApiError`) et gestion de `ApiError` dans la boucle de retry ; une erreur inattendue sert désormais le cache si disponible.
+- **Ré-authentification concurrente** (`api/auth.py`) : à l'expiration du token en milieu de cycle, chaque requête en vol déclenchait son propre flux OAuth complet — rafale de logins contre le WAF. **Fix** : `asyncio.Lock` + réutilisation du token fraîchement obtenu par les appels concurrents.
+- **Un contrat en échec faisait tomber tout le compte** (`coordinator.py`) : `asyncio.gather` sans `return_exceptions`. **Fix** : les contrats sont isolés ; l'erreur n'est propagée que si *tous* échouent (pour ne pas écraser le cache avec des données vides).
+- **URL de téléchargement de facture invalide** (`api/client.py`) : `get_invoice_pdf` utilisait `/rest/produits/...` (404). **Fix** : passage par `/application/rest/produits/...`.
+- **URL de révocation de token invalide** (`api/endpoints.py`) : `TOKEN_REVOKE_URL` pointait sur `/auth/revoke` (404). **Fix** : `/application/auth/revoke`.
+- **Placeholder de traduction manquant** (`strings.json`, `translations/*`) : l'erreur `waf_blocked` contenait `{recommended_interval}` jamais fourni → `formatjs MISSING_VALUE` au premier blocage WAF dans un formulaire. **Fix** : valeur (24h) inlinée, plus de placeholder.
+- **Mode vacances non restauré au redémarrage** (`switch.py`) : le switch réaffichait « on » mais `coordinator.vacation_mode` restait `False` — surveillance silencieusement inactive. **Fix** : resynchronisation dans `async_added_to_hass`.
+- **Multiplicateur de fuite ignoré** (`coordinator.py`, `binary_sensor.py`) : la détection journalière utilisait un `2,5` codé en dur au lieu de l'option `CONF_LEAK_MULTIPLIER`, et l'attribut d'info affichait la valeur par défaut au lieu de la valeur configurée. **Fix** : lecture unifiée de l'option configurée.
+
+### Statistiques long terme
+
+- **Deltas négatifs sur fenêtre glissante** (`coordinator.py`) : le cumul repartait de 0 à chaque injection ; quand un mois quittait la fenêtre de 36 mois, les sommes ré-injectées devenaient inférieures à celles déjà dans le recorder → pics négatifs dans le tableau Énergie. **Fix** : le cumul s'ancre sur la dernière somme connue du recorder (`get_last_statistics`, best-effort avec repli sur l'ancien comportement).
+- **Mois courant figé** : la garde « n'injecter que si le nombre de mois change » empêchait le rafraîchissement de la conso du mois en cours (révisée chaque jour par l'API). **Fix** : garde retirée, injection à chaque cycle.
+- **`state_class` / `device_class` corrigés** (`sensors/consumption.py`, `sensors/alerts.py`) : « mois précédent » passe en `MEASUREMENT` (au lieu de `TOTAL_INCREASING`, qui lisait chaque baisse mensuelle comme un reset de compteur et gonflait les statistiques) ; les capteurs de seuil perdent le `device_class` WATER (incompatible avec `MEASUREMENT`).
+
+### Qualité
+
+- **Quality Scale : Gold → Silver** (`manifest.json`, `quality_scale.yaml`) pour refléter la réalité : `action-setup`, `brands`, `exception-translations`, `entity-translations` (états), `stale-devices` passés en `todo` avec justification honnête.
+- **Suite de tests** : tests factices remplacés par de vrais tests (`test_concurrency.py` teste maintenant le verrou d'authentification ; `benchmarks.py` supprimé ; tautologies remplacées par des tests réels de `check_long_outage_issue`). Couverture ajoutée pour l'ancrage des statistiques, la gestion `ApiError`/timeout et les `state_class` par période.
+
+### Dépôt
+
+- Le dépôt GitHub ne contient désormais que les fichiers nécessaires à HACS / Home Assistant (intégration, blueprints, cartes Lovelace, docs). L'outillage de développement (tests, CI, pré-commit) est conservé en local mais retiré du suivi Git.
+
 ## [3.3.0] - 2026-07-18
 
 Validation sur données réelles capturées depuis l'espace client : correction d'un bug d'unité et exploitation des seuils d'alerte configurés côté serveur.

@@ -10,12 +10,12 @@ LOGIN_URL = f"{BASE_URL}/application/auth/externe/authentification"
 AUTHORIZE_URL = f"{BASE_URL}/application/auth/authorize-internet"
 TOKEN_URL = f"{BASE_URL}/application/auth/tokenUtilisateurInternet"
 
-TOKEN_REVOKE_URL = f"{BASE_URL}/auth/revoke"
+# Règle d'or n°1 : toutes les routes vivent sous /application/... — les variantes
+# nues (/auth/..., /rest/...) renvoient 404.
+TOKEN_REVOKE_URL = f"{BASE_URL}/application/auth/revoke"
 
 PRODUITS_BASE = f"{BASE_URL}/application/rest/produits"
 INTERFACES_AEL_BASE = f"{BASE_URL}/application/rest/interfaces/ael"
-
-CODE_VERIFIER = "5"
 
 MONTHS_FR = [
     "Janvier",
