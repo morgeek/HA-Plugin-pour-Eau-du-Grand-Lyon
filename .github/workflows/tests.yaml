@@ -1,0 +1,67 @@
+name: Tests & Validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  tests:
+    name: Tests Python
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Home Assistant 2024.11+ only runs on Python 3.12+
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: "pytest.ini"
+
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-asyncio voluptuous flake8 black
+
+      - name: Lint with flake8
+        run: |
+          flake8 custom_components/eau_grand_lyon/ --max-line-length=120 --extend-ignore=E203,W503 --count --show-source
+
+      - name: Format check with black
+        run: |
+          black --check custom_components/eau_grand_lyon/ --line-length=120
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+
+  validate:
+    name: Validation HA (hassfest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run hassfest
+        uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: Validation HACS
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run HACS Action
+        uses: hacs/action@main
+        with:
+          category: integration
+          # 'brands' requires the domain to be merged into home-assistant/brands,
+          # which is only needed for the official HACS default store, not for
+          # custom-repository installs. Ignore it until the brands PR is merged.
+          ignore: brands
