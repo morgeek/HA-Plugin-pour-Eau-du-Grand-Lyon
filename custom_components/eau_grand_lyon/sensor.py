@@ -9,10 +9,14 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .sensors.alerts import (
+    EauGrandLyonSeuilSurconsoJourSensor,
+    EauGrandLyonSeuilSurconsoMoisSensor,
+)
 from .sensors.consumption import (
-    EauGrandLyonConso30JSensor,
-    EauGrandLyonConso7JSensor,
     EauGrandLyonCompatibilitySensor,
+    EauGrandLyonConso7JSensor,
+    EauGrandLyonConso30JSensor,
     EauGrandLyonConsoAnnuelleRefSensor,
     EauGrandLyonConsommationAnnuelleSensor,
     EauGrandLyonConsommationSensor,
@@ -20,6 +24,12 @@ from .sensors.consumption import (
     EauGrandLyonIndexJournalierSensor,
     EauGrandLyonIndexSensor,
     EauGrandLyonYesterdaySensor,
+)
+from .sensors.contract import (
+    EauGrandLyonDateEcheanceSensor,
+    EauGrandLyonProchaineFactureSensor,
+    EauGrandLyonProchaineReleveSensor,
+    EauGrandLyonStatutSensor,
 )
 from .sensors.cost import (
     EauGrandLyonCoutAnnuelSensor,
@@ -32,21 +42,12 @@ from .sensors.cost import (
     EauGrandLyonEnergyWaterSensor,
     EauGrandLyonSoldeSensor,
 )
-from .sensors.contract import (
-    EauGrandLyonDateEcheanceSensor,
-    EauGrandLyonProchaineFactureSensor,
-    EauGrandLyonProchaineReleveSensor,
-    EauGrandLyonStatutSensor,
-)
-from .sensors.intelligence import (
-    EauGrandLyonCoachingSensor,
-    EauGrandLyonCO2FootprintSensor,
-    EauGrandLyonEcoScoreSensor,
-    EauGrandLyonLimescaleSensor,
-    EauGrandLyonPredictionConsoSensor,
-    EauGrandLyonPredictionCostSensor,
-    EauGrandLyonSignalSensor,
-    EauGrandLyonTrendSensor,
+from .sensors.experimental import (
+    EauGrandLyonAvgFlowSensor,
+    EauGrandLyonDerniereFactureSensor,
+    EauGrandLyonFuiteEstimeeSensor,
+    EauGrandLyonHourlyConsoSensor,
+    EauGrandLyonPeakHourSensor,
 )
 from .sensors.global_sensors import (
     EauGrandLyonAlertesSensor,
@@ -58,17 +59,20 @@ from .sensors.global_sensors import (
     EauGrandLyonLastUpdateSensor,
     EauGrandLyonNextOutageSensor,
 )
+from .sensors.intelligence import (
+    EauGrandLyonCO2FootprintSensor,
+    EauGrandLyonCoachingSensor,
+    EauGrandLyonEcoScoreSensor,
+    EauGrandLyonLimescaleSensor,
+    EauGrandLyonPredictionConsoSensor,
+    EauGrandLyonPredictionCostSensor,
+    EauGrandLyonSignalSensor,
+    EauGrandLyonTrendSensor,
+)
 from .sensors.quality import (
     EauGrandLyonChloreSensor,
     EauGrandLyonNitratesSensor,
     EauGrandLyonWaterHardnessSensor,
-)
-from .sensors.experimental import (
-    EauGrandLyonAvgFlowSensor,
-    EauGrandLyonDerniereFactureSensor,
-    EauGrandLyonFuiteEstimeeSensor,
-    EauGrandLyonHourlyConsoSensor,
-    EauGrandLyonPeakHourSensor,
 )
 
 PARALLEL_UPDATES = 0
@@ -159,6 +163,11 @@ async def async_setup_entry(
         entities.append(EauGrandLyonEcoScoreSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonCO2FootprintSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonSignalSensor(coordinator, entry, ref))
+        # ── Seuils d'alerte surconsommation (configurés côté serveur) ─
+        if contract.get("seuil_surconso_jour_m3") is not None:
+            entities.append(EauGrandLyonSeuilSurconsoJourSensor(coordinator, entry, ref))
+        if contract.get("seuil_surconso_mois_m3") is not None:
+            entities.append(EauGrandLyonSeuilSurconsoMoisSensor(coordinator, entry, ref))
         # ── Expérimental ──────────────────────────────────────────────
         if experimental:
             entities.append(EauGrandLyonDerniereFactureSensor(coordinator, entry, ref))

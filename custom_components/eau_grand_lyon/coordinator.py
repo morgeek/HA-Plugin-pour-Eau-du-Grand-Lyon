@@ -14,15 +14,19 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, TypedDict
 
 import aiohttp
-
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 try:
-    from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
-    from homeassistant.components.recorder.statistics import async_add_external_statistics
+    from homeassistant.components.recorder.models import (
+        StatisticData,
+        StatisticMetaData,
+    )
+    from homeassistant.components.recorder.statistics import (
+        async_add_external_statistics,
+    )
 
     _HAS_RECORDER = True
 except ImportError:
@@ -39,40 +43,40 @@ if TYPE_CHECKING:
     from .__init__ import EauGrandLyonConfigEntry
 
 from .api import (
+    MONTHS_FR,
     AuthenticationError,
     EauGrandLyonApi,
-    MONTHS_FR,
     NetworkError,
     WafBlockedError,
 )
-from .repairs import check_long_outage_issue
 from .const import (
+    CACHE_MAX_AGE_DAYS,
     CONF_EMAIL,
     CONF_EXPERIMENTAL,
-    CONF_PASSWORD,
+    CONF_HOUSEHOLD_SIZE,
     CONF_MAX_RETRIES,
+    CONF_PASSWORD,
     CONF_PRICE_ENTITY,
+    CONF_SUBSCRIPTION_ANNUAL,
     CONF_TARIF_M3,
     CONF_UPDATE_INTERVAL_HOURS,
-    CONF_HOUSEHOLD_SIZE,
     CONF_WATER_HARDNESS,
     CONF_WATER_QUALITY_COMMUNE,
-    CONF_SUBSCRIPTION_ANNUAL,
     DEFAULT_EXPERIMENTAL,
     DEFAULT_HOUSEHOLD_SIZE,
     DEFAULT_MAX_RETRIES,
+    DEFAULT_SUBSCRIPTION_ANNUAL,
     DEFAULT_TARIF_M3,
     DEFAULT_UPDATE_INTERVAL_HOURS,
     DEFAULT_WATER_HARDNESS,
-    DEFAULT_SUBSCRIPTION_ANNUAL,
     DOMAIN,
-    CACHE_MAX_AGE_DAYS,
-    RATE_LIMIT_DELAY_S,
     NETWORK_RETRY_BASE_DELAY_S,
+    RATE_LIMIT_DELAY_S,
     RETRY_BACKOFF_MULTIPLIER,
     RETRY_JITTER_RATIO,
     WAF_RETRY_BASE_DELAY_S,
 )
+from .repairs import check_long_outage_issue
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -138,6 +142,29 @@ class CoordinatorData(TypedDict, total=False):
     offline_since: datetime | None
 
 
+class _RebuildableStore(Store):
+    """Store pour caches reconstructibles (historique mensuel, cache offline).
+
+    Le Store par défaut lève NotImplementedError au chargement quand le fichier
+    `.storage` porte une version antérieure à celle du code sans fonction de
+    migration — ce qui plante le setup de l'intégration après une montée de
+    version du schéma (ex. v1 -> v2 de l'historique mensuel).
+
+    Ici les données sont entièrement reconstruites depuis l'API aux cycles
+    suivants : une migration se résume donc à repartir d'un cache vide, ce qui
+    est sûr et évite tout crash au démarrage.
+    """
+
+    async def _async_migrate_func(self, old_major_version, old_minor_version, old_data):
+        _LOGGER.debug(
+            "Cache %s en version %s.%s — reconstruction depuis l'API (reset)",
+            self.key,
+            old_major_version,
+            old_minor_version,
+        )
+        return {}
+
+
 class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
     """Manages periodic data updates for Eau du Grand Lyon.
 
@@ -197,12 +224,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         self._persistent_data_lock = asyncio.Lock()
 
         # Cache persistant pour l'historique offline
-        self._store = Store(hass, 1, f"{DOMAIN}_{entry.entry_id}_history")
+        self._store = _RebuildableStore(hass, 1, f"{DOMAIN}_{entry.entry_id}_history")
 
         # Historique mensuel cumulatif — accumule jusqu'à 36 mois pour le calcul N-1
         # (l'API ne retourne que 12 mois ; ce store persiste les mois précédents entre mises à jour)
         # Version 2 : correction du bug mois base-0 (v1 avait des mois_index décalés d'un rang).
-        self._monthly_history_store = Store(hass, 2, f"{DOMAIN}_{entry.entry_id}_monthly_history")
+        # _RebuildableStore migre une ancienne version en repartant d'un cache vide.
+        self._monthly_history_store = _RebuildableStore(hass, 2, f"{DOMAIN}_{entry.entry_id}_monthly_history")
         self._monthly_history: dict[str, list[dict]] = {}
 
         if experimental:
@@ -232,8 +260,8 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                     "Loaded monthly history: %d contract(s)",
                     len(self._monthly_history),
                 )
-        except (json.JSONDecodeError, OSError) as err:
-            _LOGGER.warning("Failed to load monthly history: %s", err)
+        except (json.JSONDecodeError, OSError, NotImplementedError, ValueError) as err:
+            _LOGGER.warning("Failed to load monthly history (cache ignoré, reconstruit depuis l'API) : %s", err)
 
         try:
             stored = await self._store.async_load()
@@ -266,7 +294,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 self.data = stored
                 self._last_good_data = stored
                 _LOGGER.debug("Loaded persistent data (offline cache available)")
-        except (json.JSONDecodeError, OSError, KeyError) as err:
+        except (json.JSONDecodeError, OSError, KeyError, NotImplementedError, ValueError) as err:
             _LOGGER.warning("Failed to load persisted data: %s", err)
 
     async def _save_persistent_data(self) -> None:
@@ -601,11 +629,12 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         cid = details["id"]
 
         # ── Consommations mensuelles + journalières + données PdS (en parallèle) ──
-        raw_consos, raw_daily_data, date_prochaine_facture, pds_etendu = await asyncio.gather(
+        raw_consos, raw_daily_data, date_prochaine_facture, pds_etendu, alerte_surconso = await asyncio.gather(
             cycle_api.get_monthly_consumptions(cid),
             cycle_api.get_daily_consumptions(cid, nb_jours=90),
             cycle_api.get_date_prochaine_facture(cid),
             cycle_api.get_point_de_service_etendu(cid),
+            cycle_api.get_alerte_surconsommation(cid),
         )
         consos = EauGrandLyonApi.format_consumptions(raw_consos)
         consos_journalieres = raw_daily_data["entries"]
@@ -726,6 +755,19 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         factures_contrat = [f for f in factures if f.get("contrat_id") == cid]
         derniere_facture = factures_contrat[0] if factures_contrat else None
 
+        # ── [ALERTES SERVEUR] Seuils de surconsommation configurés côté Eau du Grand Lyon ──
+        seuil_surconso_jour = alerte_surconso.get("seuil_surconso_jour_m3")
+        seuil_surconso_mois = alerte_surconso.get("seuil_surconso_mois_m3")
+        derniere_conso_jour = consos_journalieres[-1]["consommation_m3"] if consos_journalieres else None
+        surconso_jour_depassee = (
+            seuil_surconso_jour is not None
+            and derniere_conso_jour is not None
+            and derniere_conso_jour > seuil_surconso_jour
+        )
+        surconso_mois_depassee = (
+            seuil_surconso_mois is not None and conso_courant is not None and conso_courant > seuil_surconso_mois
+        )
+
         return {
             **details,
             "consommations": consos,
@@ -788,6 +830,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             # [INDEX JOURNALIER] Dernier index connu depuis données journalières (Téléo uniquement)
             "index_journalier_dernier": index_journalier_dernier,
             "index_journalier_dernier_date": index_journalier_dernier_date,
+            # [ALERTES SERVEUR] Seuils surconsommation configurés côté Eau du Grand Lyon
+            "seuil_surconso_jour_m3": seuil_surconso_jour,
+            "seuil_surconso_mois_m3": seuil_surconso_mois,
+            "abonne_alerte_fuite": alerte_surconso.get("abonne_alerte_fuite"),
+            "derniere_conso_jour_m3": derniere_conso_jour,
+            "surconso_jour_depassee": surconso_jour_depassee,
+            "surconso_mois_depassee": surconso_mois_depassee,
         }
 
     def _get_consumption_n1(self, consos: list[dict]) -> tuple[float | None, str | None]:
@@ -897,11 +946,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             recent = [e["consommation_m3"] for e in daily[-7:]]
             moyenne_7j = sum(recent) / len(recent)
             last = recent[-1]
-            seuil = max(moyenne_7j * 2.5, 0.5)   # au moins 500 L/j pour déclencher
+            seuil = max(moyenne_7j * 2.5, 0.5)  # au moins 500 L/j pour déclencher
             if moyenne_7j > 0 and last > seuil:
                 _LOGGER.warning(
                     "Suspected leak (daily spike): %s — last=%.3f m³, avg7j=%.3f m³",
-                    ref, last, moyenne_7j,
+                    ref,
+                    last,
+                    moyenne_7j,
                 )
                 return True
         return False
@@ -1090,6 +1141,8 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         try:
             from homeassistant.components.persistent_notification import (
                 async_create as pn_create,
+            )
+            from homeassistant.components.persistent_notification import (
                 async_dismiss as pn_dismiss,
             )
         except ImportError:
@@ -1187,6 +1240,9 @@ class _CycleCachedApi:
 
     async def get_daily_consumptions(self, contract_id: str, nb_jours: int = 90):
         return await self._cached("get_daily_consumptions", contract_id, nb_jours=nb_jours)
+
+    async def get_alerte_surconsommation(self, contract_id: str):
+        return await self._cached("get_alerte_surconsommation", contract_id)
 
     async def get_date_prochaine_facture(self, contract_id: str):
         return await self._cached("get_date_prochaine_facture", contract_id)

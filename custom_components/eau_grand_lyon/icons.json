@@ -49,7 +49,9 @@
       "next_outage": { "default": "mdi:pipe-wrench" },
       "solde": { "default": "mdi:bank-check" },
       "conso_hier": { "default": "mdi:calendar-today" },
-      "last_update": { "default": "mdi:clock-check-outline" }
+      "last_update": { "default": "mdi:clock-check-outline" },
+      "seuil_surconso_jour": { "default": "mdi:water-alert-outline" },
+      "seuil_surconso_mois": { "default": "mdi:water-alert-outline" }
     },
     "binary_sensor": {
       "leak_alert": { "default": "mdi:water-alert" },
@@ -57,7 +59,10 @@
       "local_leak": { "default": "mdi:water-alert" },
       "battery": { "default": "mdi:pipe-wrench" },
       "limescale_alert": { "default": "mdi:pipe-wrench" },
-      "outage_alert": { "default": "mdi:pipe-wrench" }
+      "outage_alert": { "default": "mdi:pipe-wrench" },
+      "leak_subscription": { "default": "mdi:bell-ring" },
+      "surconso_jour": { "default": "mdi:water-alert" },
+      "surconso_mois": { "default": "mdi:water-alert" }
     },
     "button": {
       "download_invoice": { "default": "mdi:file-download" }

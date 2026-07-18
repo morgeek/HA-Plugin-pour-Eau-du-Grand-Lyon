@@ -38,12 +38,19 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
 
     entities: list[BinarySensorEntity] = []
-    for ref in (coordinator.data or {}).get("contracts", {}):
+    for ref, contract in (coordinator.data or {}).get("contracts", {}).items():
         entities.append(EauGrandLyonLeakAlertSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonRealTimeLeakSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonLocalLeakSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonBatterySensor(coordinator, entry, ref))
         entities.append(EauGrandLyonLimescaleAlertSensor(coordinator, entry, ref))
+        # ── Alertes serveur (seuils configurés dans l'espace Eau du Grand Lyon) ──
+        if contract.get("abonne_alerte_fuite") is not None:
+            entities.append(EauGrandLyonLeakSubscriptionSensor(coordinator, entry, ref))
+        if contract.get("seuil_surconso_jour_m3") is not None:
+            entities.append(EauGrandLyonSurconsoJourSensor(coordinator, entry, ref))
+        if contract.get("seuil_surconso_mois_m3") is not None:
+            entities.append(EauGrandLyonSurconsoMoisSensor(coordinator, entry, ref))
 
     # [FEAT 3] Coupure/Travaux planifiés — capteur global
     entities.append(EauGrandLyonOutageSensor(coordinator, entry))
@@ -94,9 +101,7 @@ class EauGrandLyonLeakAlertSensor(_EauGrandLyonBinaryBase):
         conso_precedent = c.get("consommation_mois_precedent")
         if conso_courant and conso_precedent:
             multiplier = float(
-                (self.coordinator.config_entry.options or {}).get(
-                    CONF_LEAK_MULTIPLIER, DEFAULT_LEAK_MULTIPLIER
-                )
+                (self.coordinator.config_entry.options or {}).get(CONF_LEAK_MULTIPLIER, DEFAULT_LEAK_MULTIPLIER)
             )
             return conso_courant > multiplier * conso_precedent
         return False
@@ -210,6 +215,88 @@ class EauGrandLyonLimescaleAlertSensor(_EauGrandLyonBinaryBase):
         return {
             "seuil_maintenance": "100 kg de calcaire cumulé",
             "note": "Alerte indicative pour entretien chauffe-eau ou adoucisseur.",
+        }
+
+
+class EauGrandLyonLeakSubscriptionSensor(_EauGrandLyonBinaryBase):
+    """Statut d'abonnement à l'alerte fuite (endpoint /abonneAlerteFuite)."""
+
+    _attr_translation_key = "leak_subscription"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_leak_subscription"
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._contract.get("abonne_alerte_fuite") is not None
+
+    @property
+    def is_on(self) -> bool:
+        """True si l'abonné est inscrit à l'alerte fuite d'Eau du Grand Lyon."""
+        return self._contract.get("abonne_alerte_fuite") is True
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "note": "Abonnement à l'alerte fuite configuré sur l'espace Eau du Grand Lyon.",
+        }
+
+
+class EauGrandLyonSurconsoJourSensor(_EauGrandLyonBinaryBase):
+    """Dépassement du seuil de surconsommation journalier configuré côté serveur."""
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_translation_key = "surconso_jour"
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_surconso_jour"
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._contract.get("seuil_surconso_jour_m3") is not None
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self._contract.get("surconso_jour_depassee"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        c = self._contract
+        return {
+            "seuil_m3": c.get("seuil_surconso_jour_m3"),
+            "consommation_jour_m3": c.get("derniere_conso_jour_m3"),
+            "note": "Compare la dernière consommation journalière au seuil configuré côté serveur.",
+        }
+
+
+class EauGrandLyonSurconsoMoisSensor(_EauGrandLyonBinaryBase):
+    """Dépassement du seuil de surconsommation mensuel configuré côté serveur."""
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_translation_key = "surconso_mois"
+
+    def __init__(self, coordinator, entry, contract_ref):
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_surconso_mois"
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._contract.get("seuil_surconso_mois_m3") is not None
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self._contract.get("surconso_mois_depassee"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        c = self._contract
+        return {
+            "seuil_m3": c.get("seuil_surconso_mois_m3"),
+            "consommation_mois_m3": c.get("consommation_mois_courant"),
+            "note": "Compare la consommation du mois en cours au seuil configuré côté serveur.",
         }
 
 

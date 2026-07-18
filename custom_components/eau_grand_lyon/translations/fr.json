@@ -251,6 +251,12 @@
       },
       "conso_annuelle_ref": {
         "name": "Conso. annuelle de référence"
+      },
+      "seuil_surconso_jour": {
+        "name": "Seuil surconsommation (jour)"
+      },
+      "seuil_surconso_mois": {
+        "name": "Seuil surconsommation (mois)"
       }
     },
     "button": {
@@ -289,6 +295,15 @@
       },
       "outage_alert": {
         "name": "Interruption de service (Travaux/Coupure)"
+      },
+      "leak_subscription": {
+        "name": "Abonnement alerte fuite"
+      },
+      "surconso_jour": {
+        "name": "Surconsommation journalière"
+      },
+      "surconso_mois": {
+        "name": "Surconsommation mensuelle"
       }
     }
   },

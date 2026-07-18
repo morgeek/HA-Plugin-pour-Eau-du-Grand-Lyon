@@ -9,8 +9,8 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 
-from .base import _EauGrandLyonGlobalBase
 from ..coordinator import EauGrandLyonCoordinator
+from .base import _EauGrandLyonGlobalBase
 
 
 class EauGrandLyonAlertesSensor(_EauGrandLyonGlobalBase):
