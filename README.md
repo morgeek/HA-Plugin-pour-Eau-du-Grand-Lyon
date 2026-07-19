@@ -29,111 +29,9 @@ Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
 - **Polish** : fuseau horaire (`dt_util.now()`), imports canoniques (`homeassistant.exceptions`), sélecteur d'entité pour le prix dynamique, libellés d'intervalle traduisibles.
 - **Tests & CI** : couverture mesurée avec seuil (`pytest-cov`), job mypy (non bloquant), smoke tests exécutables à la demande, nouveaux tests (migration, happy-path config flow, appareils obsolètes, ré-auth facture).
 
-### 🛡️ Robustesse réseau & statistiques — Audit (v3.4.0)
+_Versions antérieures (v3.4.0 et précédentes) : voir le [CHANGELOG](CHANGELOG.md)._
 
-- **Timeouts et erreurs serveur gérés** : un timeout ou une erreur HTTP 5xx / réponse malformée déclenche désormais le retry puis le mode hors-ligne (cache) au lieu de faire tomber toutes les entités.
-- **Ré-authentification sérialisée** : lors d'un cycle, une expiration de token ne déclenche plus qu'un seul flux OAuth au lieu d'une rafale contre le pare-feu (WAF).
-- **Un contrat en erreur n'impacte plus les autres** du même compte.
-- **URLs corrigées** : téléchargement de facture et révocation de token passent enfin par le préfixe `/application/...` (les anciennes routes renvoyaient 404).
-- **Statistiques long terme fiabilisées** : le cumul s'ancre sur la dernière valeur du recorder (plus de pics négatifs quand la fenêtre glisse) et la consommation du mois courant est rafraîchie à chaque cycle.
-- **Corrections capteurs** : mode vacances restauré au redémarrage, multiplicateur de fuite configurable pris en compte partout, `state_class` / `device_class` corrigés (mois précédent, seuils).
-- **Config flow** : l'erreur WAF ne provoque plus de message cassé (placeholder manquant).
-- **Qualité affichée honnête** : Quality Scale ramené de Gold à **Silver** pour refléter la réalité.
-
-### 🐛 Retours utilisateurs — Labels, Précision, Fuite (v3.2.0)
-
-- **Labels mensuels corrigés** : l'API Téléo envoie les mois en base-0 (0 = Janvier) — le décalage d'un rang est corrigé, Janvier n'est plus "manquant".
-- **Précision index** : `round(x, 1)` → `round(x, 3)` — 326.014 m³ n'est plus affiché comme 326.0.
-- **Fuite locale** : seuil statistique (2,5× la moyenne 7j) remplace la règle qui déclenchait en permanence ; capteur désactivé par défaut.
-- **Fréquence de mise à jour** : la modification via les options HA ne renvoie plus d'erreur de validation.
-- **Seuil fuite configurable** : multiplicateur réglable de 1,5× à 10× dans les options de l'intégration.
-- **245 tests** au vert.
-
-### 🩹 Stabilité & Endpoints (v3.0.x)
-
-- **Endpoints API corrigés** : les routes de données utilisent désormais le préfixe `/application/rest/...` (les anciennes routes `/rest/...` renvoyaient 404, vérifié en production). Authentification et récupération des données fiabilisées.
-- **Correctifs de plantage** : résolution de plusieurs erreurs au rafraîchissement et lors des notifications/alertes — `TypeError: _get() ... 'params'`, `'NoneType' object can't be awaited`, `a coroutine was expected, got None` (appel correct des fonctions synchrones `@callback` de Home Assistant).
-- **Options** : correction de l'affichage des libellés de configuration (dureté de l'eau, abonnement annuel) qui provoquaient une erreur de traduction.
-- **Détection Téléo/TIC** améliorée (gère les nouveaux formats de champs de l'API).
-- **Qualité & packaging** : 220 tests automatisés ; validations HACS et hassfest au vert ; nettoyage du dépôt (suppression du `.venv` versionné) et ajout d'un guide `AGENTS.md` pour les contributeurs et agents IA.
-
-### 🐛 Correctif Graphique Historique (v2.9.3)
-
-- **Graphique mensuel vide** : Le coordinateur stockait jusqu'à 36 mois d'historique en local, mais l'injection dans les statistiques HA n'utilisait que les 12 mois retournés par l'API à chaque cycle. Résultat : Janvier, Février, Mars 2026 n'apparaissaient pas dans les graphiques HA. **Corrigé** — l'historique complet est désormais injecté à chaque mise à jour.
-- Après mise à jour : utilisez le bouton **Forcer la mise à jour** pour déclencher l'injection immédiate.
-
-### 🔧 Corrections & Nouvelles Fonctionnalités (v2.9.0)
-
-#### Corrections Critiques
-- **Correction crash démarrage** : `AttributeError` sur `_current_year_str` dans les capteurs Energy — corrigé dans la classe de base
-- **"Économie potentielle" restaurée** : Fallback immédiat par extrapolation mensuelle, puis calcul exact après 12 mois d'accumulation d'historique
-- **Historique mensuel 36 mois** : Le coordinateur accumule l'historique contrat par contrat sur disque — le calcul N-1 annuel devient exact après 1 an d'utilisation
-- **Sécheresse jamais déclenchée** : Corrections du niveau détecté dans `repairs.py` (désormais niveau == "Vigilance")
-- **Coût cumulé = 0€ au lieu de unavailable** : Correction du capteur "Coût cumulé" (0 m³ → 0.0€ valide)
-- **Index journalier priorité** : Correctif pour utiliser réellement `index_journalier_dernier` avant la fallback sur somme mensuelle
-- **nb_jours parameter utilisé** : `_get_daily_new` utilise désormais le paramètre au lieu de hardcoder 2 ans
-
-#### Nouvelles Fonctionnalités
-- **Statistiques de coût injectées** : Nouvel ID statistic `eau_grand_lyon:cost_<ref>` (EUR/mois) injecté automatiquement si tarif configuré — permet au tableau de bord Énergie HA de suivre l'historique de facturation sur 24+ mois
-- **Graphiques Lovelace natifs** : Fichier `lovelace/monthly_chart_cards.yaml` avec 6 exemples prêts à l'emploi utilisant `custom:apexcharts-card` pour visualiser les données `monthly_chart_data` (consommation/coût mensuels, graphiques combinés)
-- **Dashboard Énergie complet** : `lovelace/energy_dashboard_preset.yaml` — tableau de bord prêt à paster avec 10 sections (résumé, historique 24 mois, coûts, intelligence, Téléo, qualité eau, alertes, calendrier)
-- **Guide Configuration Énergie** : `lovelace/energy_config.yaml` enrichi avec documentation complète des sources d'eau, statistic IDs, troubleshooting
-- **Téléchargement facture multi-contrats** : Service `download_latest_invoice` accepte maintenant paramètre optionnel `contract_reference` pour cibler un contrat spécifique
-- **Icônes manquantes** : `solde`, `conso_hier`, `last_update` ajoutées dans `icons.json`
-
-#### Qualité & Maintenabilité
-- **213 tests** (vs 113 en v2.8.0) — +100 nouveaux tests couvrant toutes les plateformes et chemins d'erreur
-- **Exception handling** : Remplacement des `except Exception` génériques par des exceptions spécifiques (`KeyError`, `TypeError`, `ValueError`) dans `api/methods.py`
-- **Documentation des statistic IDs** : Clarification des IDs injectés pour la traçabilité et l'intégration Energy Dashboard
-- **Type hints améliorés** — ~80% de couverture sur les méthodes critiques
-- **CI/CD GitHub Actions** : Tests automatisés sur Python 3.9–3.12 à chaque push et pull request
-- **Pre-commit hooks** : `black`, `isort`, `flake8`, validation YAML/JSON, détection de clés privées
-- **Manifest.json** : Ajout du champ `homeassistant: "2024.4.0"` pour clarifier les dépendances
-- **Aucun dead code** — code audit effectué, zéro imports inutilisés
-- **Aucun breaking change** — upgrade transparent depuis v2.8.0
-
-### ⭐ Certification Gold Home Assistant (v2.8.0)
-- **Quality Scale Gold** : Intégration certifiée conforme aux critères Gold de Home Assistant
-- **Flux Configuration Avancés** : Réauthentification automatique + reconfiguration des identifiants sans suppression
-- **Gestion d'Erreurs Pro** : Services qui lèvent `HomeAssistantError` / `ServiceValidationError` pour une meilleure traçabilité
-- **Icons & Exceptions Traduites** : `icons.json` + traductions multilingues des messages d'erreur
-- **Entités Catégorisées** : Capteurs diagnostiques (tendance, prédictions, alertes) masqués par défaut, `PARALLEL_UPDATES = 0`
-- **Documentation Gold** : 6 nouvelles sections — mise à jour données, appareils supportés, limitations, dépannage, cas d'usage, exemples
-- **Tests Complets** : 113 tests pytest + validation CI/CD (GitHub Actions)
-- **Aucun breaking change** — upgrade transparent depuis v2.7.0
-
-### 🏗️ Refonte Architecturale & Audit HA (v2.7.0)
-- **Architecture Modulaire** : `sensor.py` (1800 lignes) découpé en 9 modules spécialisés dans `sensors/` pour une meilleure maintenabilité
-- **Suite de Tests Complète** : 35 tests pytest — flux de config, coordinateur, logique métier
-- **Audit HA Complet** : Corrections de cycle de vie des entités (`CoordinatorEntity`), types calendrier (`date` objects), clés de services (`selector`)
-- **Corrections Critiques** : Bug bouton facture (clé hardcodée), `switch.py`/`calendar.py` (`super().__init__()`), fonctions `async_` erronées dans `repairs.py`
-- **Nettoyage** : Imports morts, dépendance `tenacity` fantôme, dossier `api/` abandonné, screenshots (257 Ko) déplacés vers `docs/`
-- **Aucun breaking change** — migration transparente depuis v2.6.0
-
-### 📦 Téléchargement Facture & Calendrier Enrichi (v2.6.0)
-- **Service `download_latest_invoice`** : Téléchargement PDF de la dernière facture avec normalisation robuste des réponses API
-- **Bouton Facture** : Entité bouton dans l'interface HA pour déclencher le téléchargement en un clic
-- **Calendrier Enrichi** : Interventions terrain planifiées et interruptions réseau (travaux/coupures) intégrées
-- **Mode Vacances (Switch)** : Surveillance renforcée persistante avec alerte sur toute consommation
-
-### 🚀 Hardening & Features Pack (v2.5.0)
-- **Hardening API 2026** : Parsing ultra-robuste des volumes journaliers (support multi-clés et structures API variées).
-- **Consommation Moyenne (L/j)** : Nouveau capteur glissant en **Litres** pour une vision plus concrète du quotidien.
-- **Capteur de Compatibilité** : Détection automatique Téléo vs Standard pour clarifier la disponibilité des données.
-- **Bouton Facture Direct** : Téléchargez votre dernière facture PDF en un clic depuis l'interface HA.
-- **Qualité de l'Eau Open Data** : Dureté, Nitrates et Chlore via les données de la Métropole de Lyon, avec alertes sur les seuils sanitaires. Renseignez votre commune dans les options pour filtrer les mesures (sinon, première mesure disponible du réseau — voir l'attribut `commune`).
-- **Consommation d'Hier** : Suivez votre volume consommé la veille directement en Litres.
-- **Index Journalier (Energy)** : Nouveau capteur d'index cumulé haute précision, idéal pour le panneau Énergie de HA.
-- **Courbe de Charge Horaire** : Visualisez votre consommation heure par heure (compteurs Téléo compatibles).
-- **Stabilité Totale** : Mise en place de tests de non-régression et correction du bug de calcul de l'économie vs N-1.
-- **Correction Bug Économie** : Correction de la formule de calcul du capteur d'économie qui comparait un mois à une année entière (désormais : 12 mois vs 12 mois).
-- **Fallback 30 jours** : Si l'historique journalier de 90 jours échoue, l'intégration tente automatiquement un fallback sur 30 jours pour éviter de perdre les données.
-
-### 🚀 Modernisation HA 2026 (v2.4.0)
-- **Pleine Conformité HA 2026** : Alignement total avec les standards de développement Home Assistant 2026.
-- **Internationalisation Native** : Support complet des `translation_key` pour une interface multilingue fluide.
-- **Architecture Haute Performance** : Migration vers `entry.runtime_data` et optimisation des statistiques à long terme (`StatisticMeanType`).
-- **Prêt pour HACS 2.0** : Validation rigoureuse des métadonnées pour une installation sans accroc.
+## Fonctionnalités
 
 ### 🧠 Intelligence Avancée & Coaching "Platinum"
 - **Eco-Coach (IA) 💎** : Sensor de conseil personnalisé qui analyse vos habitudes pour vous aider à réduire votre consommation quotidiennement.
@@ -172,7 +70,7 @@ Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
 ### Mode hors-ligne
 Si l'API Eau du Grand Lyon est indisponible (coupure réseau, maintenance, blocage WAF), l'intégration bascule automatiquement en **mode hors-ligne** :
 - Les sensors restent disponibles et affichent les dernières données connues
-- Le sensor **Statut API** passe à `HORS-LIGNE` avec l'horodatage du début de la panne
+- Le sensor **Statut API** affiche `Hors-ligne` (état brut `offline`) avec l'horodatage du début de la panne
 - Le cache est persistant sur disque — il survit à un redémarrage de Home Assistant
 - Dès que l'API répond à nouveau, les données sont rafraîchies et le mode hors-ligne se désactive automatiquement
 
@@ -295,7 +193,7 @@ L'intégration fonctionne avec deux types de compteurs :
 
 ## Dépannage
 
-### L'intégration affiche "HORS-LIGNE"
+### L'intégration affiche "Hors-ligne"
 
 **Cause** : L'API Eau du Grand Lyon est indisponible ou inaccessible.
 
