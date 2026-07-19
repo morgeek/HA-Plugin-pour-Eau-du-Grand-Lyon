@@ -9,6 +9,23 @@ et cette intégration adhère au [Versionnage Sémantique](https://semver.org/sp
 
 Traitement de l'intégralité des axes d'amélioration restants de l'audit et retour au niveau Gold, honnêtement mérité cette fois.
 
+### ⚠️ Changements cassants
+
+Deux catégories peuvent impacter vos **automatisations, templates et cartes existants**.
+
+**1. Valeurs d'état de capteurs (traduction ENUM).** L'état brut renvoyé par `states('sensor.xxx')` de quatre capteurs passe de textes français à des clés en minuscules (l'affichage dans l'interface reste traduit, mais la valeur testée dans les automatisations change). Mettez à jour vos comparaisons :
+
+| Capteur | Avant | Après |
+| --- | --- | --- |
+| Santé de l'intégration | `OK` / `KO` / `HORS-LIGNE` / `INCONNU` | `ok` / `error` / `offline` / `unknown` |
+| Niveau de sécheresse | `Normal` / `Vigilance` / `Crise` | `normal` / `vigilance` / `crise` |
+| Compatibilité compteur | `Téléo (Télé-relève)` / `Standard (Relève manuelle)` | `teleo` / `standard` |
+| Eco-Score | `A` … `G` / `Inconnu` | `a` … `g` / `unknown` |
+
+Exemple : `{{ states('sensor.xxx') == 'OK' }}` devient `== 'ok'`.
+
+**2. Classes de capteurs (statistiques long terme).** Les capteurs de consommation « mois précédent », « annuelle », « 7 derniers jours », « 30 derniers jours », « veille », « référence annuelle » et « prédiction conso » passent de `state_class: total` à `measurement` et perdent leur `device_class: water` (combinaison invalide). Home Assistant peut afficher un avertissement sur ces entités et réinitialiser leurs statistiques long terme. **Aucune action requise** : la consommation officielle du tableau Énergie provient des statistiques externes (`eau_grand_lyon:water_*`), qui ne sont pas impactées.
+
 ### Corrections de Bugs
 
 - **Régression agrégats multi-contrats** (`coordinator.py`) : le bloc de mise à jour de `global_data` (conso / coût / prédiction totaux) était devenu du code mort après le `raise` introduit en 3.4.0 → les capteurs globaux affichaient 0. **Fix** : agrégation réintégrée dans la boucle des contrats.

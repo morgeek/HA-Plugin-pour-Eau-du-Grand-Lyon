@@ -22,6 +22,8 @@ Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
 
 ### 🥇 Retour au Gold + durcissement (v3.4.1)
 
+> ⚠️ **Changements cassants** — Les états de 4 capteurs passent en clés minuscules (`OK`→`ok`, `Téléo (Télé-relève)`→`teleo`, `Normal`→`normal`, note `A`→`a`…) : mettez à jour les automatisations/templates qui testent ces valeurs. Plusieurs capteurs de consommation passent aussi de `state_class: total` à `measurement` (statistiques long terme réinitialisées, sans action requise). Détails et tableau de correspondance dans le [CHANGELOG](CHANGELOG.md#341---2026-07-19).
+
 - **Bugs restants corrigés** : garde d'identité en ré-auth/reconfiguration (l'`unique_id` suit le compte), `state_class` des capteurs glissants/statiques passés en `MEASUREMENT`, alerte tartre bornée sur 12 mois (fini l'alerte permanente), `get_invoice_pdf` ré-authentifie sur 401, `max_retries` borné, tâches réseau annulées sur erreur, et **correction d'une régression** où les agrégats multi-contrats (conso/coût totaux) n'étaient plus calculés.
 - **Retour au Gold, honnêtement** : services enregistrés dans `async_setup` (`action-setup`), exceptions reliées à des `translation_key` (`exception-translations`), états d'entités traduits via `device_class` ENUM (`entity-translations`), suppression des appareils obsolètes (`stale-devices`).
 - **Polish** : fuseau horaire (`dt_util.now()`), imports canoniques (`homeassistant.exceptions`), sélecteur d'entité pour le prix dynamique, libellés d'intervalle traduisibles.
