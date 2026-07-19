@@ -27,10 +27,15 @@ def _stub_homeassistant() -> None:
     ha = _make_module("homeassistant")
 
     class _HomeAssistantError(Exception):
-        """Mock HomeAssistantError."""
-        pass
+        """Mock HomeAssistantError (accepte les kwargs de traduction comme le vrai)."""
+        def __init__(self, *args, translation_domain=None, translation_key=None,
+                     translation_placeholders=None):
+            super().__init__(*args)
+            self.translation_domain = translation_domain
+            self.translation_key = translation_key
+            self.translation_placeholders = translation_placeholders
 
-    class _ServiceValidationError(Exception):
+    class _ServiceValidationError(_HomeAssistantError):
         """Mock ServiceValidationError."""
         pass
 
@@ -49,6 +54,7 @@ def _stub_homeassistant() -> None:
         "homeassistant.exceptions",
         ConfigEntryAuthFailed=_ConfigEntryAuthFailed,
         HomeAssistantError=_HomeAssistantError,
+        ServiceValidationError=_ServiceValidationError,
     )
     _make_module("homeassistant.const", EntityCategory=MagicMock(), Platform=MagicMock())
     class _ConfigEntry:
@@ -132,6 +138,18 @@ def _stub_homeassistant() -> None:
         async_delete_issue=MagicMock(),
         IssueSeverity=MagicMock(),
     )
+    class _Selector:
+        def __init__(self, config=None): self._config = config
+        def __call__(self, value): return value
+    _make_module(
+        "homeassistant.helpers.selector",
+        EntitySelector=_Selector,
+        EntitySelectorConfig=lambda **kw: dict(kw),
+        SelectSelector=_Selector,
+        SelectSelectorConfig=lambda **kw: dict(kw),
+        SelectOptionDict=lambda **kw: dict(kw),
+        SelectSelectorMode=types.SimpleNamespace(DROPDOWN="dropdown", LIST="list"),
+    )
     _make_module("homeassistant.helpers.aiohttp_client")
     class _RestoreEntity:
         async def async_get_last_state(self): return None
@@ -177,7 +195,7 @@ def _stub_homeassistant() -> None:
         def __eq__(self, other): return self.key == other
 
     class _Optional:
-        def __init__(self, key, default=None): self.key = key; self.default = default
+        def __init__(self, key, default=None, **kwargs): self.key = key; self.default = default
         def __hash__(self): return hash(self.key)
         def __eq__(self, other): return self.key == other
 

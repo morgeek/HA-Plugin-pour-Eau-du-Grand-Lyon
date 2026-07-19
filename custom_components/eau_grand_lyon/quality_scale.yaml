@@ -1,18 +1,14 @@
 rules:
   # Bronze
-  action-setup:
-    status: todo
-    comment: >-
-      Les services sont enregistrés dans async_setup_entry, pas dans
-      async_setup. À déplacer pour qu'un appel échoue proprement quand
-      l'entrée n'est pas chargée.
+  action-setup: done
   appropriate-polling: done
   brands:
-    status: todo
+    status: exempt
     comment: >-
-      Le domaine n'est pas encore fusionné dans home-assistant/brands
-      (validation HACS lancée avec ignore: brands). Dossier brand/ local
-      uniquement.
+      Intégration en dépôt personnalisé (HACS custom) : les icônes sont
+      fournies via le dossier brand/ local. La soumission à home-assistant/brands
+      n'est requise que pour le store par défaut, pas pour un install custom
+      (validation HACS lancée avec ignore: brands).
   common-modules: done
   config-flow: done
   config-flow-test-coverage: done
@@ -64,28 +60,30 @@ rules:
   entity-device-class: done
   entity-disabled-by-default: done
   entity-translations:
-    status: todo
+    status: done
     comment: >-
-      Les noms d'entités sont traduits, mais plusieurs états sont encore
-      codés en dur en français (santé OK/KO, sécheresse, coaching) sans
-      device_class ENUM + states de traduction.
-  exception-translations:
-    status: todo
-    comment: >-
-      La section exceptions de strings.json existe mais n'est reliée à aucun
-      translation_key dans le code ; les exceptions sont levées en dur.
+      Noms traduits (has_entity_name + translation_key) et états enum traduits
+      (santé, sécheresse, compatibilité, éco-score en device_class ENUM +
+      section state). Le capteur coaching reste un texte libre (contenu, non
+      énumérable).
+  exception-translations: done
   icon-translations: done
   reconfiguration-flow: done
   repair-issues: done
   stale-devices:
-    status: todo
+    status: done
     comment: >-
-      Aucun retrait des devices/entités orphelins quand un contrat disparaît
-      de l'API — un contrat clôturé laisse son device en place.
+      async_remove_config_entry_device autorise la suppression des devices
+      dont le contrat a disparu de l'API ; l'historique mensuel des contrats
+      disparus est purgé à chaque cycle.
 
   # Platinum
   async-dependency: done
   inject-websession:
     status: exempt
     comment: Provider requires CookieJar(unsafe=True) for OAuth cookie; a dedicated session is created and closed with the entry.
-  strict-typing: todo
+  strict-typing:
+    status: todo
+    comment: >-
+      Un job CI mypy (non bloquant) est en place ; le durcissement complet vers
+      le typage strict reste à faire.

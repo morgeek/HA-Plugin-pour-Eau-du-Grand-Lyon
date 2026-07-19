@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch: {}
 
 jobs:
   tests:
@@ -23,11 +24,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
-          cache-dependency-path: "pytest.ini"
+          cache-dependency-path: ".github/workflows/tests.yaml"
 
       - name: Install dependencies
         run: |
-          pip install pytest pytest-asyncio voluptuous flake8 black
+          pip install pytest pytest-asyncio pytest-cov voluptuous flake8 black
 
       - name: Lint with flake8
         run: |
@@ -37,8 +38,33 @@ jobs:
         run: |
           black --check custom_components/eau_grand_lyon/ --line-length=120
 
-      - name: Run tests
-        run: pytest tests/ -v --tb=short
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ -v --tb=short \
+            --cov=custom_components/eau_grand_lyon \
+            --cov-report=term-missing \
+            --cov-fail-under=60
+
+  typing:
+    name: Typage (mypy)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install mypy voluptuous
+
+      # Non bloquant : le typage strict (Platinum strict-typing) est amélioré
+      # progressivement. Le job donne un retour sans faire échouer le build.
+      - name: Run mypy
+        continue-on-error: true
+        run: mypy custom_components/eau_grand_lyon/
 
   validate:
     name: Validation HA (hassfest)
@@ -65,3 +91,23 @@ jobs:
           # which is only needed for the official HACS default store, not for
           # custom-repository installs. Ignore it until the brands PR is merged.
           ignore: brands
+
+  smoke:
+    name: Smoke tests (vrai HA)
+    # Lourd (installe un vrai Home Assistant) : uniquement sur déclenchement manuel.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install pytest pytest-asyncio pytest-homeassistant-custom-component
+
+      - name: Run smoke tests
+        run: pytest smoke_tests/ -v --tb=short

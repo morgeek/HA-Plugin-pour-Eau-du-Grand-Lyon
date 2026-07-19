@@ -2,7 +2,7 @@
 import pytest
 import voluptuous as vol
 
-from custom_components.eau_grand_lyon.config_flow import _is_valid_email, _INTERVAL_OPTIONS
+from custom_components.eau_grand_lyon.config_flow import _is_valid_email, _INTERVAL_VALUES
 
 
 class TestIsValidEmail:
@@ -39,26 +39,12 @@ class TestIsValidEmail:
 
 # ── Intervalle de mise à jour — vol.Coerce(int) ───────────────────────────────
 
-class TestIntervalSchema:
-    """Couvre le fix vol.Coerce(int) — HA soumet des strings depuis le formulaire."""
+class TestIntervalValues:
+    """L'intervalle est désormais un SelectSelector : valeurs (heures) en strings."""
 
-    _schema = vol.All(vol.Coerce(int), vol.In(_INTERVAL_OPTIONS))
+    def test_valeurs_attendues(self):
+        assert _INTERVAL_VALUES == ["6", "12", "24", "48"]
 
-    def test_string_24_accepte(self):
-        """HA envoie "24" sous forme de string — doit être converti et validé."""
-        assert self._schema("24") == 24
-
-    def test_int_24_accepte(self):
-        assert self._schema(24) == 24
-
-    def test_toutes_les_valeurs_valides(self):
-        for v in _INTERVAL_OPTIONS:
-            assert self._schema(str(v)) == v
-
-    def test_valeur_non_listee_rejete(self):
-        with pytest.raises((vol.Invalid, ValueError)):
-            self._schema("7")
-
-    def test_string_vide_rejete(self):
-        with pytest.raises((vol.Invalid, ValueError)):
-            self._schema("")
+    def test_toutes_convertibles_en_int(self):
+        # Le coordinator fait int(...) sur la valeur stockée (chaîne du formulaire).
+        assert [int(v) for v in _INTERVAL_VALUES] == [6, 12, 24, 48]

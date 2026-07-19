@@ -604,21 +604,39 @@ class EauGrandLyonApi:
         correlation_id = _new_correlation_id()
         await self._ensure_auth(correlation_id=correlation_id)
         url = f"{PRODUITS_BASE}/factures/{invoice_ref}/document"
-        headers = {"Authorization": f"Bearer {self._auth.access_token}"}
         start = time.perf_counter()
-        try:
+
+        async def _download() -> tuple[int, bytes]:
+            headers = {"Authorization": f"Bearer {self._auth.access_token}"}
             async with self._session.get(url, headers=headers) as resp:
-                _log_http_event(
-                    phase="invoice_pdf",
-                    correlation_id=correlation_id,
-                    method="GET",
-                    url=url,
-                    duration_ms=(time.perf_counter() - start) * 1000,
-                    status=resp.status,
-                )
-                if resp.status != 200:
-                    raise NetworkError(f"Erreur telechargement PDF ({resp.status})")
-                return await resp.read()
+                status = resp.status
+                body = await resp.read() if status == 200 else b""
+                return status, body
+
+        try:
+            status, body = await _download()
+            if status == 401:
+                # Token expiré : ré-authentifier puis réessayer (comme _request).
+                _LOGGER.debug("invoice_pdf_reauth cid=%s ref=%s", correlation_id, invoice_ref)
+                await self._auth.authenticate(correlation_id=correlation_id)
+                status, body = await _download()
+            _log_http_event(
+                phase="invoice_pdf",
+                correlation_id=correlation_id,
+                method="GET",
+                url=url,
+                duration_ms=(time.perf_counter() - start) * 1000,
+                status=status,
+            )
+            if status == 403:
+                raise WafBlockedError(f"WAF 403 sur telechargement PDF {invoice_ref}.")
+            if status != 200:
+                raise NetworkError(f"Erreur telechargement PDF ({status})")
+            return body
+        except (WafBlockedError, AuthenticationError):
+            raise
+        except (TimeoutError, asyncio.TimeoutError) as err:
+            raise NetworkError(f"Timeout telechargement PDF: {err}") from err
         except aiohttp.ClientError as err:
             _log_http_event(
                 phase="invoice_pdf",

@@ -16,7 +16,8 @@ from .base import _EauGrandLyonGlobalBase
 class EauGrandLyonAlertesSensor(_EauGrandLyonGlobalBase):
     """Nombre d'alertes actives sur l'ensemble des contrats."""
 
-    _attr_state_class = SensorStateClass.TOTAL
+    # Un compteur d'alertes courant est une MEASUREMENT, pas un total cumulatif.
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
     _attr_translation_key = "alertes"
@@ -69,6 +70,8 @@ class EauGrandLyonHealthSensor(_EauGrandLyonGlobalBase):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
     _attr_translation_key = "health"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["ok", "error", "offline", "unknown"]
 
     def __init__(self, coordinator: EauGrandLyonCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator, entry)
@@ -78,12 +81,12 @@ class EauGrandLyonHealthSensor(_EauGrandLyonGlobalBase):
     def native_value(self) -> str:
         data = self.coordinator.data or {}
         if data.get("offline_mode"):
-            return "HORS-LIGNE"
+            return "offline"
         if data.get("last_error"):
-            return "KO"
+            return "error"
         if data.get("last_update_success_time"):
-            return "OK"
-        return "INCONNU"
+            return "ok"
+        return "unknown"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -181,6 +184,8 @@ class EauGrandLyonDroughtSensor(_EauGrandLyonGlobalBase):
     """Indicateur saisonnier de risque sécheresse (heuristique, pas de donnée préfectorale)."""
 
     _attr_translation_key = "drought"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["normal", "vigilance", "crise"]
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
@@ -188,7 +193,7 @@ class EauGrandLyonDroughtSensor(_EauGrandLyonGlobalBase):
 
     @property
     def native_value(self) -> str:
-        return (self.coordinator.data or {}).get("drought_level", "Normal")
+        return (self.coordinator.data or {}).get("drought_level", "normal")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -203,9 +208,9 @@ class EauGrandLyonDroughtSensor(_EauGrandLyonGlobalBase):
     @property
     def icon(self) -> str:
         val = self.native_value
-        if val == "Normal":
+        if val == "normal":
             return "mdi:water-check"
-        if val == "Crise":
+        if val == "crise":
             return "mdi:water-alert"
         return "mdi:water-remove"
 

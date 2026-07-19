@@ -56,15 +56,15 @@ class TestTrendSensor:
 class TestEcoScoreSensor:
     def test_grade_a(self):
         s = _make_sensor(EauGrandLyonEcoScoreSensor, {"eco_score_grade": "A"})
-        assert s.native_value == "A"
+        assert s.native_value == "a"
 
     def test_grade_g(self):
         s = _make_sensor(EauGrandLyonEcoScoreSensor, {"eco_score_grade": "G"})
-        assert s.native_value == "G"
+        assert s.native_value == "g"
 
     def test_missing_returns_default(self):
         s = _make_sensor(EauGrandLyonEcoScoreSensor, {})
-        assert s.native_value == "Inconnu"
+        assert s.native_value == "unknown"
 
     def test_extra_attributes_m3_per_person(self):
         s = _make_sensor(EauGrandLyonEcoScoreSensor, {

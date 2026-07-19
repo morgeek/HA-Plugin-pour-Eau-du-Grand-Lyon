@@ -2,11 +2,11 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![Tests & Validation](https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/actions/workflows/tests.yaml/badge.svg?branch=main)](https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/actions/workflows/tests.yaml)
-[![Quality Scale - Silver](https://img.shields.io/badge/Quality%20Scale-Silver-9E9E9E)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
+[![Quality Scale - Gold](https://img.shields.io/badge/Quality%20Scale-Gold-4CAF50)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
 
 Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](https://www.home-assistant.io/) qui fournit des capteurs pour les données de consommation d'eau du service Eau du Grand Lyon.
 
-> 🥈 **Quality Scale : Silver** — Intégration robuste au quotidien : gestion d'erreurs et mode hors-ligne, flux de configuration / options / ré-authentification, traductions FR/EN, documentation détaillée et large couverture de tests. Plusieurs critères Gold restent en cours (voir [`quality_scale.yaml`](custom_components/eau_grand_lyon/quality_scale.yaml)) : traduction des états d'entités, `exception-translations`, nettoyage des appareils obsolètes et enregistrement des services via `async_setup`.
+> 🥇 **Quality Scale : Gold** — Gestion d'erreurs robuste avec mode hors-ligne, flux de configuration / options / ré-authentification / reconfiguration, services enregistrés dans `async_setup`, exceptions et états d'entités traduits (FR/EN), suppression des appareils obsolètes, documentation détaillée et suite de tests avec seuil de couverture. Détail des critères dans [`quality_scale.yaml`](custom_components/eau_grand_lyon/quality_scale.yaml) (`strict-typing` Platinum encore en cours).
 
 ![alt text](https://raw.githubusercontent.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/main/docs/screenshots/HA-Eau-Grand-Lyon.png)
 
@@ -19,6 +19,15 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
 ## Historique des versions
 
 Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
+
+### 🥇 Retour au Gold + durcissement (v3.4.1)
+
+> ⚠️ **Changements cassants** — Les états de 4 capteurs passent en clés minuscules (`OK`→`ok`, `Téléo (Télé-relève)`→`teleo`, `Normal`→`normal`, note `A`→`a`…) : mettez à jour les automatisations/templates qui testent ces valeurs. Plusieurs capteurs de consommation passent aussi de `state_class: total` à `measurement` (statistiques long terme réinitialisées, sans action requise). Détails et tableau de correspondance dans le [CHANGELOG](CHANGELOG.md#341---2026-07-19).
+
+- **Bugs restants corrigés** : garde d'identité en ré-auth/reconfiguration (l'`unique_id` suit le compte), `state_class` des capteurs glissants/statiques passés en `MEASUREMENT`, alerte tartre bornée sur 12 mois (fini l'alerte permanente), `get_invoice_pdf` ré-authentifie sur 401, `max_retries` borné, tâches réseau annulées sur erreur, et **correction d'une régression** où les agrégats multi-contrats (conso/coût totaux) n'étaient plus calculés.
+- **Retour au Gold, honnêtement** : services enregistrés dans `async_setup` (`action-setup`), exceptions reliées à des `translation_key` (`exception-translations`), états d'entités traduits via `device_class` ENUM (`entity-translations`), suppression des appareils obsolètes (`stale-devices`).
+- **Polish** : fuseau horaire (`dt_util.now()`), imports canoniques (`homeassistant.exceptions`), sélecteur d'entité pour le prix dynamique, libellés d'intervalle traduisibles.
+- **Tests & CI** : couverture mesurée avec seuil (`pytest-cov`), job mypy (non bloquant), smoke tests exécutables à la demande, nouveaux tests (migration, happy-path config flow, appareils obsolètes, ré-auth facture).
 
 ### 🛡️ Robustesse réseau & statistiques — Audit (v3.4.0)
 

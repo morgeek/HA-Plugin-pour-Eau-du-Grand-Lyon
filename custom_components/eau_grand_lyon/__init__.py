@@ -9,12 +9,8 @@ from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import (
-    HomeAssistant,
-    HomeAssistantError,
-    ServiceCall,
-    ServiceValidationError,
-)
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
@@ -39,11 +35,14 @@ PLATFORMS: list[Platform] = [
     Platform.CALENDAR,
 ]
 
-SERVICE_NAMES = ("clear_cache", "update_now", "export_data", "download_latest_invoice")
-
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the integration (no YAML)."""
+    """Set up the integration (no YAML).
+
+    Les services sont enregistrés ici (et non dans async_setup_entry) pour qu'ils
+    existent même sans entrée chargée — critère Gold `action-setup`.
+    """
+    _async_setup_services(hass)
     return True
 
 
@@ -73,8 +72,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    _async_setup_services(hass)
-
     entry.async_on_unload(entry.add_update_listener(_async_update_options))
     return True
 
@@ -90,10 +87,12 @@ def _iter_coordinators(hass: HomeAssistant):
 def _validate_write_path(hass: HomeAssistant, path: str) -> None:
     """Refuse les chemins vides ou hors des répertoires autorisés."""
     if not isinstance(path, str) or not path.strip():
-        raise ServiceValidationError("path must be a non-empty string")
+        raise ServiceValidationError(translation_domain=DOMAIN, translation_key="invalid_path")
     if not hass.config.is_allowed_path(path):
         raise ServiceValidationError(
-            f"Path '{path}' is not allowed. Add its directory to " "'allowlist_external_dirs' in configuration.yaml."
+            translation_domain=DOMAIN,
+            translation_key="path_not_allowed",
+            translation_placeholders={"path": path},
         )
 
 
@@ -148,10 +147,12 @@ def _async_setup_services(hass: HomeAssistant) -> None:
 
         try:
             await hass.async_add_executor_job(_do_export)
-        except PermissionError as err:
-            raise HomeAssistantError(f"Permission denied writing to {export_path}") from err
-        except OSError as err:
-            raise HomeAssistantError(f"Failed to export data: {err}") from err
+        except (PermissionError, OSError) as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="export_failed",
+                translation_placeholders={"reason": str(err)},
+            ) from err
 
     async def async_handle_download_invoice(call: ServiceCall) -> None:
         target_path = call.data.get("path", "/config/www/eau_grand_lyon/latest_invoice.pdf")
@@ -179,7 +180,11 @@ def _async_setup_services(hass: HomeAssistant) -> None:
                     ValueError,
                     KeyError,
                 ) as err:
-                    raise HomeAssistantError(f"Failed to download invoice {ref}: {err}") from err
+                    raise HomeAssistantError(
+                        translation_domain=DOMAIN,
+                        translation_key="download_failed",
+                        translation_placeholders={"reason": str(err)},
+                    ) from err
 
                 def _save_pdf() -> None:
                     os.makedirs(os.path.dirname(target_path), exist_ok=True)
@@ -188,10 +193,12 @@ def _async_setup_services(hass: HomeAssistant) -> None:
 
                 try:
                     await hass.async_add_executor_job(_save_pdf)
-                except PermissionError as err:
-                    raise HomeAssistantError(f"Permission denied writing to {target_path}") from err
-                except OSError as err:
-                    raise HomeAssistantError(f"Failed to save invoice: {err}") from err
+                except (PermissionError, OSError) as err:
+                    raise HomeAssistantError(
+                        translation_domain=DOMAIN,
+                        translation_key="download_failed",
+                        translation_placeholders={"reason": str(err)},
+                    ) from err
 
                 www_root = hass.config.path("www")
                 try:
@@ -214,9 +221,7 @@ def _async_setup_services(hass: HomeAssistant) -> None:
                     )
                 return
 
-        if contract_ref_filter:
-            raise HomeAssistantError(f"No invoices found for contract {contract_ref_filter}")
-        raise HomeAssistantError("No invoices found")
+        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="no_invoices")
 
     hass.services.async_register(DOMAIN, "clear_cache", async_handle_clear_cache)
     hass.services.async_register(DOMAIN, "update_now", async_handle_update_now)
@@ -224,14 +229,32 @@ def _async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, "download_latest_invoice", async_handle_download_invoice)
 
 
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    config_entry: EauGrandLyonConfigEntry,
+    device_entry,
+) -> bool:
+    """Autorise la suppression d'un device qui ne correspond plus à un contrat actif.
+
+    Home Assistant propose alors un bouton de suppression pour les compteurs
+    dont le contrat a disparu de l'API (critère Gold `stale-devices`).
+    """
+    coordinator = getattr(config_entry, "runtime_data", None)
+    valid_ids = {(DOMAIN, config_entry.entry_id)}
+    if coordinator is not None and coordinator.data:
+        for ref in coordinator.data.get("contracts", {}):
+            valid_ids.add((DOMAIN, f"{config_entry.entry_id}_{ref}"))
+    return not any(identifier in valid_ids for identifier in device_entry.identifiers)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> bool:
-    """Unload a config entry."""
+    """Unload a config entry.
+
+    Les services restent enregistrés (cf. async_setup) pour toute la durée de vie
+    de l'intégration ; Home Assistant les retire au déchargement du composant.
+    """
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         await entry.runtime_data.async_close()
-        if not hass.config_entries.async_entries(DOMAIN):
-            for service_name in SERVICE_NAMES:
-                if hass.services.has_service(DOMAIN, service_name):
-                    hass.services.async_remove(DOMAIN, service_name)
 
     return unload_ok
 

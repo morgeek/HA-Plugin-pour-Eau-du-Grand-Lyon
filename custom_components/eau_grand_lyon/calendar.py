@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .coordinator import EauGrandLyonCoordinator
 from .device import account_device_info
@@ -46,7 +47,7 @@ class EauGrandLyonCalendar(CoordinatorEntity[EauGrandLyonCoordinator], CalendarE
     @property
     def event(self) -> CalendarEvent | None:
         """Prochain événement à venir (calculé depuis les données du coordinator)."""
-        today = date.today()
+        today = dt_util.now().date()
         upcoming = [e for e in self._build_events() if e.end > today]
         return min(upcoming, key=lambda e: e.start) if upcoming else None
 

@@ -183,16 +183,16 @@ class TestCompatibilitySensor:
     def test_teleo(self):
         s = _make_sensor(EauGrandLyonCompatibilitySensor,
                          {"teleo_compatible": True})
-        assert "Téléo" in s.native_value
+        assert s.native_value == "teleo"
 
     def test_standard(self):
         s = _make_sensor(EauGrandLyonCompatibilitySensor,
                          {"teleo_compatible": False})
-        assert "Standard" in s.native_value
+        assert s.native_value == "standard"
 
     def test_missing_defaults_to_standard(self):
         s = _make_sensor(EauGrandLyonCompatibilitySensor, {})
-        assert "Standard" in s.native_value
+        assert s.native_value == "standard"
 
     def test_disabled_by_default(self):
         assert EauGrandLyonCompatibilitySensor._attr_entity_registry_enabled_default is False
