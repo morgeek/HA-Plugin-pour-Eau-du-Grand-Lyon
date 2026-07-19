@@ -10,6 +10,7 @@ import aiohttp
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers import selector
 
 from .api import (
     ApiError,
@@ -88,12 +89,9 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     }
 )
 
-_INTERVAL_OPTIONS = {
-    6: "Toutes les 6 heures",
-    12: "Toutes les 12 heures",
-    24: "Une fois par jour (recommandé)",
-    48: "Tous les 2 jours",
-}
+# Valeurs (en heures) proposées pour l'intervalle. Les libellés sont traduits
+# côté frontend via la section `selector.update_interval` de strings.json.
+_INTERVAL_VALUES = ["6", "12", "24", "48"]
 
 
 class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -132,8 +130,13 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 errors = await _authenticate_and_handle_errors(email, password, " (reauth)")
             if not errors:
+                # Garde l'unique_id aligné sur le compte : sans ça, un changement
+                # d'email laissait l'unique_id sur l'ancien compte et cassait la
+                # détection de doublon (already_configured) pour le nouveau.
+                await self.async_set_unique_id(email.lower())
                 self.hass.config_entries.async_update_entry(
                     config_entry,
+                    unique_id=email.lower(),
                     data={
                         **config_entry.data,
                         CONF_EMAIL: email,
@@ -173,8 +176,12 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 errors = await _authenticate_and_handle_errors(email, password, " (reconfigure)")
             if not errors:
+                # Aligne l'unique_id sur le compte (cf. reauth) pour préserver la
+                # détection de doublon si l'email change.
+                await self.async_set_unique_id(email.lower())
                 self.hass.config_entries.async_update_entry(
                     config_entry,
+                    unique_id=email.lower(),
                     data={
                         **config_entry.data,
                         CONF_EMAIL: email,
@@ -268,8 +275,14 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
             {
                 vol.Optional(
                     CONF_UPDATE_INTERVAL_HOURS,
-                    default=current_interval,
-                ): vol.All(vol.Coerce(int), vol.In(_INTERVAL_OPTIONS)),
+                    default=str(current_interval),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=_INTERVAL_VALUES,
+                        translation_key="update_interval",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
                 vol.Optional(
                     CONF_TARIF_M3,
                     default=current_tarif,
@@ -277,7 +290,7 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_PRICE_ENTITY,
                     default=current_price_entity,
-                ): str,
+                ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor", "input_number"])),
                 vol.Optional(
                     CONF_EXPERIMENTAL,
                     default=current_experimental,

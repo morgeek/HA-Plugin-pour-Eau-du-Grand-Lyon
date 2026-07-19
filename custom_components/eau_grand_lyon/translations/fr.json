@@ -1,4 +1,14 @@
 {
+  "selector": {
+    "update_interval": {
+      "options": {
+        "6": "Toutes les 6 heures",
+        "12": "Toutes les 12 heures",
+        "24": "Une fois par jour (recommandé)",
+        "48": "Tous les 2 jours"
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {
@@ -65,6 +75,9 @@
     },
     "invalid_path": {
       "message": "Chemin invalide. Le chemin doit être une chaîne de caractères non vide."
+    },
+    "path_not_allowed": {
+      "message": "Chemin '{path}' non autorisé. Ajoutez son répertoire à 'allowlist_external_dirs' dans configuration.yaml."
     },
     "no_invoices": {
       "message": "Aucune facture trouvée pour le(s) contrat(s) configuré(s)."
@@ -169,7 +182,17 @@
         "name": "Prédiction coût mois"
       },
       "eco_score": {
-        "name": "Eco-Score (m³/pers/mois)"
+        "name": "Eco-Score (m³/pers/mois)",
+        "state": {
+          "a": "A",
+          "b": "B",
+          "c": "C",
+          "d": "D",
+          "e": "E",
+          "f": "F",
+          "g": "G",
+          "unknown": "Inconnu"
+        }
       },
       "co2_footprint": {
         "name": "Empreinte CO2"
@@ -184,7 +207,13 @@
         "name": "Dernière mise à jour"
       },
       "health": {
-        "name": "Santé de l'intégration"
+        "name": "Santé de l'intégration",
+        "state": {
+          "ok": "Opérationnel",
+          "error": "Erreur",
+          "offline": "Hors-ligne",
+          "unknown": "Inconnu"
+        }
       },
       "global_conso": {
         "name": "Consommation totale"
@@ -196,7 +225,12 @@
         "name": "Prédiction coût total"
       },
       "drought": {
-        "name": "Niveau de sécheresse"
+        "name": "Niveau de sécheresse",
+        "state": {
+          "normal": "Normal",
+          "vigilance": "Vigilance",
+          "crise": "Crise"
+        }
       },
       "limescale": {
         "name": "Calcaire cumulé"
@@ -232,7 +266,11 @@
         "name": "Prochaine interruption de service"
       },
       "compatibilite_compteur": {
-        "name": "Compatibilité compteur"
+        "name": "Compatibilité compteur",
+        "state": {
+          "teleo": "Téléo (télé-relève)",
+          "standard": "Standard (relève manuelle)"
+        }
       },
       "index_journalier": {
         "name": "Index journalier (Téléo)"

@@ -5,6 +5,42 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.1] - 2026-07-19
+
+Traitement de l'intégralité des axes d'amélioration restants de l'audit et retour au niveau Gold, honnêtement mérité cette fois.
+
+### Corrections de Bugs
+
+- **Régression agrégats multi-contrats** (`coordinator.py`) : le bloc de mise à jour de `global_data` (conso / coût / prédiction totaux) était devenu du code mort après le `raise` introduit en 3.4.0 → les capteurs globaux affichaient 0. **Fix** : agrégation réintégrée dans la boucle des contrats.
+- **Garde d'identité en ré-auth / reconfiguration** (`config_flow.py`) : un changement d'email laissait l'`unique_id` sur l'ancien compte, cassant la détection de doublon. **Fix** : `async_set_unique_id` + mise à jour de l'`unique_id` de l'entrée.
+- **`state_class` incohérents** (`sensors/`) : conso 7j/30j/annuelle, référence annuelle, veille, prédictions et compteur d'alertes passent de `TOTAL` à `MEASUREMENT` (valeurs glissantes/statiques, sans device_class WATER incompatible).
+- **Alerte tartre permanente** (`coordinator.py`) : basée sur l'index absolu du compteur (cumul depuis la pose), l'alerte était quasi toujours active. **Fix** : calcul borné sur les 12 derniers mois.
+- **`get_invoice_pdf`** (`api/client.py`) : ré-authentifie sur 401 (token expiré), distingue le 403 WAF, gère les timeouts.
+- **`max_retries` non borné** (`coordinator.py`) : une option à 0 donnait `range(0)` → aucune tentative. **Fix** : `max(1, ...)` + try/except.
+- **Tâches réseau orphelines** (`coordinator.py`) : les tâches en vol sont annulées sur les chemins d'erreur (fin des warnings « Task exception was never retrieved » et des requêtes fantômes).
+- **Fuseau horaire** : `date.today()` → `dt_util.now()` (`calendar.py`, `binary_sensor.py`).
+
+### Qualité — retour au Gold
+
+- **`action-setup`** : services enregistrés dans `async_setup` (et non `async_setup_entry`).
+- **`exception-translations`** : exceptions de service reliées à des `translation_key` (`export_failed`, `download_failed`, `invalid_path`, `path_not_allowed`, `no_invoices`).
+- **`entity-translations`** : états traduits via `device_class` ENUM pour santé, sécheresse, compatibilité compteur et éco-score (+ sections `state` FR/EN).
+- **`stale-devices`** : `async_remove_config_entry_device` permet de supprimer un compteur dont le contrat a disparu ; l'historique mensuel des contrats disparus est purgé.
+- **`brands`** : marqué `exempt` (dépôt custom, icônes via `brand/` local — soumission au store par défaut non requise).
+- **`quality_scale` : Silver → Gold** (`manifest.json` + `quality_scale.yaml`).
+
+### Polish
+
+- Imports canoniques : `HomeAssistantError` / `ServiceValidationError` depuis `homeassistant.exceptions`.
+- Options : `CONF_PRICE_ENTITY` en `EntitySelector` (sensor / input_number) ; libellés d'intervalle traduisibles via un `SelectSelector`.
+
+### Tests & CI
+
+- **Couverture** : `pytest-cov` avec seuil `--cov-fail-under=60` (couverture actuelle ~63 %).
+- **mypy** : configuration `mypy.ini` + job CI (non bloquant ; `strict-typing` Platinum reste à durcir).
+- **Smoke tests** : job CI `workflow_dispatch` (exécution manuelle contre un vrai Home Assistant).
+- **Nouveaux tests** : migration d'entrée v1→v2, happy-path de `async_step_user`, suppression d'appareils obsolètes, ré-authentification du téléchargement de facture, `translation_key` des exceptions, ancrage des statistiques.
+
 ## [3.4.0] - 2026-07-19
 
 Audit de robustesse : correction de la chaîne de gestion d'erreurs (qui court-circuitait le mode hors-ligne), de deux URLs invalides, et fiabilisation des statistiques long terme. Quality Scale ajusté de Gold à Silver pour refléter la réalité.

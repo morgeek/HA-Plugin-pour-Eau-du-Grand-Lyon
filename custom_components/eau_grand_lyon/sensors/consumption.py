@@ -155,8 +155,9 @@ class EauGrandLyonConsommationSensor(_EauGrandLyonBase):
 class EauGrandLyonConsommationAnnuelleSensor(_EauGrandLyonBase):
     """Consommation totale des 12 derniers mois (m³)."""
 
-    _attr_device_class = SensorDeviceClass.WATER
-    _attr_state_class = SensorStateClass.TOTAL
+    # Fenêtre glissante / valeur statique : MEASUREMENT, sans device_class WATER
+    # (WATER interdit MEASUREMENT ; TOTAL produisait des stats long terme fausses).
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "m³"
     _attr_translation_key = "conso_annuelle"
     _attr_suggested_display_precision = 1
@@ -195,8 +196,9 @@ class EauGrandLyonConsommationAnnuelleSensor(_EauGrandLyonBase):
 class EauGrandLyonYesterdaySensor(_EauGrandLyonDailyBase):
     """Consommation de la veille (dernier jour disponible) en Litres."""
 
-    _attr_device_class = SensorDeviceClass.WATER
-    _attr_state_class = SensorStateClass.TOTAL
+    # Valeur d'un jour révolu : MEASUREMENT, sans device_class WATER
+    # (WATER interdit MEASUREMENT ; TOTAL produisait des stats long terme fausses).
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "L"
     _attr_translation_key = "conso_hier"
     _attr_suggested_display_precision = 0
@@ -230,8 +232,9 @@ class EauGrandLyonYesterdaySensor(_EauGrandLyonDailyBase):
 class EauGrandLyonConso7JSensor(_EauGrandLyonDailyBase):
     """Consommation sur les 7 derniers jours (compteur Téléo/TIC uniquement)."""
 
-    _attr_device_class = SensorDeviceClass.WATER
-    _attr_state_class = SensorStateClass.TOTAL
+    # Fenêtre glissante / valeur statique : MEASUREMENT, sans device_class WATER
+    # (WATER interdit MEASUREMENT ; TOTAL produisait des stats long terme fausses).
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "m³"
     _attr_translation_key = "conso_7j"
     _attr_suggested_display_precision = 2
@@ -259,8 +262,9 @@ class EauGrandLyonConso7JSensor(_EauGrandLyonDailyBase):
 class EauGrandLyonConso30JSensor(_EauGrandLyonDailyBase):
     """Consommation sur les 30 derniers jours (compteur Téléo/TIC uniquement)."""
 
-    _attr_device_class = SensorDeviceClass.WATER
-    _attr_state_class = SensorStateClass.TOTAL
+    # Fenêtre glissante / valeur statique : MEASUREMENT, sans device_class WATER
+    # (WATER interdit MEASUREMENT ; TOTAL produisait des stats long terme fausses).
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "m³"
     _attr_translation_key = "conso_30j"
     _attr_suggested_display_precision = 2
@@ -317,6 +321,8 @@ class EauGrandLyonCompatibilitySensor(_EauGrandLyonBase):
     _attr_translation_key = "compatibilite_compteur"
     _attr_entity_registry_enabled_default = False
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["teleo", "standard"]
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -324,9 +330,7 @@ class EauGrandLyonCompatibilitySensor(_EauGrandLyonBase):
 
     @property
     def native_value(self) -> str:
-        if self._contract.get("teleo_compatible"):
-            return "Téléo (Télé-relève)"
-        return "Standard (Relève manuelle)"
+        return "teleo" if self._contract.get("teleo_compatible") else "standard"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -340,8 +344,9 @@ class EauGrandLyonCompatibilitySensor(_EauGrandLyonBase):
 class EauGrandLyonConsoAnnuelleRefSensor(_EauGrandLyonBase):
     """Consommation annuelle de référence du profil contrat (m³/an)."""
 
-    _attr_device_class = SensorDeviceClass.WATER
-    _attr_state_class = SensorStateClass.TOTAL
+    # Fenêtre glissante / valeur statique : MEASUREMENT, sans device_class WATER
+    # (WATER interdit MEASUREMENT ; TOTAL produisait des stats long terme fausses).
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "m³"
     _attr_translation_key = "conso_annuelle_ref"
     _attr_suggested_display_precision = 0

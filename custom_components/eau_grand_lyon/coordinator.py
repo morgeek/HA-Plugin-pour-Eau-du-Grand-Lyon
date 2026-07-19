@@ -200,7 +200,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         )
         self._entry = entry
         self._prev_nb_alertes = 0
-        self._max_retries = int(options.get(CONF_MAX_RETRIES, DEFAULT_MAX_RETRIES))
+        try:
+            # max(1, ...) : une option à 0 donnerait range(0) → aucune tentative.
+            self._max_retries = max(1, int(options.get(CONF_MAX_RETRIES, DEFAULT_MAX_RETRIES)))
+        except (ValueError, TypeError):
+            self._max_retries = DEFAULT_MAX_RETRIES
         self.vacation_mode = False
 
         # Mode expérimental — lu depuis les options
@@ -555,99 +559,117 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         water_quality_task = asyncio.create_task(cycle_api.get_water_quality(commune))
         interventions_task = asyncio.create_task(cycle_api.get_interventions())
 
-        tarif_m3 = self._calculate_tarif_m3()
-
-        factures_raw: list[dict] = []
-        if experimental:
-            factures_raw = await cycle_api.get_factures()
-
-        factures = EauGrandLyonApi.format_factures(factures_raw) if factures_raw else []
-
-        contracts_data: dict[str, dict] = {}
-        global_data = {
-            "total_conso_courant": 0.0,
-            "total_cout_courant_eur": 0.0,
-            "total_prediction_cout_eur": 0.0,
-            "total_consommation_annuelle": 0.0,
-            "nb_contracts": 0,
-        }
-
-        valid_contracts: list[dict] = []
-        for raw in raw_contracts:
-            details = EauGrandLyonApi.parse_contract_details(raw)
-            ref = details["reference"]
-            cid = details.get("id")
-            if not ref or not cid:
-                _LOGGER.warning("Invalid contract (missing reference or ID); skipping")
-                continue
-            valid_contracts.append(details)
-
-        contract_results = await asyncio.gather(
-            *[
-                self._process_contract(cycle_api, details, tarif_m3, factures, experimental)
-                for details in valid_contracts
-            ],
-            return_exceptions=True,
-        )
-
-        first_contract_error: BaseException | None = None
-        for details, contract_data in zip(valid_contracts, contract_results):
-            ref = details["reference"]
-            # Un contrat en échec ne doit pas faire tomber les autres du compte.
-            if isinstance(contract_data, BaseException):
-                _LOGGER.warning("Contrat %s ignoré ce cycle (erreur : %s)", ref, contract_data)
-                if first_contract_error is None:
-                    first_contract_error = contract_data
-                continue
-            contracts_data[ref] = contract_data
-
-        # Si TOUS les contrats ont échoué, propager l'erreur pour que le
-        # coordinator déclenche retry + cache offline plutôt que d'écraser le
-        # cache avec des données vides.
-        if valid_contracts and not contracts_data and first_contract_error is not None:
-            raise first_contract_error
-
-            # Mise à jour des agrégats globaux
-            global_data["total_conso_courant"] += contract_data.get("consommation_mois_courant") or 0
-            global_data["total_cout_courant_eur"] += contract_data.get("cout_mois_courant_eur") or 0
-            global_data["total_prediction_cout_eur"] += contract_data.get("prediction_cout_mois") or 0
-            global_data["total_consommation_annuelle"] += contract_data.get("consommation_annuelle") or 0
-            global_data["nb_contracts"] += 1
-
-        water_quality = await water_quality_task
         try:
-            interventions_planifiees = await interventions_task
-        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError) as err:
-            _LOGGER.debug("Lazy interventions fetch failed: %s", err)
-            interventions_planifiees = []
+            tarif_m3 = self._calculate_tarif_m3()
 
-        drought_level = self._get_drought_level()
+            factures_raw: list[dict] = []
+            if experimental:
+                factures_raw = await cycle_api.get_factures()
 
-        vacation_alert = self._check_vacation_alert(contracts_data)
+            factures = EauGrandLyonApi.format_factures(factures_raw) if factures_raw else []
 
-        await self._inject_statistics(contracts_data)
-        self._handle_alert_notifications(nb_alertes)
-        await self._save_monthly_history()
+            contracts_data: dict[str, dict] = {}
+            global_data = {
+                "total_conso_courant": 0.0,
+                "total_cout_courant_eur": 0.0,
+                "total_prediction_cout_eur": 0.0,
+                "total_consommation_annuelle": 0.0,
+                "nb_contracts": 0,
+            }
 
-        return {
-            "contracts": contracts_data,
-            "global": global_data,
-            "drought_level": drought_level,
-            "vacation_alert": vacation_alert,
-            "nb_alertes": nb_alertes,
-            "interruptions": interruptions,
-            "prochaine_coupure": prochaine_coupure,
-            "interventions_planifiees": interventions_planifiees,
-            "water_quality": water_quality,
-            "experimental_mode": experimental,
-            "api_mode": "Experimental (2026)" if experimental else "Legacy",
-            "last_update_success_time": datetime.now(tz=timezone.utc),
-            "last_error": None,
-            "last_error_type": None,
-            "last_failure_time": None,
-            "last_failure_reason": None,
-            "cache_age_days": 0,
-        }
+            valid_contracts: list[dict] = []
+            for raw in raw_contracts:
+                details = EauGrandLyonApi.parse_contract_details(raw)
+                ref = details["reference"]
+                cid = details.get("id")
+                if not ref or not cid:
+                    _LOGGER.warning("Invalid contract (missing reference or ID); skipping")
+                    continue
+                valid_contracts.append(details)
+
+            contract_results = await asyncio.gather(
+                *[
+                    self._process_contract(cycle_api, details, tarif_m3, factures, experimental)
+                    for details in valid_contracts
+                ],
+                return_exceptions=True,
+            )
+
+            first_contract_error: BaseException | None = None
+            for details, contract_data in zip(valid_contracts, contract_results):
+                ref = details["reference"]
+                # Un contrat en échec ne doit pas faire tomber les autres du compte.
+                if isinstance(contract_data, BaseException):
+                    _LOGGER.warning("Contrat %s ignoré ce cycle (erreur : %s)", ref, contract_data)
+                    if first_contract_error is None:
+                        first_contract_error = contract_data
+                    continue
+                contracts_data[ref] = contract_data
+
+                # Mise à jour des agrégats globaux
+                global_data["total_conso_courant"] += contract_data.get("consommation_mois_courant") or 0
+                global_data["total_cout_courant_eur"] += contract_data.get("cout_mois_courant_eur") or 0
+                global_data["total_prediction_cout_eur"] += contract_data.get("prediction_cout_mois") or 0
+                global_data["total_consommation_annuelle"] += contract_data.get("consommation_annuelle") or 0
+                global_data["nb_contracts"] += 1
+
+            # Si TOUS les contrats ont échoué, propager l'erreur pour que le
+            # coordinator déclenche retry + cache offline plutôt que d'écraser le
+            # cache avec des données vides.
+            if valid_contracts and not contracts_data and first_contract_error is not None:
+                raise first_contract_error
+
+            water_quality = await water_quality_task
+            try:
+                interventions_planifiees = await interventions_task
+            except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError) as err:
+                _LOGGER.debug("Lazy interventions fetch failed: %s", err)
+                interventions_planifiees = []
+
+            drought_level = self._get_drought_level()
+
+            vacation_alert = self._check_vacation_alert(contracts_data)
+
+            # Purge l'historique des contrats disparus de l'API (évite une
+            # croissance illimitée du .storage). On se base sur la liste des
+            # contrats renvoyés, pas sur contracts_data, pour ne PAS supprimer
+            # l'historique d'un contrat dont seule la récupération a échoué.
+            valid_refs = {d["reference"] for d in valid_contracts}
+            if valid_refs:
+                self._monthly_history = {ref: hist for ref, hist in self._monthly_history.items() if ref in valid_refs}
+
+            await self._inject_statistics(contracts_data)
+            self._handle_alert_notifications(nb_alertes)
+            await self._save_monthly_history()
+
+            return {
+                "contracts": contracts_data,
+                "global": global_data,
+                "drought_level": drought_level,
+                "vacation_alert": vacation_alert,
+                "nb_alertes": nb_alertes,
+                "interruptions": interruptions,
+                "prochaine_coupure": prochaine_coupure,
+                "interventions_planifiees": interventions_planifiees,
+                "water_quality": water_quality,
+                "experimental_mode": experimental,
+                "api_mode": "Experimental (2026)" if experimental else "Legacy",
+                "last_update_success_time": datetime.now(tz=timezone.utc),
+                "last_error": None,
+                "last_error_type": None,
+                "last_failure_time": None,
+                "last_failure_reason": None,
+                "cache_age_days": 0,
+            }
+        finally:
+            # Annuler les tâches encore en vol (chemins d'erreur) pour éviter
+            # requêtes fantômes et « Task exception was never retrieved ».
+            leftovers = [t for t in (water_quality_task, interventions_task) if not t.done()]
+            for task in leftovers:
+                task.cancel()
+            if leftovers:
+                await asyncio.gather(*leftovers, return_exceptions=True)
+            await cycle_api.aclose()
 
     def _calculate_tarif_m3(self) -> float:
         """Calcule le tarif au m3 selon les options ou l'entité dynamique."""
@@ -797,10 +819,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         # ── [EXPÉRIMENTAL] Index réel & Factures ──────────────────────────
         real_index = await self._get_real_index(cycle_api, experimental, cid, consos_journalieres)
 
-        # ── [LIMESCALE] Entartrage Virtuel ───────────────────────────────
+        # ── [LIMESCALE] Entartrage estimé sur 12 mois glissants ──────────
+        # Basé sur la conso des 12 derniers mois (fenêtre bornée), et NON sur
+        # l'index absolu du compteur (cumul depuis la pose) qui faisait dépasser
+        # le seuil en permanence — l'alerte était donc toujours active.
         hardness = float(self._entry.options.get(CONF_WATER_HARDNESS, DEFAULT_WATER_HARDNESS))
-        idx_cumul = real_index if real_index is not None else sum(e["consommation_m3"] for e in consos)
-        limescale_g = round(idx_cumul * hardness * 10, 0)
+        annual_volume = sum(e["consommation_m3"] for e in consos[-12:])
+        limescale_g = round(annual_volume * hardness * 10, 0)
         limescale_alert = limescale_g > 100000
 
         factures_contrat = [f for f in factures if f.get("contrat_id") == cid]
@@ -1030,9 +1055,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         return index
 
     def _get_drought_level(self) -> str:
-        """Détermine le niveau de sécheresse simulé."""
+        """Niveau de sécheresse (heuristique calendaire). Valeurs = clés ENUM traduites."""
         current_month = datetime.now(timezone.utc).month
-        return "Vigilance" if 6 <= current_month <= 9 else "Normal"
+        return "vigilance" if 6 <= current_month <= 9 else "normal"
 
     def _get_real_monthly_cost(self, conso_courant: float | None, tarif_m3: float) -> float | None:
         """Calcule le coût mensuel réel = variable (conso × tarif) + part fixe (abonnement/12)."""
@@ -1288,6 +1313,18 @@ class _CycleCachedApi:
         if key not in self._tasks:
             self._tasks[key] = asyncio.ensure_future(getattr(self._api, method)(*args, **kwargs))
         return self._tasks[key]
+
+    async def aclose(self) -> None:
+        """Annule les tasks encore en vol à la fin du cycle (chemins d'erreur).
+
+        Évite les requêtes fantômes et les avertissements « Task exception was
+        never retrieved » quand le cycle se termine sur une exception.
+        """
+        pending = [t for t in self._tasks.values() if not t.done()]
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
     async def get_contracts(self):
         return await self._cached("get_contracts")

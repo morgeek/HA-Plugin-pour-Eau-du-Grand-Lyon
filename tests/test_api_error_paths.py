@@ -291,6 +291,27 @@ class TestRequestPaths:
             await api.get_invoice_pdf("INV-1")
 
     @pytest.mark.asyncio
+    async def test_get_invoice_pdf_401_reauth_then_success(self, patched_aiohttp):
+        """Token expiré (401) : ré-auth puis nouvel essai réussi (fix M6)."""
+        session = _FakeSession(
+            [
+                _FakeContextManager(_FakeResponse(status=401)),
+                _FakeContextManager(_FakeResponse(status=200, text="PDFBYTES")),
+            ]
+        )
+        api = self._make_api(session)
+        result = await api.get_invoice_pdf("INV-1")
+        assert result == b"PDFBYTES"
+        api._auth.authenticate.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_get_invoice_pdf_403_raises_waf_blocked(self, patched_aiohttp):
+        session = _FakeSession([_FakeContextManager(_FakeResponse(status=403))])
+        api = self._make_api(session)
+        with pytest.raises(WafBlockedError):
+            await api.get_invoice_pdf("INV-1")
+
+    @pytest.mark.asyncio
     async def test_get_monthly_consumptions_forwards_params_to_get(self, patched_aiohttp):
         """Regression: _get must accept params (was crashing get_monthly_consumptions)."""
         session = _FakeSession([_FakeContextManager(_FakeResponse(status=200, text="{}"))])

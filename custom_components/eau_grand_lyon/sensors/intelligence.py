@@ -40,8 +40,9 @@ class EauGrandLyonTrendSensor(_EauGrandLyonBase):
 class EauGrandLyonPredictionConsoSensor(_EauGrandLyonBase):
     """Sensor de prédiction de consommation fin de mois (m³)."""
 
-    _attr_device_class = SensorDeviceClass.WATER
-    _attr_state_class = SensorStateClass.TOTAL
+    # Prévision (valeur estimée, non cumulative) : MEASUREMENT sans device_class
+    # WATER (WATER interdit MEASUREMENT).
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "m³"
     _attr_entity_registry_enabled_default = False
     _attr_translation_key = "prediction_conso"
@@ -59,8 +60,9 @@ class EauGrandLyonPredictionConsoSensor(_EauGrandLyonBase):
 class EauGrandLyonPredictionCostSensor(_EauGrandLyonBase):
     """Sensor de prédiction de coût mensuel (EUR)."""
 
+    # Prévision de coût (valeur estimée, non cumulative) : MEASUREMENT.
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.TOTAL
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "EUR"
     _attr_entity_registry_enabled_default = False
     _attr_translation_key = "prediction_cost"
@@ -79,6 +81,8 @@ class EauGrandLyonEcoScoreSensor(_EauGrandLyonBase):
     """Note de performance environnementale (A-G)."""
 
     _attr_translation_key = "eco_score"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["a", "b", "c", "d", "e", "f", "g", "unknown"]
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -86,7 +90,8 @@ class EauGrandLyonEcoScoreSensor(_EauGrandLyonBase):
 
     @property
     def native_value(self) -> str:
-        return self._contract.get("eco_score_grade", "Inconnu")
+        grade = (self._contract.get("eco_score_grade") or "").lower()
+        return grade if grade in self._attr_options else "unknown"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

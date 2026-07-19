@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import CONF_LEAK_MULTIPLIER, DEFAULT_LEAK_MULTIPLIER
 from .coordinator import EauGrandLyonCoordinator
@@ -327,7 +328,7 @@ class EauGrandLyonOutageSensor(CoordinatorEntity[EauGrandLyonCoordinator], Binar
         interruptions = (self.coordinator.data or {}).get("interruptions", [])
         if not interruptions:
             return False
-        today = date.today()
+        today = dt_util.now().date()
         horizon = today + timedelta(days=2)
         for inter in interruptions:
             debut_str = inter.get("date_debut")

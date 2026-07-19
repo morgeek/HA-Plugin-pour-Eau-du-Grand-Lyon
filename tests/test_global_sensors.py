@@ -57,7 +57,7 @@ class TestHealthSensor:
                 "consecutive_failures": 3,
             },
         )
-        assert sensor.native_value == "HORS-LIGNE"
+        assert sensor.native_value == "offline"
         attrs = sensor.extra_state_attributes
         assert attrs["offline_mode"] is True
         assert attrs["cached_data_age_days"] == 5

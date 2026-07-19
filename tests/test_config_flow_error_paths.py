@@ -123,6 +123,32 @@ def _make_flow(entry: MagicMock | None = None) -> tuple[EauGrandLyonConfigFlow, 
     return flow, config_entry
 
 
+class TestUserFlow:
+    @pytest.mark.asyncio
+    async def test_user_success_creates_entry_and_sets_unique_id(self):
+        flow, _ = _make_flow()
+        with patch(
+            "custom_components.eau_grand_lyon.config_flow._authenticate_and_handle_errors",
+            new=AsyncMock(return_value={}),
+        ):
+            result = await flow.async_step_user(
+                {CONF_EMAIL: "New@Example.com", CONF_PASSWORD: "secret", CONF_TARIF_M3: 5.2}
+            )
+        assert result["type"] == "create_entry"
+        assert result["data"][CONF_EMAIL] == "New@Example.com"
+        # unique_id doit être l'email en minuscules (détection de doublon).
+        flow.async_set_unique_id.assert_awaited_once_with("new@example.com")
+        flow._abort_if_unique_id_configured.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_user_invalid_email_shows_error(self):
+        flow, _ = _make_flow()
+        result = await flow.async_step_user(
+            {CONF_EMAIL: "not-an-email", CONF_PASSWORD: "secret", CONF_TARIF_M3: 5.2}
+        )
+        assert result["errors"][CONF_EMAIL] == "invalid_email"
+
+
 class TestReauthFlow:
     @pytest.mark.asyncio
     async def test_reauth_missing_entry_aborts(self):
