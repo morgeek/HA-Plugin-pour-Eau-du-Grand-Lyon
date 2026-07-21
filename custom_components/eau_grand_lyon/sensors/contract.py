@@ -7,6 +7,7 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass
 
+from ..const import CONF_HOUSEHOLD_SIZE
 from .base import _EauGrandLyonBase
 
 
@@ -26,13 +27,22 @@ class EauGrandLyonStatutSensor(_EauGrandLyonBase):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         c = self._contract
+        nombre_habitants = c.get("nombre_habitants") or ""
+        if not nombre_habitants:
+            # L'API ne peuple pas toujours servicesSouscrits[0].nombreHabitants
+            # selon le type de contrat. On retombe sur la valeur renseignée par
+            # l'utilisateur dans les options (déjà utilisée pour l'Éco-Score)
+            # plutôt que de laisser l'attribut vide, en indiquant sa source.
+            opt_habitants = self._entry.options.get(CONF_HOUSEHOLD_SIZE)
+            if opt_habitants is not None:
+                nombre_habitants = f"{opt_habitants} (valeur configurée)"
         return {
             "référence": c.get("reference", ""),
             "date_effet": c.get("date_effet"),
             "date_fin": c.get("date_echeance"),
             "usage": c.get("usage", ""),
             "calibre_compteur_mm": c.get("calibre_compteur", ""),
-            "nombre_habitants": c.get("nombre_habitants", ""),
+            "nombre_habitants": nombre_habitants,
             "référence_pds": c.get("reference_pds", ""),
         }
 

@@ -17,7 +17,12 @@ from custom_components.eau_grand_lyon.config_flow import (
     EauGrandLyonOptionsFlowHandler,
     _authenticate_and_handle_errors,
 )
-from custom_components.eau_grand_lyon.const import CONF_EMAIL, CONF_PASSWORD, CONF_TARIF_M3
+from custom_components.eau_grand_lyon.const import (
+    CONF_EMAIL,
+    CONF_PASSWORD,
+    CONF_PRICE_ENTITY,
+    CONF_TARIF_M3,
+)
 
 
 class _FakeClientSession:
@@ -50,11 +55,11 @@ def patch_config_flow_runtime(monkeypatch):
     )
     monkeypatch.setattr(
         "custom_components.eau_grand_lyon.config_flow.vol.Required",
-        lambda key, default=None: key,
+        lambda key, default=None, **kwargs: key,
     )
     monkeypatch.setattr(
         "custom_components.eau_grand_lyon.config_flow.vol.Optional",
-        lambda key, default=None: key,
+        lambda key, default=None, **kwargs: key,
     )
 
 
@@ -334,3 +339,35 @@ class TestOptionsFlow:
         # data_description strings; missing them raises formatjs MISSING_VALUE.
         assert placeholders["hardness_lyon_avg"] == "30"
         assert placeholders["subscription_example"] == "180"
+
+    @pytest.mark.asyncio
+    async def test_price_entity_field_has_no_invalid_default(self, monkeypatch):
+        """Régression (retour utilisateur) : un EntitySelector avec `default=""`
+        crashe ("Entity is neither a valid entity ID nor a valid UUID.") dès
+        qu'aucune entité de prix n'est configurée — le cas le plus courant —
+        car vol.Optional(key, default=X) valide X même quand la clé est absente
+        de l'input. Le champ doit donc être construit SANS `default` invalide ;
+        `description={"suggested_value": ...}` est utilisé pour le pré-remplissage
+        à la place (reproduit et vérifié manuellement avec la vraie voluptuous :
+        vol.Optional(key, default="") lève sur un schema({}) vide)."""
+        calls: dict[str, dict] = {}
+
+        def spy_optional(key, default=None, **kwargs):
+            calls[key] = {"default": default, "kwargs": kwargs}
+            return key
+
+        monkeypatch.setattr(
+            "custom_components.eau_grand_lyon.config_flow.vol.Optional",
+            spy_optional,
+        )
+        flow = EauGrandLyonOptionsFlowHandler()
+        flow.config_entry = MagicMock()
+        flow.config_entry.options = {}
+        flow.config_entry.data = {}
+        flow.async_show_form = MagicMock(side_effect=lambda **kw: {"type": "form", **kw})
+
+        await flow.async_step_init()
+
+        price_entity_call = calls[CONF_PRICE_ENTITY]
+        assert price_entity_call["default"] is None
+        assert price_entity_call["kwargs"].get("description") == {"suggested_value": None}

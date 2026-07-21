@@ -287,9 +287,15 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_TARIF_M3,
                     default=current_tarif,
                 ): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=30.0)),
+                # Pas de `default=` : un EntitySelector valide sa valeur par défaut
+                # même quand la clé est absente de l'input, et une chaîne vide
+                # (aucune entité de prix configurée — le cas le plus courant)
+                # provoque alors un crash "Entity is neither a valid entity ID
+                # nor a valid UUID." à chaque sauvegarde des options. `suggested_value`
+                # pré-remplit le champ sans déclencher de validation sur le vide.
                 vol.Optional(
                     CONF_PRICE_ENTITY,
-                    default=current_price_entity,
+                    description={"suggested_value": current_price_entity or None},
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor", "input_number"])),
                 vol.Optional(
                     CONF_EXPERIMENTAL,

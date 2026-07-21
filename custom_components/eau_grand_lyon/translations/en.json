@@ -140,7 +140,7 @@
         "name": "30-day consumption"
       },
       "conso_hier": {
-        "name": "Yesterday's consumption"
+        "name": "Last known daily consumption"
       },
       "index_journalier": {
         "name": "Daily index (Téléo)"

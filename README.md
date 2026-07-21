@@ -222,6 +222,15 @@ L'intégration fonctionne avec deux types de compteurs :
 2. Attendez quelques minutes avant de réessayer — l'intégration réessaye automatiquement avec un délai exponentiel
 3. Si le problème persiste, attendez 1-2 heures avant de configurer l'intégration
 
+### L'index compteur ou la consommation journalière affiche des valeurs 1000x trop grandes (ex. "80 m³" en un jour)
+
+**Cause** : bug corrigé en v3.4.1 — sur les compteurs récents ou à faible index cumulé (moins de 100 m³), l'index restait affiché en litres sous l'étiquette m³ (ex. `20990.000 m³` au lieu de `20.990 m³`), ce qui gonflait artificiellement les consommations journalières calculées à partir de cet index.
+
+**Solutions** :
+1. Mettez à jour vers la v3.4.1 ou une version ultérieure (le calcul est corrigé pour les nouvelles données)
+2. Les statistiques long terme **déjà enregistrées** avant la mise à jour restent fausses : dans Home Assistant, allez dans `Outils de développement > Statistiques`, recherchez le capteur concerné (`Index compteur` ou `Index journalier`) et utilisez **Corriger les statistiques** pour ajuster ou effacer les jours erronés
+3. Si le doute persiste, utilisez le service **Effacer le cache** puis **Forcer la mise à jour** pour reconstruire l'historique depuis l'API
+
 ### Certains capteurs sont manquants
 
 **Cause** : Certains capteurs techniques sont désactivés par défaut.
