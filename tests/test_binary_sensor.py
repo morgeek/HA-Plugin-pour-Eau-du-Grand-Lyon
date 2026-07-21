@@ -139,6 +139,21 @@ class TestBatterySensor:
         })
         assert s.is_on is False
 
+    def test_unavailable_when_battery_ok_missing_from_api(self):
+        """Retour utilisateur : sans etatPile dans la réponse API (selon le type
+        de contrat), battery_ok=None donnait `is_on=False` — un état "pile OK"
+        faussement rassurant sans aucune donnée réelle. Doit être unavailable."""
+        s = _make_binary_sensor(EauGrandLyonBatterySensor, {
+            "contracts": {"REF1": {}}
+        })
+        assert s.available is False
+
+    def test_available_when_battery_ok_present(self):
+        s = _make_binary_sensor(EauGrandLyonBatterySensor, {
+            "contracts": {"REF1": {"battery_ok": True}}
+        })
+        assert s.available is True
+
 
 # ── EauGrandLyonLimescaleAlertSensor ────────────────────────────────────────
 

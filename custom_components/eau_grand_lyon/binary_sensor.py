@@ -193,6 +193,15 @@ class EauGrandLyonBatterySensor(_EauGrandLyonBinaryBase):
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_battery_low"
 
     @property
+    def available(self) -> bool:
+        # Sans cette garde, un battery_ok absent de l'API (etatPile non fourni
+        # pour ce type de contrat) donnait `None is False` -> False, soit un
+        # état "pile OK" faussement rassurant sans aucune donnée réelle
+        # derrière (retour utilisateur : capteur "qui marche" mais qui ne
+        # fait en réalité que masquer l'absence de donnée).
+        return super().available and self._contract.get("battery_ok") is not None
+
+    @property
     def is_on(self) -> bool:
         """True si la batterie est faible."""
         return self._contract.get("battery_ok") is False

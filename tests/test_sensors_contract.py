@@ -2,6 +2,7 @@
 from datetime import date
 from unittest.mock import MagicMock
 
+from custom_components.eau_grand_lyon.const import CONF_HOUSEHOLD_SIZE
 from custom_components.eau_grand_lyon.sensors.contract import (
     EauGrandLyonStatutSensor,
     EauGrandLyonDateEcheanceSensor,
@@ -10,11 +11,14 @@ from custom_components.eau_grand_lyon.sensors.contract import (
 )
 
 
-def _make(cls, contract_data, contract_ref="REF1"):
+def _make(cls, contract_data, contract_ref="REF1", options=None):
     coordinator = MagicMock()
     coordinator.data = {"contracts": {contract_ref: contract_data}}
     entry = MagicMock()
     entry.entry_id = "test_entry"
+    # Un vrai dict (pas un MagicMock) : entry.options.get(...) doit renvoyer
+    # None quand la clé est absente, comme la vraie ConfigEntry de HA.
+    entry.options = options if options is not None else {}
     sensor = cls.__new__(cls)
     sensor.coordinator = coordinator
     sensor._entry = entry
@@ -43,6 +47,29 @@ class TestStatutSensor:
         attrs = s.extra_state_attributes
         assert "référence" in attrs
         assert "usage" in attrs
+
+    def test_nombre_habitants_falls_back_to_household_size_option(self):
+        """Retour utilisateur : servicesSouscrits[0].nombreHabitants est vide pour
+        certains types de contrat. On retombe sur l'option household_size déjà
+        collectée pour l'Éco-Score, en indiquant sa provenance."""
+        s = _make(
+            EauGrandLyonStatutSensor,
+            {"statut": "ACTIF"},
+            options={CONF_HOUSEHOLD_SIZE: 4},
+        )
+        assert s.extra_state_attributes["nombre_habitants"] == "4 (valeur configurée)"
+
+    def test_nombre_habitants_empty_when_no_api_value_and_no_option(self):
+        s = _make(EauGrandLyonStatutSensor, {"statut": "ACTIF"}, options={})
+        assert s.extra_state_attributes["nombre_habitants"] == ""
+
+    def test_nombre_habitants_prefers_api_value_over_option(self):
+        s = _make(
+            EauGrandLyonStatutSensor,
+            {"statut": "ACTIF", "nombre_habitants": "3"},
+            options={CONF_HOUSEHOLD_SIZE: 4},
+        )
+        assert s.extra_state_attributes["nombre_habitants"] == "3"
 
 
 # ── EauGrandLyonDateEcheanceSensor ────────────────────────────────────────────
