@@ -32,6 +32,20 @@ from .endpoints import (
 _LOGGER = logging.getLogger(__name__)
 
 
+# Synonymes de clé pour l'index compteur selon le format d'API (postes vs legacy).
+_INDEX_KEYS = (
+    "index",
+    "indexCompteur",
+    "index_compteur",
+    "releve",
+    "releveCompteur",
+    "volumeCompteur",
+    "volume_cumule",
+    "consommationCumulee",
+    "consommation_cumulee",
+)
+
+
 def _infer_unit_from_magnitude(entries: list[dict]) -> str:
     values: list[float] = []
     for entry in entries[:50]:
@@ -798,22 +812,19 @@ class EauGrandLyonApi:
 
     @staticmethod
     def _extract_index(entry: dict) -> float | None:
-        for key in (
-            "index",
-            "indexCompteur",
-            "index_compteur",
-            "releve",
-            "releveCompteur",
-            "volumeCompteur",
-            "volume_cumule",
-            "consommationCumulee",
-            "consommation_cumulee",
-        ):
+        for key in _INDEX_KEYS:
             if key in entry:
                 try:
                     value = float(entry[key] or 0)
                 except (ValueError, TypeError):
                     continue
+                # Filet de sécurité UNIQUEMENT si l'unité n'a pas été déclarée par
+                # l'API (_parse_daily_response convertit déjà via `unites.index`
+                # quand disponible — voir régression ci-dessous). Une magnitude
+                # improbable en m³ (index cumulé > 100 000 m³) est alors supposée
+                # être en litres. Ce seuil est peu fiable pour un petit index
+                # (compteur récent) : c'est pourquoi la conversion basée sur
+                # `unites` est la voie primaire, celle-ci n'est qu'un repli.
                 if value > 100000:
                     return round(value / 1000, 3)
                 return round(value, 3)
@@ -865,6 +876,11 @@ class EauGrandLyonApi:
             "litre/h",
             "litres/h",
         )
+        # Index compteur (unites.index = "l") : sans cette conversion, un index
+        # inférieur à 100 000 L (compteur récent / faible cumul) échappe au filet
+        # de sécurité par magnitude de _extract_index et reste affiché en litres
+        # sous l'étiquette m³ (ex. compteur à 20,990 m³ affiché "20990.000 m³").
+        index_en_litres = (unites.get("index") or "").strip().lower() in ("l", "litre", "litres")
 
         normalized: list[dict] = []
         for entry in entries:
@@ -895,6 +911,14 @@ class EauGrandLyonApi:
                     item["debitMin"] = float(item["debitMin"]) / 1000.0
                 except (ValueError, TypeError):
                     pass
+            if index_en_litres:
+                for key in _INDEX_KEYS:
+                    if item.get(key) is not None:
+                        try:
+                            item[key] = float(item[key]) / 1000.0
+                        except (ValueError, TypeError):
+                            pass
+                        break
             normalized.append(item)
         return normalized
 

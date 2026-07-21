@@ -60,6 +60,30 @@ def test_format_daily_exposes_correct_m3_fields():
     assert row["date"] == "2026-07-15"
 
 
+def test_small_index_below_magnitude_heuristic_still_converted():
+    """Régression (retour utilisateur) : compteur récent, index physique 20,990 m³.
+
+    L'API renvoie l'index brut en litres (20990) avec `unites.index = "l"`. Le
+    filet de sécurité par magnitude de _extract_index (seuil 100 000) ne se
+    déclenche PAS pour cette valeur — sans conversion via `unites.index` dans
+    _parse_daily_response, l'index restait affiché "20990.000 m³" au lieu de
+    "20.990 m³", gonflant artificiellement la consommation journalière calculée.
+    """
+    resp = {
+        "unites": {"consommation": "l", "index": "l"},
+        "postes": [
+            {
+                "data": [
+                    {"annee": 2026, "mois": 6, "jour": 15, "consommation": 300, "index": 20990},
+                ]
+            }
+        ],
+    }
+    parsed = A._parse_daily_response(resp)
+    row = A.format_daily_consumptions(parsed, "test")[0]
+    assert row["index_m3"] == 20.990
+
+
 def test_no_conversion_when_units_absent():
     """Sans bloc `unites`, l'inférence par magnitude gère la conso mais on ne
     touche pas aux champs fuite/débit (comportement conservateur)."""
