@@ -309,7 +309,7 @@
         "name": "Consommation moyenne (7j)"
       },
       "conso_hier": {
-        "name": "Consommation d'hier"
+        "name": "Dernière conso journalière connue"
       },
       "prochaine_facture": {
         "name": "Prochaine facture"

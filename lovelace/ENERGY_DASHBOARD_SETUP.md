@@ -136,7 +136,7 @@ Après ces 4 étapes, votre tableau de bord Énergie devrait afficher :
 | Capteur | État par défaut | Rôle |
 |---------|-----------------|------|
 | `energie_cout` | **ACTIVÉ** | Coût cumulé pour le tableau de bord Énergie |
-| `conso_hier` | **ACTIVÉ** | Consommation de la veille |
+| `conso_hier` | **ACTIVÉ** | Dernière conso journalière connue (2-3 jours de latence Téléo possible) |
 | `conso_7j` | **ACTIVÉ** | Moyenne 7 jours |
 | `conso_30j` | **ACTIVÉ** | Moyenne 30 jours |
 | `conso_moyenne_7j` | **ACTIVÉ** | Moyenne journalière 7j (L/jour) |

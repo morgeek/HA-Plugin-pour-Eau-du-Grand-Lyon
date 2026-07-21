@@ -276,7 +276,7 @@
         "name": "Index journalier (Téléo)"
       },
       "conso_hier": {
-        "name": "Consommation d'hier"
+        "name": "Dernière conso journalière connue"
       },
       "conso_moyenne_7j": {
         "name": "Consommation moyenne (7j)"

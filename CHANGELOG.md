@@ -54,6 +54,7 @@ Exemple : `{{ states('sensor.xxx') == 'OK' }}` devient `== 'ok'`.
 
 - Imports canoniques : `HomeAssistantError` / `ServiceValidationError` depuis `homeassistant.exceptions`.
 - Options : `CONF_PRICE_ENTITY` en `EntitySelector` (sensor / input_number) ; libellés d'intervalle traduisibles via un `SelectSelector`.
+- **Renommage** (retour utilisateur) : le capteur `conso_hier` s'appelle désormais « Dernière conso journalière connue » (au lieu de « Consommation d'hier ») pour éviter la confusion avec le décalage de 2-3 jours possible de la télé-relève Téléo. `entity_id` et `unique_id` inchangés — aucun impact sur les automatisations ou l'historique.
 
 ### Tests & CI
 
