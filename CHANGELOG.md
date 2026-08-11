@@ -5,6 +5,21 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.2] - 2026-08-11
+
+Quatre correctifs remontés par un retour utilisateur détaillé sur une installation en production, packagés dans une release distincte car mergés dans `main` après la publication du tag `v3.4.1` (qui ne les contenait donc pas).
+
+### Corrections de Bugs
+
+- **Crash du flux d'options si aucune entité de prix dynamique n'est configurée** (`config_flow.py`) : `vol.Optional(CONF_PRICE_ENTITY, default="")` valide la valeur par défaut même quand le champ est vide — un `EntitySelector` rejette alors une chaîne vide avec `Entity is neither a valid entity ID nor a valid UUID.`, bloquant la sauvegarde des options pour tout utilisateur n'ayant pas configuré d'entité de prix dynamique (la majorité, régression introduite par l'`EntitySelector` de la 3.4.1). **Fix** : le champ n'a plus de `default` invalide ; `description={"suggested_value": ...}` pré-remplit le champ sans déclencher de validation sur le vide.
+- **Attribut `nombre_habitants` vide** (`sensors/contract.py`) : l'API ne peuple pas toujours `servicesSouscrits[0].nombreHabitants` selon le type de contrat. **Fix** : repli sur l'option `household_size` déjà collectée pour l'Éco-Score, avec la mention « (valeur configurée) » pour indiquer la provenance.
+- **Capteur batterie faussement rassurant** (`binary_sensor.py`) : sans `etatPile` dans la réponse API, `battery_ok` vaut `None`, et `is_on = (battery_ok is False)` affichait silencieusement « pile OK » sans aucune donnée réelle. **Fix** : le capteur passe `unavailable` quand `battery_ok` est absent au lieu d'afficher un état non fondé.
+- **Index compteur affiché 1000x trop grand sur les compteurs récents / à faible cumul** (`api/client.py`) : l'API déclare l'unité de l'index (`unites.index = "l"`) mais seul `_extract_index` en tenait compte, via un filet de sécurité par magnitude (conversion L→m³ uniquement si l'index brut dépassait 100 000). Un compteur avec un index physique de 20,990 m³ (donc un index brut API de 20990 L) reste **sous** ce seuil : aucune conversion n'était appliquée, et l'index — donc les capteurs "Index compteur" / "Index journalier" qui alimentent le tableau de bord Énergie — s'affichait `20990.000 m³` au lieu de `20.990 m³`. Les deltas quotidiens calculés par HA en héritaient directement : une consommation réelle de 80 L/jour s'affichait comme **80 m³/jour**. **Fix** : `_parse_daily_response` convertit désormais l'index dès que l'unité déclarée par l'API est "l" (même logique déjà appliquée à `volumeEstimeFuite`/`debitMin`) ; le filet de sécurité par magnitude reste en repli uniquement pour les réponses sans bloc `unites`.
+
+### Renommage
+
+- Le capteur `conso_hier` s'appelle désormais « Dernière conso journalière connue » (au lieu de « Consommation d'hier ») pour éviter la confusion avec le décalage de 2-3 jours possible de la télé-relève Téléo. `entity_id` et `unique_id` inchangés — aucun impact sur les automatisations ou l'historique.
+
 ## [3.4.1] - 2026-07-19
 
 Traitement de l'intégralité des axes d'amélioration restants de l'audit et retour au niveau Gold, honnêtement mérité cette fois.
@@ -28,10 +43,6 @@ Exemple : `{{ states('sensor.xxx') == 'OK' }}` devient `== 'ok'`.
 
 ### Corrections de Bugs
 
-- **Crash du flux d'options si aucune entité de prix dynamique n'est configurée** (`config_flow.py`, retour utilisateur) : `vol.Optional(CONF_PRICE_ENTITY, default="")` valide la valeur par défaut même quand le champ est vide — un `EntitySelector` rejette alors une chaîne vide avec `Entity is neither a valid entity ID nor a valid UUID.`, bloquant la sauvegarde des options pour tout utilisateur n'ayant pas configuré d'entité de prix dynamique (la majorité). **Fix** : le champ n'a plus de `default` invalide ; `description={"suggested_value": ...}` pré-remplit le champ sans déclencher de validation sur le vide.
-- **Attribut `nombre_habitants` vide** (`sensors/contract.py`, retour utilisateur) : l'API ne peuple pas toujours `servicesSouscrits[0].nombreHabitants` selon le type de contrat. **Fix** : repli sur l'option `household_size` déjà collectée pour l'Éco-Score, avec la mention « (valeur configurée) » pour indiquer la provenance.
-- **Capteur batterie faussement rassurant** (`binary_sensor.py`, retour utilisateur) : sans `etatPile` dans la réponse API, `battery_ok` vaut `None`, et `is_on = (battery_ok is False)` affichait silencieusement « pile OK » sans aucune donnée réelle. **Fix** : le capteur passe `unavailable` quand `battery_ok` est absent au lieu d'afficher un état non fondé.
-- **Index compteur affiché 1000x trop grand sur les compteurs récents / à faible cumul** (`api/client.py`, retour utilisateur) : l'API déclare l'unité de l'index (`unites.index = "l"`) mais seul `_extract_index` en tenait compte, via un filet de sécurité par magnitude (conversion L→m³ uniquement si l'index brut dépassait 100 000). Un compteur avec un index physique de 20,990 m³ (donc un index brut API de 20990 L) reste **sous** ce seuil : aucune conversion n'était appliquée, et l'index — donc les capteurs "Index compteur" / "Index journalier" qui alimentent le tableau de bord Énergie — s'affichait `20990.000 m³` au lieu de `20.990 m³`. Les deltas quotidiens calculés par HA en héritaient directement : une consommation réelle de 80 L/jour s'affichait comme **80 m³/jour**. **Fix** : `_parse_daily_response` convertit désormais l'index dès que l'unité déclarée par l'API est "l" (même logique déjà appliquée à `volumeEstimeFuite`/`debitMin`) ; le filet de sécurité par magnitude reste en repli uniquement pour les réponses sans bloc `unites`.
 - **Régression agrégats multi-contrats** (`coordinator.py`) : le bloc de mise à jour de `global_data` (conso / coût / prédiction totaux) était devenu du code mort après le `raise` introduit en 3.4.0 → les capteurs globaux affichaient 0. **Fix** : agrégation réintégrée dans la boucle des contrats.
 - **Garde d'identité en ré-auth / reconfiguration** (`config_flow.py`) : un changement d'email laissait l'`unique_id` sur l'ancien compte, cassant la détection de doublon. **Fix** : `async_set_unique_id` + mise à jour de l'`unique_id` de l'entrée.
 - **`state_class` incohérents** (`sensors/`) : conso 7j/30j/annuelle, référence annuelle, veille, prédictions et compteur d'alertes passent de `TOTAL` à `MEASUREMENT` (valeurs glissantes/statiques, sans device_class WATER incompatible).
@@ -54,7 +65,6 @@ Exemple : `{{ states('sensor.xxx') == 'OK' }}` devient `== 'ok'`.
 
 - Imports canoniques : `HomeAssistantError` / `ServiceValidationError` depuis `homeassistant.exceptions`.
 - Options : `CONF_PRICE_ENTITY` en `EntitySelector` (sensor / input_number) ; libellés d'intervalle traduisibles via un `SelectSelector`.
-- **Renommage** (retour utilisateur) : le capteur `conso_hier` s'appelle désormais « Dernière conso journalière connue » (au lieu de « Consommation d'hier ») pour éviter la confusion avec le décalage de 2-3 jours possible de la télé-relève Téléo. `entity_id` et `unique_id` inchangés — aucun impact sur les automatisations ou l'historique.
 
 ### Tests & CI
 

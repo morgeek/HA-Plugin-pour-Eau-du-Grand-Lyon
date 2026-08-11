@@ -20,6 +20,14 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
 
 Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
 
+### 🐛 Retours utilisateurs — Options, habitants, batterie, index (v3.4.2)
+
+- **Crash du flux d'options** si aucune entité de prix dynamique n'était configurée (cas le plus courant) — corrigé.
+- **Attribut « nombre d'habitants »** vide sur certains contrats : repli sur la valeur configurée dans les options.
+- **Capteur batterie** : affichait « pile OK » sans donnée réelle quand l'API ne renvoie pas l'état de la pile — passe désormais `unavailable`.
+- **Index compteur affiché 1000x trop grand** sur les compteurs récents / à faible cumul (ex. 20990.000 m³ au lieu de 20.990 m³), avec des consommations journalières faussées en conséquence — corrigé.
+- **Renommage** : « Consommation d'hier » → « Dernière conso journalière connue » (évite la confusion avec le décalage possible de la télé-relève Téléo).
+
 ### 🥇 Retour au Gold + durcissement (v3.4.1)
 
 > ⚠️ **Changements cassants** — Les états de 4 capteurs passent en clés minuscules (`OK`→`ok`, `Téléo (Télé-relève)`→`teleo`, `Normal`→`normal`, note `A`→`a`…) : mettez à jour les automatisations/templates qui testent ces valeurs. Plusieurs capteurs de consommation passent aussi de `state_class: total` à `measurement` (statistiques long terme réinitialisées, sans action requise). Détails et tableau de correspondance dans le [CHANGELOG](CHANGELOG.md#341---2026-07-19).
