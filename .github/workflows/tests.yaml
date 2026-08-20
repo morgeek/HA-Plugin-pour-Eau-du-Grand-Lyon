@@ -95,7 +95,7 @@ jobs:
   smoke:
     name: Smoke tests (vrai HA)
     # Lourd (installe un vrai Home Assistant) : uniquement sur déclenchement manuel.
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && hashFiles('smoke_tests/**/*.py') != ''
     runs-on: ubuntu-latest
 
     steps:

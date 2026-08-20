@@ -77,7 +77,7 @@
       "message": "Chemin invalide. Le chemin doit être une chaîne de caractères non vide."
     },
     "path_not_allowed": {
-      "message": "Chemin '{path}' non autorisé. Ajoutez son répertoire à 'allowlist_external_dirs' dans configuration.yaml."
+      "message": "Chemin {path} non autorisé. Ajoutez son répertoire à allowlist_external_dirs dans configuration.yaml."
     },
     "no_invoices": {
       "message": "Aucune facture trouvée pour le(s) contrat(s) configuré(s)."
