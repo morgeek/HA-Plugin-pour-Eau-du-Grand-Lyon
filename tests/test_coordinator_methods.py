@@ -298,6 +298,29 @@ class TestUpdateErrorPaths:
         assert cost_metadata["unit_class"] is None
         assert cost_metadata["unit_of_measurement"] == "EUR"
 
+    @pytest.mark.asyncio
+    async def test_injects_daily_statistics_without_monthly_data(self):
+        self.coord.hass = MagicMock()
+        self.coord._monthly_history = {}
+        contract_data = {
+            "REF1": {
+                "consommations": [],
+                "consommations_journalieres": [
+                    {"date": "2026-08-16", "consommation_m3": 1.0},
+                ],
+            }
+        }
+
+        with patch(
+            "custom_components.eau_grand_lyon.coordinator.async_add_external_statistics",
+            new=MagicMock(return_value=None),
+        ) as add_stats:
+            await self.coord._inject_statistics(contract_data)
+
+        assert [call.args[1]["statistic_id"] for call in add_stats.call_args_list] == [
+            "eau_grand_lyon:water_daily_ref1",
+        ]
+
     def test_build_stat_series_without_anchor_cumulates_from_zero(self):
         consos = [
             {"mois_index": 0, "annee": 2025, "consommation_m3": 10.0},
@@ -332,6 +355,34 @@ class TestUpdateErrorPaths:
             series = EauGrandLyonCoordinator._build_stat_series(consos, lambda c: round(c * 1.5, 2), None, 2)
         assert series[0]["state"] == 15.0
         assert series[0]["sum"] == 15.0
+
+    def test_build_daily_stat_series_sorts_and_rebuilds_cumulative_values(self):
+        daily = [
+            {"date": "2026-08-18", "consommation_m3": 2.0},
+            {"date": "2026-08-16", "consommation_m3": 1.0},
+            {"date": "2026-08-17", "consommation_m3": 3.0},
+        ]
+        with patch("custom_components.eau_grand_lyon.coordinator.StatisticData", new=lambda **kw: kw):
+            series = EauGrandLyonCoordinator._build_daily_stat_series(daily)
+        assert [point["start"].date().isoformat() for point in series] == [
+            "2026-08-16",
+            "2026-08-17",
+            "2026-08-18",
+        ]
+        assert [point["sum"] for point in series] == [1.0, 4.0, 6.0]
+
+    def test_merge_daily_history_fresh_value_replaces_late_correction(self):
+        merged = EauGrandLyonCoordinator._merge_daily_history(
+            [{"date": "2026-08-16", "consommation_m3": 1.0}],
+            [
+                {"date": "2026-08-16", "consommation_m3": 2.5},
+                {"date": "2026-08-17", "consommation_m3": 3.0},
+            ],
+        )
+        assert merged == [
+            {"date": "2026-08-16", "consommation_m3": 2.5},
+            {"date": "2026-08-17", "consommation_m3": 3.0},
+        ]
 
     def test_statistic_ref_sanitizes_invalid_characters(self):
         """Recorder statistic ids only allow lowercase [a-z0-9_], no edge/double underscores.

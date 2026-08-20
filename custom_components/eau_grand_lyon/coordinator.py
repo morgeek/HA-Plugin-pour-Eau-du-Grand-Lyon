@@ -251,6 +251,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         self._monthly_history_store = _RebuildableStore(hass, 2, f"{DOMAIN}_{entry.entry_id}_monthly_history")
         self._monthly_history: dict[str, list[dict]] = {}
 
+        # Historique journalier pour reconstruire la statistique dédiée sans
+        # perdre les jours sortis de la fenêtre renvoyée par l'API.
+        self._daily_history_store = _RebuildableStore(hass, 1, f"{DOMAIN}_{entry.entry_id}_daily_history")
+        self._daily_history: dict[str, list[dict]] = {}
+
         if experimental:
             _LOGGER.info(
                 "Eau du Grand Lyon — EXPERIMENTAL mode enabled: /rest/produits/ endpoints active. "
@@ -280,6 +285,19 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 )
         except (json.JSONDecodeError, OSError, NotImplementedError, ValueError) as err:
             _LOGGER.warning("Failed to load monthly history (cache ignoré, reconstruit depuis l'API) : %s", err)
+
+        try:
+            stored_daily_history = await self._daily_history_store.async_load()
+            if stored_daily_history and isinstance(stored_daily_history, dict):
+                self._daily_history = {
+                    ref: entries
+                    for ref, entries in stored_daily_history.items()
+                    if isinstance(ref, str)
+                    and isinstance(entries, list)
+                    and all(isinstance(entry, dict) for entry in entries)
+                }
+        except (json.JSONDecodeError, OSError, NotImplementedError, ValueError) as err:
+            _LOGGER.warning("Failed to load daily history (cache ignoré, reconstruit depuis l'API) : %s", err)
 
         try:
             stored = await self._store.async_load()
@@ -347,6 +365,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         except (OSError, TypeError) as err:
             _LOGGER.warning("Failed to save monthly history: %s", err)
 
+    async def _save_daily_history(self) -> None:
+        """Persiste l'historique journalier utilisé par les statistiques."""
+        try:
+            await self._daily_history_store.async_save(self._daily_history)
+        except (OSError, TypeError) as err:
+            _LOGGER.warning("Failed to save daily history: %s", err)
+
     @staticmethod
     def _merge_monthly_history(
         stored: list[dict],
@@ -373,11 +398,27 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         )
         return merged[-max_months:]
 
+    @staticmethod
+    def _merge_daily_history(stored: list[dict], fresh: list[dict], max_days: int = 366) -> list[dict]:
+        """Fusionne les journées, les données fraîches remplaçant les anciennes."""
+        by_date: dict[str, dict] = {}
+        entries = stored if isinstance(stored, list) else []
+        fresh_entries = fresh if isinstance(fresh, list) else []
+        for entry in (*entries, *fresh_entries):
+            if not isinstance(entry, dict):
+                continue
+            date = entry.get("date")
+            if date:
+                by_date[str(date)] = entry
+        return sorted(by_date.values(), key=lambda entry: str(entry.get("date", "")))[-max_days:]
+
     async def async_clear_cache(self) -> None:
         """Supprime le cache persistant et réinitialise les données locales."""
         await self._store.async_remove()
         await self._monthly_history_store.async_remove()
+        await self._daily_history_store.async_remove()
         self._monthly_history = {}
+        self._daily_history = {}
         self.data = {}
         self._last_good_data = None
         _LOGGER.info("Eau du Grand Lyon persistent cache cleared")
@@ -637,10 +678,12 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             valid_refs = {d["reference"] for d in valid_contracts}
             if valid_refs:
                 self._monthly_history = {ref: hist for ref, hist in self._monthly_history.items() if ref in valid_refs}
+                self._daily_history = {ref: hist for ref, hist in self._daily_history.items() if ref in valid_refs}
 
             await self._inject_statistics(contracts_data)
             self._handle_alert_notifications(nb_alertes)
             await self._save_monthly_history()
+            await self._save_daily_history()
 
             return {
                 "contracts": contracts_data,
@@ -704,13 +747,18 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         # ── Consommations mensuelles + journalières + données PdS (en parallèle) ──
         raw_consos, raw_daily_data, date_prochaine_facture, pds_etendu, alerte_surconso = await asyncio.gather(
             cycle_api.get_monthly_consumptions(cid),
-            cycle_api.get_daily_consumptions(cid, nb_jours=90),
+            cycle_api.get_daily_consumptions(cid, nb_jours=365),
             cycle_api.get_date_prochaine_facture(cid),
             cycle_api.get_point_de_service_etendu(cid),
             cycle_api.get_alerte_surconsommation(cid),
         )
         consos = EauGrandLyonApi.format_consumptions(raw_consos)
         consos_journalieres = raw_daily_data["entries"]
+        consos_journalieres = self._merge_daily_history(
+            self._daily_history.get(ref, []),
+            consos_journalieres,
+        )
+        self._daily_history[ref] = consos_journalieres
 
         # Merge avec l'historique persistant pour avoir jusqu'à 36 mois (nécessaire pour N-1 annuel)
         merged_consos = self._merge_monthly_history(
@@ -1177,6 +1225,28 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         except (HomeAssistantError, ValueError) as err:
             _LOGGER.warning("Failed to inject %s statistics: %s", label, err)
 
+    @staticmethod
+    def _build_daily_stat_series(consos: list[dict], ndigits: int = 3) -> list["StatisticData"]:
+        """Reconstruit le cumul journalier à la date réelle de chaque journée."""
+        series: list["StatisticData"] = []
+        cumulative = 0.0
+        for entry in sorted(consos, key=lambda item: str(item.get("date", ""))):
+            try:
+                date = datetime.fromisoformat(str(entry["date"])).date()
+                value = float(entry["consommation_m3"])
+            except (KeyError, TypeError, ValueError) as err:
+                _LOGGER.debug("Skipping daily statistic entry: %s — %s", entry, err)
+                continue
+            cumulative += value
+            series.append(
+                StatisticData(
+                    start=datetime.combine(date, datetime.min.time(), tzinfo=timezone.utc),
+                    sum=round(cumulative, ndigits),
+                    state=round(value, ndigits),
+                )
+            )
+        return series
+
     async def _inject_statistics(self, contracts_data: dict) -> None:
         """Injecte l'historique mensuel dans les statistiques longues durée HA."""
         if not _HAS_RECORDER:
@@ -1189,6 +1259,22 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             _mean_kwargs = {"has_mean": False}
 
         for ref, contract in contracts_data.items():
+            daily_consos = getattr(self, "_daily_history", {}).get(ref) or contract.get(
+                "consommations_journalieres", []
+            )
+            if daily_consos:
+                daily_metadata: StatisticMetaData = {
+                    **_mean_kwargs,
+                    "has_sum": True,
+                    "name": f"Eau Grand Lyon - Journalier {ref}",
+                    "source": DOMAIN,
+                    "statistic_id": f"{DOMAIN}:water_daily_{self._statistic_ref(ref)}",
+                    "unit_of_measurement": "m³",
+                    "unit_class": "volume",
+                }
+                daily_series = self._build_daily_stat_series(daily_consos)
+                await self._inject_series(daily_metadata, daily_series, f"journalier contrat {ref}")
+
             # Historique fusionné (jusqu'à 36 mois) pour que le passé soit toujours
             # injecté, pas seulement les ~12 mois renvoyés par l'API à chaque appel.
             consos = self._monthly_history.get(ref) or contract.get("consommations", [])

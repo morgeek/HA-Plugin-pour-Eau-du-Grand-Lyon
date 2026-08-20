@@ -100,3 +100,23 @@ def test_no_conversion_when_units_absent():
     # petite magnitude -> considérée m³, pas de division
     assert entry["consommation"] == 5
     assert entry["volumeFuiteEstime"] == 3
+
+
+def test_litre_unit_aliases_are_converted():
+    resp = {
+        "unites": {"consommation": "litres", "index": "litre", "debitMin": "litres / h"},
+        "postes": [{"data": [{"annee": 2026, "mois": 0, "jour": 1,
+                                "consommation": 500, "index": 20000, "debitMin": 250}]}],
+    }
+    row = A.format_daily_consumptions(A._parse_daily_response(resp), "test")[0]
+    assert row["consommation_m3"] == 0.5
+    assert row["index_m3"] == 20.0
+    assert row["debit_min_m3h"] == 0.25
+
+
+def test_malformed_daily_entries_are_ignored():
+    resp = {"postes": [{"data": [None, "invalid", {"annee": 2026, "mois": 0, "jour": 1,
+                                      "consommation": 0.5}]}]}
+    parsed = A._parse_daily_response(resp)
+    assert len(parsed) == 1
+    assert A.format_daily_consumptions(parsed, "test")[0]["consommation_m3"] == 0.5

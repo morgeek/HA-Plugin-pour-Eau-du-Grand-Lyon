@@ -153,10 +153,22 @@ Après ces 4 étapes, votre tableau de bord Énergie devrait afficher :
 
 ## 💡 Astuce avancée : Utiliser les statistiques injectées
 
-Depuis v2.9.0, deux statistiques sont **auto-injectées** dans la base de données du recorder :
+Depuis v2.9.0, les statistiques sont **auto-injectées** dans la base de données du recorder :
 
 1. **`eau_grand_lyon:water_<REF>`** — Consommation mensuelle (m³)
-2. **`eau_grand_lyon:cost_<REF>`** — Coût estimé mensuel (EUR)
+2. **`eau_grand_lyon:water_daily_<REF>`** — Consommation journalière cumulative (m³)
+3. **`eau_grand_lyon:cost_<REF>`** — Coût estimé mensuel (EUR)
+
+La statistique journalière est reconstruite et triée à chaque rafraîchissement sur
+l'historique disponible (jusqu'à 12 mois). Une correction tardive d'une journée
+met donc aussi à jour les cumuls des journées suivantes, sans doublon.
+
+### Migration recommandée du tableau Énergie
+
+Dans la source d'eau existante, sélectionnez une seule fois
+**`eau_grand_lyon:water_daily_<REF>`** comme statistique historique. Ne supprimez
+pas l'ancienne statistique `water_<REF>` : elle reste disponible comme historique
+mensuel et la migration peut être annulée en resélectionnant l'ancienne source.
 
 Ces statistiques permettent de créer des graphiques avancés avec des cartes `statistics-graph` ou `custom:apexcharts-card`.
 

@@ -46,9 +46,20 @@ _INDEX_KEYS = (
 )
 
 
+def _is_litre_unit(value: Any) -> bool:
+    return str(value or "").strip().lower() in {"l", "litre", "litres", "liter", "liters"}
+
+
+def _is_litre_rate_unit(value: Any) -> bool:
+    normalized = str(value or "").strip().lower().replace(" ", "")
+    return normalized in {"l/h", "litre/h", "litres/h", "liter/h", "liters/h"}
+
+
 def _infer_unit_from_magnitude(entries: list[dict]) -> str:
     values: list[float] = []
     for entry in entries[:50]:
+        if not isinstance(entry, dict):
+            continue
         value = entry.get("consommation")
         if value is None:
             continue
@@ -846,11 +857,14 @@ class EauGrandLyonApi:
         from_postes = False
         unites: dict = {}
         if isinstance(data, dict):
-            unites = data.get("unites") or {}
-            if "postes" in data:
+            raw_unites = data.get("unites")
+            unites = raw_unites if isinstance(raw_unites, dict) else {}
+            if isinstance(data.get("postes"), list):
                 from_postes = True
                 for poste in data["postes"]:
-                    entries.extend(poste.get("data", []))
+                    if not isinstance(poste, dict) or not isinstance(poste.get("data"), list):
+                        continue
+                    entries.extend(poste["data"])
             elif "data" in data and isinstance(data["data"], list):
                 entries = data["data"]
             elif "consommationsJournalieres" in data and isinstance(data["consommationsJournalieres"], list):
@@ -870,20 +884,20 @@ class EauGrandLyonApi:
         # renvoyes en litres par l'API. Ils doivent etre convertis en m3 (et m3/h)
         # pour rester coherents avec les cles *_m3 / *_m3h produites en aval —
         # sinon les capteurs fuite/debit affichent des valeurs 1000x trop grandes.
-        fuite_en_litres = (unites.get("volumeEstimeFuite") or "").strip().lower() in ("l", "litre", "litres")
-        debit_en_litres = (unites.get("debitMin") or "").strip().lower().replace(" ", "") in (
-            "l/h",
-            "litre/h",
-            "litres/h",
-        )
+        consommation_en_litres = _is_litre_unit(unites.get("consommation"))
+        fuite_en_litres = _is_litre_unit(unites.get("volumeEstimeFuite"))
+        debit_en_litres = _is_litre_rate_unit(unites.get("debitMin"))
         # Index compteur (unites.index = "l") : sans cette conversion, un index
         # inférieur à 100 000 L (compteur récent / faible cumul) échappe au filet
         # de sécurité par magnitude de _extract_index et reste affiché en litres
         # sous l'étiquette m³ (ex. compteur à 20,990 m³ affiché "20990.000 m³").
-        index_en_litres = (unites.get("index") or "").strip().lower() in ("l", "litre", "litres")
+        index_en_litres = _is_litre_unit(unites.get("index"))
 
         normalized: list[dict] = []
         for entry in entries:
+            if not isinstance(entry, dict):
+                _LOGGER.debug("Entree journaliere ignoree (format inattendu) : %s", entry)
+                continue
             item = dict(entry)
             if "date" not in item and "annee" in item and "mois" in item:
                 try:
@@ -894,7 +908,7 @@ class EauGrandLyonApi:
                     item["date"] = f"{year}-{month_1based:02d}-{day:02d}"
                 except (ValueError, TypeError):
                     pass
-            if conso_unit == "L" and "consommation" in item:
+            if (conso_unit == "L" or consommation_en_litres) and "consommation" in item:
                 try:
                     item["consommation"] = float(item["consommation"]) / 1000.0
                 except (ValueError, TypeError):

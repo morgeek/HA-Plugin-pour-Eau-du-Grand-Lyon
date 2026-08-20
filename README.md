@@ -144,11 +144,14 @@ Depuis v2.9.0, deux statistic IDs externes sont injectés automatiquement par le
 | Statistic ID | Unit | Period | Usage |
 |---|---|---|---|
 | `eau_grand_lyon:water_<ref>` | m³ | Monthly | Historique consommation jusqu'à 36 mois, Energy Dashboard |
+| `eau_grand_lyon:water_daily_<ref>` | m³ | Daily | Historique journalier reconstruit, corrections tardives incluses |
 | `eau_grand_lyon:cost_<ref>` | EUR | Monthly | Historique coûts jusqu'à 36 mois (si tarif configuré) |
 
 *`<ref>` = votre numéro de contrat (ex: AB1234567890)*
 
 > **Note sur les capteurs annuels** : Le capteur "Consommation annuelle" affiche les **12 derniers mois glissants** (pas l'année civile). Pour suivre la consommation depuis le 1er janvier, utilisez le capteur "Consommation depuis janvier" (`consommation_cumulee_annee`) ou le capteur de coût cumulé.
+
+> **Migration du tableau Énergie** : après la mise à jour, sélectionnez une fois `eau_grand_lyon:water_daily_<ref>` comme statistique historique de la source d'eau. L'ancienne statistique mensuelle reste intacte; cette migration est donc réversible et n'entrepose pas les anciennes valeurs erronées dans la nouvelle série.
 
 #### Configuration Pas à Pas
 Pour configurer le tableau de bord Énergie avec coûts, consultez le **[guide complet](lovelace/ENERGY_DASHBOARD_SETUP.md)**.
