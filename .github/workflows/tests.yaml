@@ -91,23 +91,3 @@ jobs:
           # which is only needed for the official HACS default store, not for
           # custom-repository installs. Ignore it until the brands PR is merged.
           ignore: brands
-
-  smoke:
-    name: Smoke tests (vrai HA)
-    # Lourd (installe un vrai Home Assistant) : uniquement sur déclenchement manuel.
-    if: github.event_name == 'workflow_dispatch' && hashFiles('smoke_tests/**/*.py') != ''
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Install dependencies
-        run: pip install pytest pytest-asyncio pytest-homeassistant-custom-component
-
-      - name: Run smoke tests
-        run: pytest smoke_tests/ -v --tb=short
