@@ -273,8 +273,42 @@ Une fois installée, vous pouvez modifier les options (tarif au m³, intervalle 
 
 L'intégration récupérera automatiquement les données toutes les **24 heures** par défaut (car les données eau sont généralement mensuelles). Cet intervalle est modifiable dans les options (6h, 12h, 24h, 48h). Et on ne va pas tabasser leur serveur inutilement.
 
+### Options disponibles
+
+| Option | Utilisation | Valeur conseillée |
+| --- | --- | --- |
+| Fréquence de mise à jour | Intervalle entre deux synchronisations | 24 heures |
+| Tarif au m³ | Calcul des coûts variables | Tarif total indiqué sur votre facture |
+| Entité de prix dynamique | Remplace le tarif fixe par une entité Home Assistant | Facultatif |
+| Abonnement annuel | Part fixe utilisée par les coûts réels | Montant annuel de la facture, ou `0` |
+| Nombre d'habitants | Éco-Score et conseils personnalisés | Nombre réel du foyer |
+| Dureté de l'eau | Estimation du calcaire | Valeur de votre commune ou de votre facture |
+| Commune qualité de l'eau | Filtre les données Open Data | Facultatif |
+| Nombre de tentatives API | Nombre d'essais avant le mode hors-ligne | Valeur par défaut |
+| Mode expérimental | Factures détaillées, courbe horaire et données Téléo étendues | Désactivé au départ |
+
+L'entité de prix dynamique est facultative. Si elle est indisponible, l'intégration utilise le tarif fixe configuré.
+
+### Délais de disponibilité des données
+
+- Les consommations mensuelles suivent généralement le calendrier de publication du fournisseur.
+- Les données Téléo peuvent arriver avec un décalage de plusieurs jours. Le capteur « dernier jour connu » n'est donc pas nécessairement la veille civile.
+- Une correction publiée tardivement remplace automatiquement la journée concernée et recalcule les cumuls suivants.
+- Une réponse vide ou une panne temporaire ne supprime pas les dernières données valides : l'intégration utilise son cache et indique son état dans le capteur de santé.
+
 ## Utilisation
 Une fois configuré, les capteurs apparaîtront dans votre tableau de bord Home Assistant. Vous pouvez les utiliser dans des automatisations, des tableaux de bord, ou de toute autre manière que vous utilisez les capteurs dans Home Assistant.
+
+### Services disponibles
+
+| Service | Fonction |
+| --- | --- |
+| `eau_grand_lyon.update_now` | Force une synchronisation immédiate |
+| `eau_grand_lyon.clear_cache` | Supprime le cache local et réinitialise l'historique reconstruit |
+| `eau_grand_lyon.export_data` | Exporte les consommations en CSV |
+| `eau_grand_lyon.download_latest_invoice` | Télécharge la dernière facture PDF |
+
+Les services d'export nécessitent que leur dossier de destination figure dans `allowlist_external_dirs`. N'utilisez que des chemins locaux explicitement autorisés dans votre configuration Home Assistant.
 
 Checklist de réparation :
 
