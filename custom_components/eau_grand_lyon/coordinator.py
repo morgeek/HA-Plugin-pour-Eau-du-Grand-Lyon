@@ -1226,14 +1226,16 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             _LOGGER.warning("Failed to inject %s statistics: %s", label, err)
 
     @staticmethod
-    def _build_daily_stat_series(consos: list[dict], ndigits: int = 3) -> list["StatisticData"]:
-        """Reconstruit le cumul journalier à la date réelle de chaque journée."""
+    def _build_daily_stat_series(
+        consos: list[dict], value_fn=lambda value: value, ndigits: int = 3
+    ) -> list["StatisticData"]:
+        """Reconstruit un cumul journalier à la date réelle de chaque journée."""
         series: list["StatisticData"] = []
         cumulative = 0.0
         for entry in sorted(consos, key=lambda item: str(item.get("date", ""))):
             try:
                 date = datetime.fromisoformat(str(entry["date"])).date()
-                value = float(entry["consommation_m3"])
+                value = float(value_fn(float(entry["consommation_m3"])))
             except (KeyError, TypeError, ValueError) as err:
                 _LOGGER.debug("Skipping daily statistic entry: %s — %s", entry, err)
                 continue
@@ -1274,6 +1276,28 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 }
                 daily_series = self._build_daily_stat_series(daily_consos)
                 await self._inject_series(daily_metadata, daily_series, f"journalier contrat {ref}")
+
+                tarif = contract.get("tarif_m3", 0)
+                if tarif > 0:
+                    daily_cost_metadata: StatisticMetaData = {
+                        **_mean_kwargs,
+                        "has_sum": True,
+                        "name": f"Eau Grand Lyon - Coût journalier {ref}",
+                        "source": DOMAIN,
+                        "statistic_id": f"{DOMAIN}:cost_daily_{self._statistic_ref(ref)}",
+                        "unit_of_measurement": "EUR",
+                        "unit_class": None,
+                    }
+                    daily_cost_series = self._build_daily_stat_series(
+                        daily_consos,
+                        lambda conso: round(conso * tarif, 2),
+                        2,
+                    )
+                    await self._inject_series(
+                        daily_cost_metadata,
+                        daily_cost_series,
+                        f"coût journalier {ref}",
+                    )
 
             # Historique fusionné (jusqu'à 36 mois) pour que le passé soit toujours
             # injecté, pas seulement les ~12 mois renvoyés par l'API à chaque appel.

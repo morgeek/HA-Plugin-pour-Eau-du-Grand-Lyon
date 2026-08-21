@@ -321,6 +321,38 @@ class TestUpdateErrorPaths:
             "eau_grand_lyon:water_daily_ref1",
         ]
 
+    @pytest.mark.asyncio
+    async def test_injects_daily_cost_statistics_separately(self):
+        self.coord.hass = MagicMock()
+        self.coord._monthly_history = {}
+        self.coord._daily_history = {}
+        contract_data = {
+            "REF1": {
+                "tarif_m3": 5.0,
+                "consommations": [],
+                "consommations_journalieres": [
+                    {"date": "2026-08-16", "consommation_m3": 1.2},
+                ],
+            }
+        }
+
+        with patch(
+            "custom_components.eau_grand_lyon.coordinator.async_add_external_statistics",
+            new=MagicMock(return_value=None),
+        ) as add_stats:
+            await self.coord._inject_statistics(contract_data)
+
+        calls = {call.args[1]["statistic_id"]: call for call in add_stats.call_args_list}
+        assert set(calls) == {
+            "eau_grand_lyon:water_daily_ref1",
+            "eau_grand_lyon:cost_daily_ref1",
+        }
+        cost_metadata = calls["eau_grand_lyon:cost_daily_ref1"].args[1]
+        cost_series = calls["eau_grand_lyon:cost_daily_ref1"].args[2]
+        assert cost_metadata["unit_of_measurement"] == "EUR"
+        assert cost_metadata["unit_class"] is None
+        assert cost_series[0].sum == 6.0
+
     def test_build_stat_series_without_anchor_cumulates_from_zero(self):
         consos = [
             {"mois_index": 0, "annee": 2025, "consommation_m3": 10.0},
