@@ -4,14 +4,33 @@
 [![Tests & Validation](https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/actions/workflows/tests.yaml/badge.svg?branch=main)](https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/actions/workflows/tests.yaml)
 [![Quality Scale - Gold](https://img.shields.io/badge/Quality%20Scale-Gold-4CAF50)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
 
-Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](https://www.home-assistant.io/) qui fournit des capteurs pour les données de consommation d'eau du service Eau du Grand Lyon.
+Ceci est une intégration personnalisée non officielle pour [Home Assistant](https://www.home-assistant.io/) qui récupère la consommation d'eau, les informations de contrat et les alertes du service Eau du Grand Lyon.
 
-> 🥇 **Quality Scale : Gold** — Gestion d'erreurs robuste avec mode hors-ligne, flux de configuration / options / ré-authentification / reconfiguration, services enregistrés dans `async_setup`, exceptions et états d'entités traduits (FR/EN), suppression des appareils obsolètes, documentation détaillée et suite de tests avec seuil de couverture. Détail des critères dans [`quality_scale.yaml`](custom_components/eau_grand_lyon/quality_scale.yaml) (`strict-typing` Platinum encore en cours).
+> **À savoir** : l'intégration interroge le portail Eau du Grand Lyon. Elle nécessite un compte client valide et peut être limitée par le pare-feu anti-abus du service.
+
+## Démarrage rapide
+
+1. Installez l'intégration avec HACS, ou copiez le dossier `custom_components/eau_grand_lyon/` dans votre configuration Home Assistant.
+2. Redémarrez Home Assistant.
+3. Allez dans **Paramètres > Appareils et services > Ajouter une intégration**.
+4. Recherchez **Eau du Grand Lyon**, puis saisissez votre email et votre mot de passe.
+5. Ouvrez **Configurer** pour régler le tarif au m³ et la fréquence de mise à jour.
+
+Les données apparaissent après la première synchronisation. Celle-ci peut prendre quelques minutes et les données Téléo peuvent être publiées avec un décalage fourni par le distributeur.
+
+## Quel compteur est pris en charge ?
+
+| Compteur | Données disponibles |
+| --- | --- |
+| **Téléo** | Consommation journalière, index journalier, alertes de fuite, signal et fonctions horaires selon le compte |
+| **Standard** | Consommation mensuelle, contrat, factures et indicateurs généraux |
+
+Le capteur **Compatibilité compteur** permet de vérifier le type détecté. Les capteurs incompatibles restent indisponibles ou sont désactivés par défaut.
 
 ## Fonctionnalités
 
 ### 🧠 Intelligence avancée & coaching
-- **Eco-Coach (IA) 💎** : Sensor de conseil personnalisé qui analyse vos habitudes pour vous aider à réduire votre consommation quotidiennement.
+- **Eco-Coach (IA) 💎** : capteur de conseil personnalisé qui analyse vos habitudes pour vous aider à réduire votre consommation quotidiennement.
 - **Eco-Score (A-G)** : Note de performance environnementale basée sur le nombre d'habitants et les barèmes nationaux.
 - **Entartrage Virtuel** : Estimation exclusive de l'accumulation de calcaire (en grammes) basée sur la dureté de l'eau configurée.
 - **Empreinte Carbone (CO₂e)** : Calcul automatique de l'impact écologique de votre consommation d'eau (kg CO₂e).
@@ -21,7 +40,7 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
 
 ### 🛡️ Sécurité & Alertes
 - **Détection Fuite Temps Réel (Téléo)** : Basé sur les alertes officielles du compteur.
-- **Détection Fuite Locale (Pattern)** : Analyse intelligente du flux constant (idéal pour compteurs legacy).
+- **Détection Fuite Locale (Pattern)** : analyse intelligente d'un débit constant, utile pour les compteurs standard.
 - **Mode Vacances** : Switch de surveillance renforcée (alerte immédiate pour toute consommation > 1L).
 - **Indicateur Sécheresse (saisonnier)** : Capteur indicatif basé sur une heuristique saisonnière (juin–septembre = Vigilance). Il ne reflète pas les arrêtés préfectoraux réels — consultez [vigieau.gouv.fr](https://vigieau.gouv.fr) pour les restrictions en vigueur.
 - **Icônes Dynamiques** : Les capteurs (ex: Nitrates, Fuites) changent d'icône selon la sévérité des données.
@@ -31,8 +50,8 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
 - **Repairs HA** : Alerte dans le tableau de bord "Réparations" de Home Assistant en cas de panne API prolongée (> 7 jours).
 
 ### 🛠️ Services Pro & Utilitaires
-- **Export CSV** : Service `export_data` pour sauvegarder tout votre historique en local.
-- **Téléchargement Facture PDF** : Service `download_latest_invoice` pour récupérer votre facture officielle.
+- **Export CSV** : service `eau_grand_lyon.export_data` pour sauvegarder votre historique en local.
+- **Téléchargement facture PDF** : service `eau_grand_lyon.download_latest_invoice` pour récupérer votre facture officielle.
   > ⚠️ Le répertoire de destination de ces services doit être autorisé dans `configuration.yaml` :
   > ```yaml
   > homeassistant:
@@ -42,12 +61,12 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
   > ```
 - **Santé Hardware** : Diagnostic du niveau de signal et de la pile du module Téléo.
 - **Calendrier des Échéances** : Entité calendrier avec dates de paiement et factures prévues.
-- **Blueprints d'Automation** : Modèles prêts à l'emploi pour les alertes fuite et budget.
+- **Blueprints d'automatisation** : modèles prêts à l'emploi pour les alertes fuite et budget.
 
 ### Mode hors-ligne
 Si l'API Eau du Grand Lyon est indisponible (coupure réseau, maintenance, blocage WAF), l'intégration bascule automatiquement en **mode hors-ligne** :
-- Les sensors restent disponibles et affichent les dernières données connues
-- Le sensor **Statut API** affiche `Hors-ligne` (état brut `offline`) avec l'horodatage du début de la panne
+- Les capteurs restent disponibles et affichent les dernières données connues
+- Le capteur **Statut API** affiche `Hors-ligne` (état brut `offline`) avec l'horodatage du début de la panne
 - Le cache est persistant sur disque — il survit à un redémarrage de Home Assistant
 - Dès que l'API répond à nouveau, les données sont rafraîchies et le mode hors-ligne se désactive automatiquement
 
@@ -64,6 +83,14 @@ Une option **Mode expérimental** (désactivée par défaut) active la récupér
 
 Si votre compteur est compatible, les capteurs supplémentaires apparaîtront automatiquement (pensez à vérifier s'ils sont désactivés par défaut dans l'interface des entités).
 
+## Réglages recommandés
+
+- **Fréquence de mise à jour** : 24 heures. Utilisez 48 heures si le portail bloque temporairement les requêtes.
+- **Tarif au m³** : indiquez le tarif total visible sur votre facture, incluant l'eau, l'assainissement et les taxes.
+- **Abonnement annuel** : renseignez uniquement la part fixe annuelle de votre facture. Laissez `0` si vous ne souhaitez pas l'intégrer aux capteurs de coût réel.
+- **Nombre d'habitants** : utilisé pour l'Éco-Score et les conseils personnalisés.
+- **Mode expérimental** : laissez-le désactivé tant que vous n'avez pas besoin des données étendues Téléo.
+
 ## Mise à jour des données
 
 L'intégration récupère vos données de consommation selon un intervalle configurable :
@@ -74,6 +101,8 @@ L'intégration récupère vos données de consommation selon un intervalle confi
 - **Cache persistant** : En cas d'indisponibilité API, les dernières données connues restent affichées localement
 - **Retry automatique** : En cas d'erreur réseau ou blocage WAF, l'intégration réessaie après un délai croissant (1 min, 5 min)
 
+Les services `eau_grand_lyon.update_now` et `eau_grand_lyon.clear_cache` permettent respectivement de forcer une synchronisation et de repartir d'un cache vide.
+
 ### Gestion du blocage WAF
 
 L'API officielle utilise un pare-feu web (WAF) qui peut bloquer les requêtes trop fréquentes. Si vous recevez l'erreur "Requête bloquée par le pare-feu", deux solutions :
@@ -82,7 +111,7 @@ L'API officielle utilise un pare-feu web (WAF) qui peut bloquer les requêtes tr
 
 ### Intégration Energy Dashboard
 
-#### Statistiques Injectées Automatiquement
+#### Statistiques injectées automatiquement
 Les statistic IDs externes suivants sont injectés automatiquement par le coordinateur :
 
 | Statistic ID | Unit | Period | Usage |
@@ -110,10 +139,18 @@ Configuration :
 5. **Coûts** : `sensor.eau_du_grand_lyon_energie_cout` (auto-calculé si tarif configuré)
 6. **Statistiques** : Utilisez les statistic IDs ci-dessus pour les cartes statistiques.
 
-#### Troubleshooting
+### Comprendre les coûts
+
+- `cost_<ref>` et `cost_daily_<ref>` correspondent uniquement au coût variable : consommation × tarif au m³.
+- `cout_reel_mois` inclut la part variable du mois et un douzième de l'abonnement annuel.
+- `cout_reel_annuel` inclut la consommation des douze derniers mois et l'abonnement annuel complet.
+
+L'abonnement n'est pas ajouté aux statistiques journalières ou mensuelles, afin de ne pas le compter plusieurs fois dans l'historique.
+
+#### Dépannage rapide
 - ⚠️ Capteurs grisés ? → Paramètres > Appareils et services > Eau du Grand Lyon > Activer
 - 📊 Statistiques vides ou graphique incomplet ? → Forcer une mise à jour avec le bouton dédié, puis attendre quelques secondes
-- 🔍 Statistic ID inconnu ? → Vérifier `YOURHA/api/statistic_metadata` ou utiliser l'UI directement
+- 🔍 Statistic ID inconnu ? → Vérifiez les statistiques dans **Outils de développement > Statistiques** ou utilisez la recherche de statistiques dans l'interface.
 
 ## Appareils supportés
 
@@ -121,7 +158,7 @@ L'intégration fonctionne avec deux types de compteurs :
 
 | Type | Nom | Disponibilité des données |
 |------|-----|---------------------------|
-| **Téléo** (smart) | Compteur communicant Eau du Grand Lyon | Consommation journalière, courbe horaire, alertes temps réel, signal radio |
+| **Téléo** (communicant) | Compteur communicant Eau du Grand Lyon | Consommation journalière, courbe horaire, alertes temps réel, signal radio |
 | **Standard** | Compteur traditionnel avec relevé manuel | Consommation mensuelle uniquement |
 
 ### Comment savoir quel compteur j'ai ?
@@ -140,7 +177,7 @@ L'intégration fonctionne avec deux types de compteurs :
 
 ## Dépannage
 
-### L'intégration affiche "Hors-ligne"
+### L'intégration affiche « Hors-ligne »
 
 **Cause** : L'API Eau du Grand Lyon est indisponible ou inaccessible.
 
@@ -148,7 +185,7 @@ L'intégration fonctionne avec deux types de compteurs :
 1. Vérifiez votre connexion réseau et que le serveur https://agence.eaudugrandlyon.com est accessible
 2. Attendez quelques minutes — l'intégration réessaye automatiquement
 3. Utilisez le service **Effacer le cache** (Paramètres > Appareils et services) pour réinitialiser l'état
-4. Consultez les logs Home Assistant pour plus de détails : `Settings > System > Logs`
+4. Consultez les logs dans **Paramètres > Système > Journaux**.
 
 ### Erreur "Identifiants incorrects"
 
@@ -194,7 +231,7 @@ L'intégration fonctionne avec deux types de compteurs :
 ## Installation
 
 > [!CAUTION]
-> **IMPORTANT** : Avant d'installer cette intégration ou toute autre extension personnalisée, effectuez toujours une **sauvegarde complète (Backup)** de votre configuration Home Assistant. L'auteur ne peut être tenu responsable en cas de perte de données ou d'instabilité de votre instance.
+> **IMPORTANT** : Avant d'installer cette intégration ou toute autre extension personnalisée, effectuez toujours une **sauvegarde complète** de votre configuration Home Assistant. L'auteur ne peut être tenu responsable en cas de perte de données ou d'instabilité de votre instance.
 
 ### Option 1 : Installation à l'ancienne
 1. Téléchargez la dernière version depuis le [dépôt GitHub](https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon).
@@ -370,7 +407,7 @@ action:
       path: /config/www/eau_export_{{ now().strftime('%Y-%m') }}.csv
 ```
 
-### Fomulations prédictives
+### Formulations prédictives
 
 Créez un template pour afficher une estimation personnalisée :
 
