@@ -5,6 +5,21 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Ajouts
+
+- **Statistique journalière Téléo** : ajout de `eau_grand_lyon:water_daily_<ref>`, reconstruite par date pour intégrer automatiquement les corrections tardives de l'API.
+- **Coût journalier Téléo** : ajout de `eau_grand_lyon:cost_daily_<ref>`, calculé à partir de la consommation journalière et du tarif configuré.
+- **Transparence des coûts** : les capteurs de coût réel indiquent explicitement que l'abonnement est inclus ; les statistiques historiques restent limitées au coût variable.
+
+### Corrections de robustesse
+
+- **Cache journalier** : les dates et valeurs invalides sont ignorées au chargement afin de ne pas interrompre un rafraîchissement Home Assistant.
+- **Statistiques idempotentes** : les journées dupliquées sont dédoublonnées avant reconstruction des cumuls.
+- **Parser Téléo** : les métadonnées comptent uniquement les entrées normalisées et exploitables.
+- **Identifiants de statistiques** : les préfixes sont centralisés sans modifier les identifiants publics existants.
+
 ## [3.4.2] - 2026-08-11
 
 Quatre correctifs remontés par un retour utilisateur détaillé sur une installation en production, packagés dans une release distincte car mergés dans `main` après la publication du tag `v3.4.1` (qui ne les contenait donc pas).

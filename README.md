@@ -8,40 +8,9 @@ Ceci est une intégration personnalisée NON OFFICIELLE pour [Home Assistant](ht
 
 > 🥇 **Quality Scale : Gold** — Gestion d'erreurs robuste avec mode hors-ligne, flux de configuration / options / ré-authentification / reconfiguration, services enregistrés dans `async_setup`, exceptions et états d'entités traduits (FR/EN), suppression des appareils obsolètes, documentation détaillée et suite de tests avec seuil de couverture. Détail des critères dans [`quality_scale.yaml`](custom_components/eau_grand_lyon/quality_scale.yaml) (`strict-typing` Platinum encore en cours).
 
-![alt text](https://raw.githubusercontent.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/main/docs/screenshots/HA-Eau-Grand-Lyon.png)
-
-![alt text](https://raw.githubusercontent.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/main/docs/screenshots/HA-Eau-Grand-Lyon2.png)
-
-![alt text](https://raw.githubusercontent.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/main/docs/screenshots/HA-Eau-Grand-Lyon3.png)
-
-![alt text](https://raw.githubusercontent.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/main/docs/screenshots/HA-Eau-Grand-Lyon4.png)
-
-## Historique des versions
-
-Voir le [CHANGELOG.md](CHANGELOG.md) pour l'historique complet des changements.
-
-### 🐛 Retours utilisateurs — Options, habitants, batterie, index (v3.4.2)
-
-- **Crash du flux d'options** si aucune entité de prix dynamique n'était configurée (cas le plus courant) — corrigé.
-- **Attribut « nombre d'habitants »** vide sur certains contrats : repli sur la valeur configurée dans les options.
-- **Capteur batterie** : affichait « pile OK » sans donnée réelle quand l'API ne renvoie pas l'état de la pile — passe désormais `unavailable`.
-- **Index compteur affiché 1000x trop grand** sur les compteurs récents / à faible cumul (ex. 20990.000 m³ au lieu de 20.990 m³), avec des consommations journalières faussées en conséquence — corrigé.
-- **Renommage** : « Consommation d'hier » → « Dernière conso journalière connue » (évite la confusion avec le décalage possible de la télé-relève Téléo).
-
-### 🥇 Retour au Gold + durcissement (v3.4.1)
-
-> ⚠️ **Changements cassants** — Les états de 4 capteurs passent en clés minuscules (`OK`→`ok`, `Téléo (Télé-relève)`→`teleo`, `Normal`→`normal`, note `A`→`a`…) : mettez à jour les automatisations/templates qui testent ces valeurs. Plusieurs capteurs de consommation passent aussi de `state_class: total` à `measurement` (statistiques long terme réinitialisées, sans action requise). Détails et tableau de correspondance dans le [CHANGELOG](CHANGELOG.md#341---2026-07-19).
-
-- **Bugs restants corrigés** : garde d'identité en ré-auth/reconfiguration (l'`unique_id` suit le compte), `state_class` des capteurs glissants/statiques passés en `MEASUREMENT`, alerte tartre bornée sur 12 mois (fini l'alerte permanente), `get_invoice_pdf` ré-authentifie sur 401, `max_retries` borné, tâches réseau annulées sur erreur, et **correction d'une régression** où les agrégats multi-contrats (conso/coût totaux) n'étaient plus calculés.
-- **Retour au Gold, honnêtement** : services enregistrés dans `async_setup` (`action-setup`), exceptions reliées à des `translation_key` (`exception-translations`), états d'entités traduits via `device_class` ENUM (`entity-translations`), suppression des appareils obsolètes (`stale-devices`).
-- **Polish** : fuseau horaire (`dt_util.now()`), imports canoniques (`homeassistant.exceptions`), sélecteur d'entité pour le prix dynamique, libellés d'intervalle traduisibles.
-- **Tests & CI** : couverture mesurée avec seuil (`pytest-cov`), job mypy (non bloquant), smoke tests exécutables à la demande, nouveaux tests (migration, happy-path config flow, appareils obsolètes, ré-auth facture).
-
-_Versions antérieures (v3.4.0 et précédentes) : voir le [CHANGELOG](CHANGELOG.md)._
-
 ## Fonctionnalités
 
-### 🧠 Intelligence Avancée & Coaching "Platinum"
+### 🧠 Intelligence avancée & coaching
 - **Eco-Coach (IA) 💎** : Sensor de conseil personnalisé qui analyse vos habitudes pour vous aider à réduire votre consommation quotidiennement.
 - **Eco-Score (A-G)** : Note de performance environnementale basée sur le nombre d'habitants et les barèmes nationaux.
 - **Entartrage Virtuel** : Estimation exclusive de l'accumulation de calcaire (en grammes) basée sur la dureté de l'eau configurée.
@@ -57,14 +26,14 @@ _Versions antérieures (v3.4.0 et précédentes) : voir le [CHANGELOG](CHANGELOG
 - **Indicateur Sécheresse (saisonnier)** : Capteur indicatif basé sur une heuristique saisonnière (juin–septembre = Vigilance). Il ne reflète pas les arrêtés préfectoraux réels — consultez [vigieau.gouv.fr](https://vigieau.gouv.fr) pour les restrictions en vigueur.
 - **Icônes Dynamiques** : Les capteurs (ex: Nitrates, Fuites) changent d'icône selon la sévérité des données.
 - **Courbe de Charge Horaire** : Support expérimental des données de consommation heure par heure pour les compteurs Téléo récents.
-- **Consommation d'Hier** : Nouveau capteur dédié affichant la consommation du dernier jour connu en **Litres**.
+- **Consommation journalière** : Capteur dédié affichant la consommation du dernier jour connu en **Litres**.
 - **Index Journalier Robuste** : Amélioration du parsing de l'index journalier avec support de 9 synonymes de clés API (inspiré du travail de @hufon).
 - **Repairs HA** : Alerte dans le tableau de bord "Réparations" de Home Assistant en cas de panne API prolongée (> 7 jours).
 
 ### 🛠️ Services Pro & Utilitaires
 - **Export CSV** : Service `export_data` pour sauvegarder tout votre historique en local.
 - **Téléchargement Facture PDF** : Service `download_latest_invoice` pour récupérer votre facture officielle.
-  > ⚠️ Depuis la 3.1.0, le répertoire de destination de ces deux services doit être autorisé dans `configuration.yaml` :
+  > ⚠️ Le répertoire de destination de ces services doit être autorisé dans `configuration.yaml` :
   > ```yaml
   > homeassistant:
   >   allowlist_external_dirs:
@@ -95,8 +64,6 @@ Une option **Mode expérimental** (désactivée par défaut) active la récupér
 
 Si votre compteur est compatible, les capteurs supplémentaires apparaîtront automatiquement (pensez à vérifier s'ils sont désactivés par défaut dans l'interface des entités).
 
-> **Note (v3.0.x)** : l'authentification et la récupération des données utilisent les routes officielles `/application/...`, vérifiées en production. L'ancien basculement automatique vers des routes alternatives (sans préfixe `/application/`) a été retiré : ces routes n'existent plus côté serveur (404).
-
 ## Mise à jour des données
 
 L'intégration récupère vos données de consommation selon un intervalle configurable :
@@ -113,33 +80,10 @@ L'API officielle utilise un pare-feu web (WAF) qui peut bloquer les requêtes tr
 1. **Augmentez l'intervalle** : Passez à 48 heures au lieu de 24h
 2. **Attendez quelques minutes** : L'intégration réessaye automatiquement après un délai exponentiel
 
-### Dashboard Lovelace
-
-#### Templates Prêts à l'Emploi (v2.9.0+)
-- **`lovelace/energy_dashboard_preset.yaml`** — Dashboard complet prêt à paster (10 sections : résumé, 24 mois historique, coûts, intelligence, Téléo, qualité, alertes, calendrier)
-- **`lovelace/monthly_chart_cards.yaml`** — 6 exemples de cartes ApexCharts pour visualiser `monthly_chart_data` :
-  - Bar chart consommation mensuelle
-  - Combo chart consommation + coût
-  - Bar chart coût mensuel
-  - Statistics graph 24 mois (sans HACS)
-  - Statistics graph coût (avec statistic ID)
-  - Graphique détaillé mensuel
-- **`lovelace/dashboard.yaml`** — Dashboard "Synthèse" avec graphiques et statistiques (v2.8.0+)
-- **`lovelace/dashboard_notifications.yaml`** — Template avec notifications avancées *(optionnel)*
-
-#### Installation Rapide
-```
-1. Ouvrir lovelace/energy_dashboard_preset.yaml
-2. Copier tout le contenu YAML
-3. HA : Paramètres > Tableaux de bord > Créer > Importer à partir du YAML
-4. Adapter les entity_id si différents (voir votre intégration)
-5. Valider — le dashboard s'affiche immédiatement
-```
-
-### Intégration Energy Dashboard (v2.9.0+)
+### Intégration Energy Dashboard
 
 #### Statistiques Injectées Automatiquement
-Depuis v2.9.0, deux statistic IDs externes sont injectés automatiquement par le coordinateur :
+Les statistic IDs externes suivants sont injectés automatiquement par le coordinateur :
 
 | Statistic ID | Unit | Period | Usage |
 |---|---|---|---|
@@ -156,31 +100,20 @@ Depuis v2.9.0, deux statistic IDs externes sont injectés automatiquement par le
 
 > **Abonnement** : les statistiques `cost_<ref>` et `cost_daily_<ref>` contiennent uniquement le coût variable (`consommation × tarif_m3`). L'abonnement annuel configuré est intégré aux capteurs `cout_reel_mois` et `cout_reel_annuel`, mais pas aux statistiques historiques, afin de ne pas dupliquer une charge fixe à chaque journée.
 
-#### Configuration Pas à Pas
-Pour configurer le tableau de bord Énergie avec coûts, consultez le **[guide complet](lovelace/ENERGY_DASHBOARD_SETUP.md)**.
-
-En résumé :
+Configuration :
 1. **Vérifier que le capteur de coût est activé** : `sensor.eau_du_grand_lyon_energie_cout`
 2. **Configurer le tarif €/m³** dans Paramètres > Options
 3. **Ajouter une source d'eau** au tableau de bord Énergie :
    - Téléo : `sensor.eau_du_grand_lyon_index_journalier_energy` (quotidien, haute précision)
    - Standard : `sensor.eau_du_grand_lyon_index_compteur` (mensuel)
 4. **Ajouter le coût** pour cette source : `sensor.eau_du_grand_lyon_energie_cout`
-2. **Coûts** : `sensor.eau_du_grand_lyon_energie_cout` (auto-calculé si tarif configuré)
-3. **Statistiques** : Utilisez les statistic IDs ci-dessus pour les cartes `statistics-graph` (voir exemples dans `monthly_chart_cards.yaml`)
+5. **Coûts** : `sensor.eau_du_grand_lyon_energie_cout` (auto-calculé si tarif configuré)
+6. **Statistiques** : Utilisez les statistic IDs ci-dessus pour les cartes statistiques.
 
 #### Troubleshooting
 - ⚠️ Capteurs grisés ? → Paramètres > Appareils et services > Eau du Grand Lyon > Activer
 - 📊 Statistiques vides ou graphique incomplet ? → Forcer une mise à jour avec le bouton dédié, puis attendre quelques secondes
 - 🔍 Statistic ID inconnu ? → Vérifier `YOURHA/api/statistic_metadata` ou utiliser l'UI directement
-
-Pour plus de détails : voir `lovelace/energy_config.yaml`
-
-### Notifications Avancées & Blueprints
-L'intégration inclut désormais des **Blueprints** (modèles d'automatisation) pour configurer en un clic :
-- **Alerte Fuite Actionnable** : Notification sur mobile avec boutons "Rafraîchir" et "Voir Dashboard".
-- **Alerte Budget** : Notification si la prédiction de fin de mois dépasse un seuil choisi.
-- **Alerte Sécheresse** : Notification quand l'indicateur saisonnier de l'intégration change de niveau (heuristique — voir vigieau.gouv.fr pour les restrictions réelles).
 
 ## Appareils supportés
 
@@ -201,7 +134,7 @@ L'intégration fonctionne avec deux types de compteurs :
 
 - **Mise à jour mensuelle** : Les données de consommation sont généralement mises à jour une fois par mois par le service. La vue quotidienne n'est disponible que pour les compteurs Téléo.
 - **Blocage WAF** : L'API officielle peut bloquer les requêtes trop fréquentes. Consultez la section "Mise à jour des données" pour plus de détails.
-- **Données historiques API** : L'API Eau du Grand Lyon ne retourne que les 12 derniers mois. L'intégration accumule cependant jusqu'à **36 mois** en cache local persistant — le graphique se remplit progressivement au fil du temps.
+- **Données historiques API** : L'API Eau du Grand Lyon ne retourne qu'une fenêtre historique limitée. L'intégration accumule cependant jusqu'à **36 mois** en cache local persistant.
 - **Compteurs Standard** : Les détails horaires et alertes temps réel ne sont disponibles que sur compteurs Téléo.
 - **Mode hors-ligne** : En cas d'indisponibilité prolongée (>7 jours), une alerte apparaît dans les réparations HA.
 
@@ -236,14 +169,14 @@ L'intégration fonctionne avec deux types de compteurs :
 2. Attendez quelques minutes avant de réessayer — l'intégration réessaye automatiquement avec un délai exponentiel
 3. Si le problème persiste, attendez 1-2 heures avant de configurer l'intégration
 
-### L'index compteur ou la consommation journalière affiche des valeurs 1000x trop grandes (ex. "80 m³" en un jour)
+### L'index compteur ou la consommation journalière affiche une valeur anormale
 
-**Cause** : bug corrigé en v3.4.1 — sur les compteurs récents ou à faible index cumulé (moins de 100 m³), l'index restait affiché en litres sous l'étiquette m³ (ex. `20990.000 m³` au lieu de `20.990 m³`), ce qui gonflait artificiellement les consommations journalières calculées à partir de cet index.
+**Cause** : l'API peut fournir un index en litres alors que l'entité attend des m³. L'intégration convertit les unités déclarées par l'API et utilise un repli par magnitude lorsque l'unité est absente.
 
 **Solutions** :
-1. Mettez à jour vers la v3.4.1 ou une version ultérieure (le calcul est corrigé pour les nouvelles données)
-2. Les statistiques long terme **déjà enregistrées** avant la mise à jour restent fausses : dans Home Assistant, allez dans `Outils de développement > Statistiques`, recherchez le capteur concerné (`Index compteur` ou `Index journalier`) et utilisez **Corriger les statistiques** pour ajuster ou effacer les jours erronés
-3. Si le doute persiste, utilisez le service **Effacer le cache** puis **Forcer la mise à jour** pour reconstruire l'historique depuis l'API
+1. Vérifiez les unités et les valeurs brutes renvoyées par l'API dans les attributs du capteur.
+2. Les statistiques long terme déjà enregistrées peuvent être corrigées dans `Outils de développement > Statistiques`.
+3. Si nécessaire, utilisez le service **Effacer le cache** puis **Forcer la mise à jour** pour reconstruire l'historique depuis l'API.
 
 ### Certains capteurs sont manquants
 
@@ -255,7 +188,7 @@ L'intégration fonctionne avec deux types de compteurs :
 3. Cliquez sur le capteur puis sur l'icône engrenage → Activez le capteur
 
 ## Prérequis
-- Home Assistant (`2024.4.0` ou ultérieure)
+- Home Assistant (`2024.11.0` ou ultérieure)
 - Un compte valide avec Eau du Grand Lyon (email et mot de passe)
 
 ## Installation
@@ -306,11 +239,6 @@ L'intégration récupérera automatiquement les données toutes les **24 heures*
 ## Utilisation
 Une fois configuré, les capteurs apparaîtront dans votre tableau de bord Home Assistant. Vous pouvez les utiliser dans des automatisations, des tableaux de bord, ou de toute autre manière que vous utilisez les capteurs dans Home Assistant.
 
-### Notifications Intelligentes
-
-> ⚠️ **Non disponible dans cette version** — prévu pour une version future.
-
-
 Checklist de réparation :
 
 1. Vérifiez que ce fichier existe bien :
@@ -343,7 +271,6 @@ En cas de doute, la structure valide est :
     client.py
     auth.py
     endpoints.py
-    methods.py
   brand/
     icon.png
     logo.png
