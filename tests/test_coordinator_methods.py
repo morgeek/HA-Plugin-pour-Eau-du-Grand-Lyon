@@ -403,6 +403,18 @@ class TestUpdateErrorPaths:
         ]
         assert [point["sum"] for point in series] == [1.0, 4.0, 6.0]
 
+    def test_build_daily_stat_series_deduplicates_dates(self):
+        daily = [
+            {"date": "2026-08-16", "consommation_m3": 1.0},
+            {"date": "2026-08-16", "consommation_m3": 2.5},
+            {"date": "2026-08-17", "consommation_m3": 3.0},
+        ]
+        with patch("custom_components.eau_grand_lyon.coordinator.StatisticData", new=lambda **kw: kw):
+            series = EauGrandLyonCoordinator._build_daily_stat_series(daily)
+        assert len(series) == 2
+        assert [point["state"] for point in series] == [2.5, 3.0]
+        assert [point["sum"] for point in series] == [2.5, 5.5]
+
     def test_merge_daily_history_fresh_value_replaces_late_correction(self):
         merged = EauGrandLyonCoordinator._merge_daily_history(
             [{"date": "2026-08-16", "consommation_m3": 1.0}],
@@ -416,6 +428,20 @@ class TestUpdateErrorPaths:
             {"date": "2026-08-17", "consommation_m3": 3.0},
         ]
 
+    def test_sanitize_daily_history_discards_corrupt_entries(self):
+        stored = {
+            "REF1": [
+                {"date": "2026-08-16", "consommation_m3": 1.2},
+                {"date": "not-a-date", "consommation_m3": 2.0},
+                {"date": "2026-08-17", "consommation_m3": "nan"},
+                None,
+            ],
+            "BROKEN": "not-a-list",
+        }
+        assert EauGrandLyonCoordinator._sanitize_daily_history(stored) == {
+            "REF1": [{"date": "2026-08-16", "consommation_m3": 1.2}]
+        }
+
     def test_statistic_ref_sanitizes_invalid_characters(self):
         """Recorder statistic ids only allow lowercase [a-z0-9_], no edge/double underscores.
 
@@ -426,6 +452,10 @@ class TestUpdateErrorPaths:
         assert EauGrandLyonCoordinator._statistic_ref("REF1") == "ref1"
         assert EauGrandLyonCoordinator._statistic_ref("AB-12 34/X") == "ab_12_34_x"
         assert EauGrandLyonCoordinator._statistic_ref("--") == "contract"
+
+    def test_statistic_id_preserves_public_prefixes_and_sanitizes_ref(self):
+        assert EauGrandLyonCoordinator._statistic_id("water", "AB-12") == "eau_grand_lyon:water_ab_12"
+        assert EauGrandLyonCoordinator._statistic_id("cost_daily", "REF1") == "eau_grand_lyon:cost_daily_ref1"
 
     @pytest.mark.asyncio
     async def test_offline_cache_persists_failure_context(self):

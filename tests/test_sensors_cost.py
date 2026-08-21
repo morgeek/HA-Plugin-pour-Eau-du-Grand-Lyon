@@ -131,6 +131,7 @@ class TestCoutReelMoisSensor:
         assert attrs["part_fixe_eur"] == round(180.0 / 12, 2)
         assert attrs["part_variable_eur"] == 30.0
         assert attrs["abonnement_annuel"] == 180.0
+        assert attrs["inclut_abonnement"] is True
 
 
 # ── EauGrandLyonCoutReelAnnuelSensor ─────────────────────────────────────────

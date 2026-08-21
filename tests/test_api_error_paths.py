@@ -139,6 +139,25 @@ class TestAuthPaths:
         with pytest.raises(NetworkError):
             await auth.authenticate()
 
+
+class TestDailyFetchMetadata:
+    @pytest.mark.asyncio
+    async def test_metadata_counts_normalized_entries_only(self):
+        api = EauGrandLyonApi.__new__(EauGrandLyonApi)
+        api._get_daily_new = AsyncMock(
+            return_value=[
+                {"date": "2026-08-16", "consommation": 1.2},
+                {"date": "not-a-date", "unexpected": True},
+            ]
+        )
+        api._get_daily_legacy = AsyncMock()
+
+        result = await api._fetch_daily_raw("REF1", 365)
+
+        assert result["nb_entries"] == 1
+        assert result["last_date"] == "2026-08-16"
+        api._get_daily_legacy.assert_not_awaited()
+
     @pytest.mark.asyncio
     async def test_authenticate_authorize_403_raises_waf_blocked(self, patched_aiohttp):
         auth = EauGrandLyonAuth(

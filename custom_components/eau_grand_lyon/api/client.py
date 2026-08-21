@@ -332,11 +332,12 @@ class EauGrandLyonApi:
         source = "Produits (2026)" if entries else "Aucune"
         if not entries:
             entries, source = await self._get_daily_legacy(contract_id, nb_jours)
-        last_date = entries[-1].get("date") if entries else None
+        formatted_entries = self.format_daily_consumptions(entries, contract_id)
+        last_date = formatted_entries[-1].get("date") if formatted_entries else None
         return {
-            "entries": self.format_daily_consumptions(entries, contract_id),
+            "entries": formatted_entries,
             "source": source,
-            "nb_entries": len(entries),
+            "nb_entries": len(formatted_entries),
             "last_date": last_date,
         }
 

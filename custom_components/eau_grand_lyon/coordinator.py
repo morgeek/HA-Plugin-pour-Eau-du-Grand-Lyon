@@ -7,6 +7,7 @@ import calendar
 import inspect
 import json
 import logging
+import math
 import random
 import re
 import time
@@ -88,6 +89,10 @@ from .const import (
     RATE_LIMIT_DELAY_S,
     RETRY_BACKOFF_MULTIPLIER,
     RETRY_JITTER_RATIO,
+    STATISTIC_COST,
+    STATISTIC_COST_DAILY,
+    STATISTIC_WATER,
+    STATISTIC_WATER_DAILY,
     WAF_RETRY_BASE_DELAY_S,
 )
 from .repairs import check_long_outage_issue
@@ -411,6 +416,31 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             if date:
                 by_date[str(date)] = entry
         return sorted(by_date.values(), key=lambda entry: str(entry.get("date", "")))[-max_days:]
+
+    @staticmethod
+    def _sanitize_daily_history(stored: object) -> dict[str, list[dict]]:
+        """Conserve uniquement les contrats et journées valides du cache."""
+        if not isinstance(stored, dict):
+            return {}
+        sanitized: dict[str, list[dict]] = {}
+        for ref, entries in stored.items():
+            if not isinstance(ref, str) or not isinstance(entries, list):
+                continue
+            valid_entries = []
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                try:
+                    datetime.fromisoformat(str(entry["date"]))
+                    value = float(entry["consommation_m3"])
+                    if not math.isfinite(value):
+                        continue
+                except (KeyError, TypeError, ValueError):
+                    continue
+                valid_entries.append(entry)
+            if valid_entries:
+                sanitized[ref] = valid_entries
+        return sanitized
 
     async def async_clear_cache(self) -> None:
         """Supprime le cache persistant et réinitialise les données locales."""
@@ -1150,6 +1180,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         sanitized = re.sub(r"[^a-z0-9]+", "_", str(ref).lower()).strip("_")
         return sanitized or "contract"
 
+    @classmethod
+    def _statistic_id(cls, prefix: str, ref: str) -> str:
+        """Construit un statistic ID stable pour un contrat."""
+        return f"{DOMAIN}:{prefix}_{cls._statistic_ref(ref)}"
+
     @staticmethod
     def _build_stat_series(
         consos: list[dict],
@@ -1232,7 +1267,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         """Reconstruit un cumul journalier à la date réelle de chaque journée."""
         series: list["StatisticData"] = []
         cumulative = 0.0
-        for entry in sorted(consos, key=lambda item: str(item.get("date", ""))):
+        by_date: dict[str, dict] = {}
+        for entry in consos:
+            if isinstance(entry, dict) and entry.get("date"):
+                by_date[str(entry["date"])] = entry
+        for entry in sorted(by_date.values(), key=lambda item: str(item.get("date", ""))):
             try:
                 date = datetime.fromisoformat(str(entry["date"])).date()
                 value = float(value_fn(float(entry["consommation_m3"])))
@@ -1270,7 +1309,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                     "has_sum": True,
                     "name": f"Eau Grand Lyon - Journalier {ref}",
                     "source": DOMAIN,
-                    "statistic_id": f"{DOMAIN}:water_daily_{self._statistic_ref(ref)}",
+                    "statistic_id": self._statistic_id(STATISTIC_WATER_DAILY, ref),
                     "unit_of_measurement": "m³",
                     "unit_class": "volume",
                 }
@@ -1284,7 +1323,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                         "has_sum": True,
                         "name": f"Eau Grand Lyon - Coût journalier {ref}",
                         "source": DOMAIN,
-                        "statistic_id": f"{DOMAIN}:cost_daily_{self._statistic_ref(ref)}",
+                        "statistic_id": self._statistic_id(STATISTIC_COST_DAILY, ref),
                         "unit_of_measurement": "EUR",
                         "unit_class": None,
                     }
@@ -1305,7 +1344,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             if not consos:
                 continue
 
-            statistic_id = f"{DOMAIN}:water_{self._statistic_ref(ref)}"
+            statistic_id = self._statistic_id(STATISTIC_WATER, ref)
             metadata: StatisticMetaData = {
                 **_mean_kwargs,
                 "has_sum": True,
@@ -1323,7 +1362,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             tarif = contract.get("tarif_m3", 0)
             if tarif <= 0:
                 continue
-            cost_statistic_id = f"{DOMAIN}:cost_{self._statistic_ref(ref)}"
+            cost_statistic_id = self._statistic_id(STATISTIC_COST, ref)
             cost_metadata: StatisticMetaData = {
                 **_mean_kwargs,
                 "has_sum": True,

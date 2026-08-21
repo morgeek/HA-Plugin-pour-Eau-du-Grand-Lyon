@@ -2,6 +2,13 @@
 
 DOMAIN = "eau_grand_lyon"
 
+# Prefixes des statistiques externes recorder. Les suffixes font partie de
+# l'API publique de l'intégration et ne doivent pas être renommés.
+STATISTIC_WATER = "water"
+STATISTIC_WATER_DAILY = "water_daily"
+STATISTIC_COST = "cost"
+STATISTIC_COST_DAILY = "cost_daily"
+
 CONF_EMAIL = "email"
 CONF_PASSWORD = "password"
 
