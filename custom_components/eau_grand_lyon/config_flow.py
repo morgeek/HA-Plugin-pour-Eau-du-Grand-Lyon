@@ -114,6 +114,33 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type:
         """Retourne le gestionnaire du flux d'options."""
         return EauGrandLyonOptionsFlowHandler()
 
+    def _async_update_and_abort_compat(
+        self,
+        config_entry: ConfigEntry,
+        *,
+        data_updates: dict[str, Any],
+        reason: str,
+    ) -> config_entries.FlowResult:
+        """Update credentials with the best ConfigFlow API available.
+
+        ``async_update_and_abort`` is the primary path on recent Home Assistant
+        releases. Home Assistant 2024.11 does not expose it, so that version
+        receives the equivalent update without a direct reload; the config-entry
+        update listener remains the sole owner of the reload.
+        """
+        modern_update = getattr(self, "async_update_and_abort", None)
+        if callable(modern_update):
+            return modern_update(
+                config_entry,
+                data_updates=data_updates,
+                reason=reason,
+            )
+
+        data = dict(config_entry.data)
+        data.update(data_updates)
+        self.hass.config_entries.async_update_entry(config_entry, data=data)
+        return self.async_abort(reason=reason)
+
     async def async_step_reauth(self, user_input: dict[str, Any] | None = None) -> config_entries.FlowResult:
         """Flux de réauthentification après une erreur d'authentification."""
         return await self.async_step_reauth_confirm()
@@ -134,7 +161,7 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type:
             if not errors:
                 await self.async_set_unique_id(email.lower())
                 self._abort_if_unique_id_mismatch()
-                return self.async_update_and_abort(
+                return self._async_update_and_abort_compat(
                     config_entry,
                     data_updates={
                         CONF_EMAIL: email,
@@ -173,7 +200,7 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type:
             if not errors:
                 await self.async_set_unique_id(email.lower())
                 self._abort_if_unique_id_mismatch()
-                return self.async_update_and_abort(
+                return self._async_update_and_abort_compat(
                     config_entry,
                     data_updates={
                         CONF_EMAIL: email,

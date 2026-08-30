@@ -17,6 +17,7 @@ from custom_components.eau_grand_lyon.config_flow import (
     EauGrandLyonOptionsFlowHandler,
     _authenticate_and_handle_errors,
 )
+from custom_components.eau_grand_lyon import _async_update_options
 from custom_components.eau_grand_lyon.const import (
     CONF_EMAIL,
     CONF_PASSWORD,
@@ -143,11 +144,6 @@ def _make_flow(entry: MagicMock | None = None) -> tuple[EauGrandLyonConfigFlow, 
     flow._get_reauth_entry = MagicMock(return_value=config_entry)
     flow._get_reconfigure_entry = MagicMock(return_value=config_entry)
 
-    def update_and_abort(target, *, data_updates, reason):
-        flow.hass.config_entries.async_update_entry(target, data={**target.data, **data_updates})
-        return flow.async_abort(reason=reason)
-
-    flow.async_update_and_abort = MagicMock(side_effect=update_and_abort)
     return flow, config_entry
 
 
@@ -256,11 +252,13 @@ class TestReauthFlow:
         assert result == {"type": "abort", "reason": "reauth_successful"}
         flow.async_set_unique_id.assert_awaited_once_with("old@example.com")
         flow._abort_if_unique_id_mismatch.assert_called_once_with()
-        flow.async_update_and_abort.assert_called_once_with(
-            entry,
-            data_updates={CONF_EMAIL: "Old@Example.com", CONF_PASSWORD: "secret"},
-            reason="reauth_successful",
-        )
+        assert flow._modern_update_calls == [
+            (
+                entry,
+                {CONF_EMAIL: "Old@Example.com", CONF_PASSWORD: "secret"},
+                "reauth_successful",
+            )
+        ]
         flow.hass.config_entries.async_update_entry.assert_called_once_with(
             entry,
             data={
@@ -293,7 +291,7 @@ class TestReauthFlow:
             new=AsyncMock(return_value={}),
         ), pytest.raises(RuntimeError, match="existing account"):
             await flow.async_step_reauth_confirm({CONF_EMAIL: "configured@example.com", CONF_PASSWORD: "secret"})
-        flow.async_update_and_abort.assert_not_called()
+        assert flow._modern_update_calls == []
 
 
 class TestReconfigureFlow:
@@ -368,11 +366,13 @@ class TestReconfigureFlow:
                 }
             )
         assert result == {"type": "abort", "reason": "reconfigure_successful"}
-        flow.async_update_and_abort.assert_called_once_with(
-            entry,
-            data_updates={CONF_EMAIL: "OLD@example.com", CONF_PASSWORD: "secret"},
-            reason="reconfigure_successful",
-        )
+        assert flow._modern_update_calls == [
+            (
+                entry,
+                {CONF_EMAIL: "OLD@example.com", CONF_PASSWORD: "secret"},
+                "reconfigure_successful",
+            )
+        ]
         flow.hass.config_entries.async_update_entry.assert_called_once_with(
             entry,
             data={
@@ -382,6 +382,40 @@ class TestReconfigureFlow:
             },
         )
         assert entry.options[CONF_TARIF_M3] == 4.8
+        flow.hass.config_entries.async_reload.assert_not_awaited()
+
+        await _async_update_options(flow.hass, entry)
+        flow.hass.config_entries.async_reload.assert_awaited_once_with("entry-1")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("step_name", "reason"),
+        [
+            ("async_step_reauth_confirm", "reauth_successful"),
+            ("async_step_reconfigure", "reconfigure_successful"),
+        ],
+    )
+    async def test_ha_2024_11_fallback_updates_and_aborts_without_direct_reload(self, step_name, reason):
+        flow, entry = _make_flow()
+        # Mask only the missing HA capability. Our compatibility helper and the
+        # complete reauth/reconfigure flow remain real and exercised.
+        flow.async_update_and_abort = None
+        with patch(
+            "custom_components.eau_grand_lyon.config_flow._authenticate_and_handle_errors",
+            new=AsyncMock(return_value={}),
+        ):
+            result = await getattr(flow, step_name)({CONF_EMAIL: " OLD@example.com ", CONF_PASSWORD: "new-secret"})
+
+        assert result == {"type": "abort", "reason": reason}
+        flow.hass.config_entries.async_update_entry.assert_called_once_with(
+            entry,
+            data={
+                CONF_EMAIL: "OLD@example.com",
+                CONF_PASSWORD: "new-secret",
+                "account_setting": "kept",
+            },
+        )
+        assert entry.options == {CONF_TARIF_M3: 4.8, "option_setting": "kept"}
         flow.hass.config_entries.async_reload.assert_not_awaited()
 
     @pytest.mark.asyncio

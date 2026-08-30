@@ -1,4 +1,5 @@
 """Tests for config_flow validation helpers."""
+
 import pytest
 import voluptuous as vol
 
@@ -38,6 +39,7 @@ class TestIsValidEmail:
 
 
 # ── Intervalle de mise à jour — vol.Coerce(int) ───────────────────────────────
+
 
 class TestIntervalValues:
     """L'intervalle est désormais un SelectSelector : valeurs (heures) en strings."""

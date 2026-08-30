@@ -454,9 +454,7 @@ class TestSensorAutoDiscovery:
         entry.runtime_data = coordinator
         entry.entry_id = "test_entry"
 
-        await sensor_platform.async_setup_entry(
-            MagicMock(), entry, lambda entities, update_before_add=False: None
-        )
+        await sensor_platform.async_setup_entry(MagicMock(), entry, lambda entities, update_before_add=False: None)
 
         assert f"{entry.entry_id}_REF1_derniere_facture" in set(created)
         assert f"{entry.entry_id}_REF1_fuite_estimee" not in set(created)

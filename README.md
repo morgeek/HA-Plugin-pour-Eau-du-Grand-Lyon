@@ -260,7 +260,7 @@ Après la mise à jour, Home Assistant peut conserver l'ancien nom personnalisé
 
 ### Le téléchargement de facture ne fonctionne pas
 
-La version 3.5.1 utilise la route actuelle du portail (`/factures/{id}/duplicata`) et l'identifiant interne de la facture, au lieu de sa référence lisible. Le bouton est indisponible si aucun document n'est annoncé comme téléchargeable.
+La version 3.5.2 utilise la route actuelle du portail (`/factures/{id}/duplicata`) et l'identifiant interne de la facture, au lieu de sa référence lisible. Le bouton est indisponible si aucun document n'est annoncé comme téléchargeable. Un lien `/local/...` est ajouté uniquement lorsque le fichier se trouve réellement sous `/config/www` ; ailleurs, la notification indique seulement le chemin de sauvegarde local.
 
 Vérifiez ensuite :
 

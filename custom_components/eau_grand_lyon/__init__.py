@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import logging
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING, TypeAlias
 
 from homeassistant.config_entries import ConfigEntry
@@ -12,6 +13,8 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.typing import ConfigType
 
 from .api import ApiError, AuthenticationError, NetworkError, WafBlockedError
@@ -89,7 +92,86 @@ async def async_setup_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    try:
+        _async_cleanup_legacy_device(hass, entry)
+    except Exception:  # noqa: BLE001 - best-effort migration must never break setup
+        _LOGGER.exception("Legacy device cleanup failed; keeping the existing device")
+
     entry.async_on_unload(entry.add_update_listener(_async_update_options))
+    return True
+
+
+def _async_cleanup_legacy_device(hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> bool:
+    """Remove the exact legacy account device only when it is demonstrably orphaned.
+
+    This migration touches the device registry exclusively. Entity registry
+    entries, entity IDs, unique IDs and recorder statistics are never modified.
+    """
+    coordinator = getattr(entry, "runtime_data", None)
+    contracts = (coordinator.data or {}).get("contracts", {}) if coordinator is not None else {}
+    if not contracts:
+        return False
+
+    device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
+    legacy_identifier = (DOMAIN, entry.entry_id)
+    legacy_device = device_registry.async_get_device(identifiers={legacy_identifier})
+    if legacy_device is None or legacy_device.identifiers != {legacy_identifier}:
+        return False
+
+    other_config_entries = set(legacy_device.config_entries) - {entry.entry_id}
+    if other_config_entries:
+        _LOGGER.warning(
+            "Keeping legacy device %s: shared with config entries %s",
+            legacy_device.id,
+            sorted(other_config_entries),
+        )
+        return False
+
+    for device in device_registry.devices.values():
+        if device.id != legacy_device.id and device.via_device_id == legacy_device.id:
+            _LOGGER.warning("Keeping legacy device %s: device %s depends on it", legacy_device.id, device.id)
+            return False
+
+    current_devices = []
+    for contract_ref in contracts:
+        current_identifier = (DOMAIN, f"{entry.entry_id}_{contract_ref}")
+        current_device = device_registry.async_get_device(identifiers={current_identifier})
+        if current_device is None:
+            _LOGGER.debug("Deferring legacy device cleanup: contract device %s is not registered", current_identifier)
+            return False
+        current_entities = er.async_entries_for_device(
+            entity_registry,
+            current_device.id,
+            include_disabled_entities=True,
+        )
+        if not any(entity.config_entry_id == entry.entry_id for entity in current_entities):
+            _LOGGER.debug(
+                "Deferring legacy device cleanup: contract device %s has no current entities",
+                current_device.id,
+            )
+            return False
+        current_devices.append(current_device.id)
+
+    legacy_entities = er.async_entries_for_device(
+        entity_registry,
+        legacy_device.id,
+        include_disabled_entities=True,
+    )
+    if legacy_entities:
+        _LOGGER.warning(
+            "Keeping legacy device %s: %d registry entities are still attached",
+            legacy_device.id,
+            len(legacy_entities),
+        )
+        return False
+
+    device_registry.async_remove_device(legacy_device.id)
+    _LOGGER.info(
+        "Removed orphaned legacy device %s; active contract devices remain: %s",
+        legacy_device.id,
+        ", ".join(current_devices),
+    )
     return True
 
 
@@ -111,6 +193,17 @@ def _validate_write_path(hass: HomeAssistant, path: str) -> None:
             translation_key="path_not_allowed",
             translation_placeholders={"path": path},
         )
+
+
+def _local_invoice_url(hass: HomeAssistant, target_path: str) -> str | None:
+    """Return a /local URL only for a real descendant of Home Assistant's www directory."""
+    www_root = Path(hass.config.path("www")).resolve()
+    target = Path(target_path).resolve()
+    try:
+        relative = target.relative_to(www_root)
+    except ValueError:
+        return None
+    return f"/local/{relative.as_posix()}"
 
 
 def _async_setup_services(hass: HomeAssistant) -> None:
@@ -229,25 +322,23 @@ def _async_setup_services(hass: HomeAssistant) -> None:
                         translation_placeholders={"reason": str(err)},
                     ) from err
 
-                www_root = hass.config.path("www")
-                try:
-                    rel = os.path.relpath(target_path, www_root)
-                    download_url = f"/local/{rel}"
-                except ValueError:
-                    download_url = None
+                download_url = _local_invoice_url(hass, target_path)
                 if download_url:
-                    await hass.services.async_call(
-                        "persistent_notification",
-                        "create",
-                        {
-                            "title": "Facture Eau du Grand Lyon",
-                            "message": (
-                                f"Facture du contrat {contract_ref} téléchargée. "
-                                f"[Télécharger le PDF]({download_url})"
-                            ),
-                            "notification_id": f"eau_grand_lyon_invoice_{contract_ref}",
-                        },
+                    notification_message = f"Facture du contrat {contract_ref} téléchargée. "
+                    notification_message += f"[Télécharger le PDF]({download_url})"
+                else:
+                    notification_message = (
+                        f"Facture du contrat {contract_ref} téléchargée dans :\n`{Path(target_path).resolve()}`"
                     )
+                await hass.services.async_call(
+                    "persistent_notification",
+                    "create",
+                    {
+                        "title": "Facture Eau du Grand Lyon",
+                        "message": notification_message,
+                        "notification_id": f"eau_grand_lyon_invoice_{contract_ref}",
+                    },
+                )
                 return
 
         raise HomeAssistantError(
@@ -272,10 +363,11 @@ async def async_remove_config_entry_device(
     dont le contrat a disparu de l'API (critère Gold `stale-devices`).
     """
     coordinator = getattr(config_entry, "runtime_data", None)
-    valid_ids = {(DOMAIN, config_entry.entry_id)}
-    if coordinator is not None and coordinator.data:
-        for ref in coordinator.data.get("contracts", {}):
-            valid_ids.add((DOMAIN, f"{config_entry.entry_id}_{ref}"))
+    contracts = (coordinator.data or {}).get("contracts", {}) if coordinator is not None else {}
+    if contracts:
+        valid_ids = {(DOMAIN, f"{config_entry.entry_id}_{ref}") for ref in contracts}
+    else:
+        valid_ids = {(DOMAIN, config_entry.entry_id)}
     return not any(identifier in valid_ids for identifier in device_entry.identifiers)
 
 

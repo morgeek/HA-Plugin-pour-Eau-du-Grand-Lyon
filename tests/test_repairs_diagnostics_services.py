@@ -1,4 +1,5 @@
 """Tests for repairs, diagnostics, and service handlers."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -80,9 +81,7 @@ class TestDiagnosticsModule:
             captured["data"] = data
             return data
 
-        sys.modules["homeassistant.components.diagnostics"] = types.SimpleNamespace(
-            async_redact_data=_redact
-        )
+        sys.modules["homeassistant.components.diagnostics"] = types.SimpleNamespace(async_redact_data=_redact)
         from custom_components.eau_grand_lyon.diagnostics import (
             async_get_config_entry_diagnostics,
         )

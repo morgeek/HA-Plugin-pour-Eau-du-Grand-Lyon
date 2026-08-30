@@ -1,4 +1,5 @@
 """Tests for sensors/contract.py — date parsing, state and availability logic."""
+
 from datetime import date
 from unittest.mock import MagicMock
 
@@ -29,6 +30,7 @@ def _make(cls, contract_data, contract_ref="REF1", options=None):
 
 # ── EauGrandLyonStatutSensor ──────────────────────────────────────────────────
 
+
 class TestStatutSensor:
     def test_returns_statut(self):
         s = _make(EauGrandLyonStatutSensor, {"statut": "ACTIF"})
@@ -39,11 +41,14 @@ class TestStatutSensor:
         assert s.native_value is None
 
     def test_extra_attrs_present(self):
-        s = _make(EauGrandLyonStatutSensor, {
-            "statut": "ACTIF",
-            "reference": "REF-123",
-            "usage": "Habitation",
-        })
+        s = _make(
+            EauGrandLyonStatutSensor,
+            {
+                "statut": "ACTIF",
+                "reference": "REF-123",
+                "usage": "Habitation",
+            },
+        )
         attrs = s.extra_state_attributes
         assert "référence" in attrs
         assert "usage" in attrs
@@ -74,6 +79,7 @@ class TestStatutSensor:
 
 # ── EauGrandLyonDateEcheanceSensor ────────────────────────────────────────────
 
+
 class TestDateEcheanceSensor:
     def test_valid_iso_date(self):
         s = _make(EauGrandLyonDateEcheanceSensor, {"date_echeance": "2027-12-31"})
@@ -94,6 +100,7 @@ class TestDateEcheanceSensor:
 
 # ── EauGrandLyonProchaineFactureSensor ────────────────────────────────────────
 
+
 class TestProchaineFactureSensor:
     def test_valid_date(self):
         s = _make(EauGrandLyonProchaineFactureSensor, {"next_bill_date": "2026-09-15"})
@@ -110,6 +117,7 @@ class TestProchaineFactureSensor:
 
 # ── EauGrandLyonProchaineReleveSensor ─────────────────────────────────────────
 
+
 class TestProchaineReleveSensor:
     def test_valid_date(self):
         s = _make(EauGrandLyonProchaineReleveSensor, {"date_prochaine_releve": "2026-10-01"})
@@ -124,9 +132,12 @@ class TestProchaineReleveSensor:
         assert s.native_value is None
 
     def test_extra_attrs(self):
-        s = _make(EauGrandLyonProchaineReleveSensor, {
-            "pds_mode_releve": "RADIO",
-            "pds_communicabilite_amm": True,
-        })
+        s = _make(
+            EauGrandLyonProchaineReleveSensor,
+            {
+                "pds_mode_releve": "RADIO",
+                "pds_communicabilite_amm": True,
+            },
+        )
         attrs = s.extra_state_attributes
         assert attrs["mode_releve"] == "RADIO"

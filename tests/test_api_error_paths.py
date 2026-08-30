@@ -349,9 +349,7 @@ class TestRequestPaths:
 
     @pytest.mark.asyncio
     async def test_get_invoice_pdf_rejects_html_success_response(self, patched_aiohttp):
-        session = _FakeSession(
-            [_FakeContextManager(_FakeResponse(status=200, text="<html>login</html>"))]
-        )
+        session = _FakeSession([_FakeContextManager(_FakeResponse(status=200, text="<html>login</html>"))])
         api = self._make_api(session)
         with pytest.raises(NetworkError, match="pas un document PDF"):
             await api.get_invoice_pdf("INV-1")

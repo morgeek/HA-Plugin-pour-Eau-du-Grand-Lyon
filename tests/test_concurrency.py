@@ -6,6 +6,7 @@ parallèle et que le token expire, chaque requête reçoit un 401 et appelle
 partiraient simultanément contre un WAF agressif. Le premier ré-authentifie,
 les suivants réutilisent le token fraîchement obtenu.
 """
+
 import asyncio
 from unittest.mock import MagicMock
 

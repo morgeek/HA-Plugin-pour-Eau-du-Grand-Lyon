@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from custom_components.eau_grand_lyon import (
+    _async_cleanup_legacy_device,
     async_migrate_entry,
     async_remove_config_entry_device,
     _validate_write_path,
@@ -123,11 +125,142 @@ class TestStaleDeviceRemoval:
         assert await async_remove_config_entry_device(MagicMock(), entry, device) is False
 
     @pytest.mark.asyncio
+    async def test_legacy_account_device_is_removable_when_contract_exists(self):
+        entry = self._entry_with_contracts("REF1")
+        device = MagicMock()
+        device.identifiers = {(DOMAIN, "e1")}
+        assert await async_remove_config_entry_device(MagicMock(), entry, device) is True
+
+    @pytest.mark.asyncio
     async def test_account_device_is_not_removable(self):
         entry = self._entry_with_contracts()
         device = MagicMock()
         device.identifiers = {(DOMAIN, "e1")}
         assert await async_remove_config_entry_device(MagicMock(), entry, device) is False
+
+    @pytest.mark.asyncio
+    async def test_multiple_contract_devices_are_valid_and_legacy_is_stale(self):
+        entry = self._entry_with_contracts("A", "B")
+        for identifier in ("e1_A", "e1_B"):
+            device = MagicMock()
+            device.identifiers = {(DOMAIN, identifier)}
+            assert await async_remove_config_entry_device(MagicMock(), entry, device) is False
+        legacy = MagicMock()
+        legacy.identifiers = {(DOMAIN, "e1")}
+        assert await async_remove_config_entry_device(MagicMock(), entry, legacy) is True
+
+
+class _FakeDeviceRegistry:
+    def __init__(self, *devices):
+        self.devices = {device.id: device for device in devices}
+        self.removed: list[str] = []
+
+    def async_get_device(self, identifiers):
+        return next(
+            (device for device in self.devices.values() if device.identifiers & identifiers),
+            None,
+        )
+
+    def async_remove_device(self, device_id):
+        self.removed.append(device_id)
+        self.devices.pop(device_id)
+
+
+class TestLegacyDeviceCleanup:
+    @staticmethod
+    def _device(device_id, identifier, *, config_entries=None, via_device_id=None):
+        return SimpleNamespace(
+            id=device_id,
+            identifiers={(DOMAIN, identifier)},
+            config_entries=set(config_entries or {"e1"}),
+            via_device_id=via_device_id,
+        )
+
+    def _setup_registries(self, monkeypatch, *, refs=("REF1",), legacy_entities=None):
+        legacy = self._device("legacy", "e1")
+        current_devices = [self._device(f"device-{ref}", f"e1_{ref}") for ref in refs]
+        device_registry = _FakeDeviceRegistry(legacy, *current_devices)
+        current_entities = {
+            device.id: [
+                SimpleNamespace(
+                    entity_id=f"sensor.{device.id}",
+                    unique_id=f"unique-{device.id}",
+                    config_entry_id="e1",
+                    device_id=device.id,
+                )
+            ]
+            for device in current_devices
+        }
+        entity_registry = SimpleNamespace(
+            entries={
+                **current_entities,
+                "legacy": list(legacy_entities or []),
+            },
+            async_remove=MagicMock(),
+        )
+        monkeypatch.setattr("custom_components.eau_grand_lyon.dr.async_get", lambda hass: device_registry)
+        monkeypatch.setattr("custom_components.eau_grand_lyon.er.async_get", lambda hass: entity_registry)
+        monkeypatch.setattr(
+            "custom_components.eau_grand_lyon.er.async_entries_for_device",
+            lambda registry, device_id, include_disabled_entities=False: registry.entries.get(device_id, []),
+        )
+        entry = MagicMock()
+        entry.entry_id = "e1"
+        entry.runtime_data.data = {"contracts": {ref: {} for ref in refs}}
+        return entry, device_registry, entity_registry
+
+    def test_orphaned_legacy_device_is_removed_without_touching_entities(self, monkeypatch):
+        entry, device_registry, entity_registry = self._setup_registries(monkeypatch)
+        entities_before = {device_id: list(entities) for device_id, entities in entity_registry.entries.items()}
+
+        assert _async_cleanup_legacy_device(MagicMock(), entry) is True
+
+        assert device_registry.removed == ["legacy"]
+        assert "device-REF1" in device_registry.devices
+        assert entity_registry.entries == entities_before
+        entity_registry.async_remove.assert_not_called()
+
+    def test_cleanup_keeps_legacy_device_while_any_entity_is_attached(self, monkeypatch):
+        legacy_entity = SimpleNamespace(
+            entity_id="sensor.legacy",
+            unique_id="legacy-unique",
+            config_entry_id="e1",
+            device_id="legacy",
+        )
+        entry, device_registry, entity_registry = self._setup_registries(
+            monkeypatch,
+            legacy_entities=[legacy_entity],
+        )
+
+        assert _async_cleanup_legacy_device(MagicMock(), entry) is False
+        assert device_registry.removed == []
+        assert entity_registry.entries["legacy"] == [legacy_entity]
+
+    def test_cleanup_is_idempotent(self, monkeypatch):
+        entry, device_registry, _ = self._setup_registries(monkeypatch)
+
+        assert _async_cleanup_legacy_device(MagicMock(), entry) is True
+        assert _async_cleanup_legacy_device(MagicMock(), entry) is False
+        assert device_registry.removed == ["legacy"]
+
+    def test_cleanup_supports_multiple_current_contract_devices(self, monkeypatch):
+        entry, device_registry, _ = self._setup_registries(monkeypatch, refs=("A", "B"))
+
+        assert _async_cleanup_legacy_device(MagicMock(), entry) is True
+        assert set(device_registry.devices) == {"device-A", "device-B"}
+
+    def test_cleanup_keeps_shared_or_parent_legacy_device(self, monkeypatch):
+        entry, device_registry, _ = self._setup_registries(monkeypatch)
+        device_registry.devices["legacy"].config_entries.add("other-entry")
+
+        assert _async_cleanup_legacy_device(MagicMock(), entry) is False
+        assert device_registry.removed == []
+
+        device_registry.devices["legacy"].config_entries = {"e1"}
+        child = self._device("child", "other_device", via_device_id="legacy")
+        device_registry.devices[child.id] = child
+        assert _async_cleanup_legacy_device(MagicMock(), entry) is False
+        assert device_registry.removed == []
 
 
 class TestServiceExceptionTranslations:

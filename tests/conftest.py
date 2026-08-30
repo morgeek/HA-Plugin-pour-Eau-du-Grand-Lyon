@@ -68,8 +68,20 @@ def _stub_homeassistant() -> None:
     class _ConfigFlow:
         """Stub ConfigFlow that accepts domain= keyword."""
 
+        def __init__(self):
+            self._modern_update_calls = []
+
         def __init_subclass__(cls, domain=None, **kw):
             super().__init_subclass__(**kw)
+
+        def async_update_and_abort(self, entry, *, data_updates, reason):
+            """Mirror the inherited modern HA implementation used by the flow."""
+            self._modern_update_calls.append((entry, data_updates, reason))
+            self.hass.config_entries.async_update_entry(
+                entry,
+                data={**entry.data, **data_updates},
+            )
+            return self.async_abort(reason=reason)
 
     _make_module(
         "homeassistant.config_entries",
@@ -84,7 +96,16 @@ def _stub_homeassistant() -> None:
     )
     _make_module("homeassistant.helpers.typing", ConfigType=MagicMock)
     _make_module("homeassistant.helpers.storage", Store=MagicMock)
-    _make_module("homeassistant.helpers.device_registry", DeviceInfo=MagicMock)
+    _make_module(
+        "homeassistant.helpers.device_registry",
+        DeviceInfo=MagicMock,
+        async_get=MagicMock(),
+    )
+    _make_module(
+        "homeassistant.helpers.entity_registry",
+        async_get=MagicMock(),
+        async_entries_for_device=MagicMock(return_value=[]),
+    )
     _make_module("homeassistant.helpers.entity_platform", AddEntitiesCallback=MagicMock)
 
     class _GenericBase:

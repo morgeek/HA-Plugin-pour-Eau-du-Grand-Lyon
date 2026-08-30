@@ -9,6 +9,7 @@ from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.eau_grand_lyon import (
     _async_update_options,
+    _local_invoice_url,
     _async_setup_services,
     async_setup,
     async_setup_entry,
@@ -46,12 +47,16 @@ class TestSetupLifecycle:
         coordinator.async_config_entry_first_refresh = AsyncMock()
         coordinator.async_close = AsyncMock()
 
-        with patch("custom_components.eau_grand_lyon.EauGrandLyonCoordinator", return_value=coordinator):
+        with patch(
+            "custom_components.eau_grand_lyon.EauGrandLyonCoordinator",
+            return_value=coordinator,
+        ), patch("custom_components.eau_grand_lyon._async_cleanup_legacy_device") as cleanup:
             assert await async_setup_entry(hass, entry) is True
 
         assert entry.runtime_data is coordinator
         entry.add_update_listener.assert_called_once_with(_async_update_options)
         entry.async_on_unload.assert_called_once_with(entry.add_update_listener.return_value)
+        cleanup.assert_called_once_with(hass, entry)
         coordinator.async_close.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -135,6 +140,15 @@ def _service_hass(coordinator: MagicMock) -> tuple[MagicMock, dict[str, object]]
 
 
 class TestServiceHandlers:
+    @staticmethod
+    def _invoice_coordinator() -> MagicMock:
+        coordinator = MagicMock()
+        coordinator.data = {
+            "contracts": {"REF1": {"factures": [{"id": "API-ID-1", "reference": "INV-1", "telechargeable": True}]}}
+        }
+        coordinator.api.get_invoice_pdf = AsyncMock(return_value=b"%PDF-test")
+        return coordinator
+
     @pytest.mark.asyncio
     async def test_clear_cache_and_update_now_reach_every_coordinator(self):
         coordinator = MagicMock()
@@ -171,41 +185,56 @@ class TestServiceHandlers:
         assert "REF1,JOURNALIER,2026-08-01,0.1,Index 42.0" in content
 
     @pytest.mark.asyncio
-    async def test_download_invoice_writes_pdf_and_notifies(self, tmp_path):
-        coordinator = MagicMock()
-        coordinator.data = {
-            "contracts": {
-                "REF1": {
-                    "factures": [
-                        {"id": "API-ID-1", "reference": "INV-1", "telechargeable": True}
-                    ]
-                }
-            }
-        }
-        coordinator.api.get_invoice_pdf = AsyncMock(return_value=b"%PDF-test")
+    async def test_download_invoice_under_www_writes_pdf_and_links_local_url(self, tmp_path):
+        coordinator = self._invoice_coordinator()
         hass, handlers = _service_hass(coordinator)
         hass.config.is_allowed_path.return_value = True
-        hass.config.path.return_value = str(tmp_path)
+        www_root = tmp_path / "config" / "www"
+        hass.config.path.return_value = str(www_root)
         hass.services.async_call = AsyncMock()
-        target = tmp_path / "invoice.pdf"
+        target = www_root / "eau_grand_lyon" / "invoice.pdf"
 
         await handlers["download_latest_invoice"](MagicMock(data={"path": str(target), "contract_reference": "REF1"}))
 
         assert target.read_bytes() == b"%PDF-test"
         coordinator.api.get_invoice_pdf.assert_awaited_once_with("API-ID-1")
         hass.services.async_call.assert_awaited_once()
+        notification = hass.services.async_call.await_args.args[2]
+        assert "/local/eau_grand_lyon/invoice.pdf" in notification["message"]
+        assert ".." not in notification["message"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("directory", ["exports", "www_fake"])
+    async def test_download_invoice_outside_www_saves_without_local_url(self, tmp_path, directory):
+        coordinator = self._invoice_coordinator()
+        hass, handlers = _service_hass(coordinator)
+        hass.config.is_allowed_path.return_value = True
+        config_root = tmp_path / "config"
+        hass.config.path.return_value = str(config_root / "www")
+        hass.services.async_call = AsyncMock()
+        target = config_root / directory / "invoice.pdf"
+
+        await handlers["download_latest_invoice"](MagicMock(data={"path": str(target), "contract_reference": "REF1"}))
+
+        assert target.read_bytes() == b"%PDF-test"
+        notification = hass.services.async_call.await_args.args[2]
+        assert "/local/" not in notification["message"]
+        assert "/local/../" not in notification["message"]
+        assert str(target.resolve()) in notification["message"]
+
+    def test_local_invoice_url_rejects_normalized_traversal(self, tmp_path):
+        hass = MagicMock()
+        www_root = tmp_path / "config" / "www"
+        hass.config.path.return_value = str(www_root)
+        target = www_root / "nested" / ".." / ".." / "exports" / "invoice.pdf"
+
+        assert _local_invoice_url(hass, str(target)) is None
 
     @pytest.mark.asyncio
     async def test_download_invoice_reports_invoice_without_downloadable_document(self, tmp_path):
         coordinator = MagicMock()
         coordinator.data = {
-            "contracts": {
-                "REF1": {
-                    "factures": [
-                        {"id": "API-ID-1", "reference": "INV-1", "telechargeable": False}
-                    ]
-                }
-            }
+            "contracts": {"REF1": {"factures": [{"id": "API-ID-1", "reference": "INV-1", "telechargeable": False}]}}
         }
         coordinator.api.get_invoice_pdf = AsyncMock()
         hass, handlers = _service_hass(coordinator)

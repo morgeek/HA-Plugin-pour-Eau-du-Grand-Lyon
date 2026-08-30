@@ -5,6 +5,29 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.2] - 2026-08-30
+
+### Compatibilité Home Assistant
+
+- **Reauth/Reconfigure HA 2024.11+** : `async_update_and_abort()` reste le chemin principal sur les versions récentes. Une détection de capacité utilise `async_update_entry()` puis `async_abort()` sur HA 2024.11, qui ne fournit pas encore cette méthode.
+- **Un seul reload** : aucun flow ne recharge directement l'intégration ; le listener de `ConfigEntry` reste l'unique responsable du reload, sur les deux chemins.
+- **CI réelle** : ajout de smoke tests exécutés avec HA 2024.11/Python 3.12 et HA 2025.12/Python 3.13, en plus de la matrice de tests existante. Les pushes sur `DEV` déclenchent désormais la CI complète.
+
+### Factures
+
+- **Lien navigateur sûr** : un lien `/local/...` est créé uniquement lorsque le PDF résolu est réellement sous le dossier `www` de Home Assistant. Les chemins frères, faux préfixes et traversals `..` ne peuvent plus produire `/local/../...`.
+- **Fichiers hors `www`** : le téléchargement par Home Assistant et l'écriture locale restent inchangés, mais la notification indique le chemin filesystem sans publier de faux lien navigateur.
+
+### Migration des appareils
+
+- **Device legacy « Morgeek »** : l'ancien identifiant `(eau_grand_lyon, entry_id)` devient stale dès qu'au moins un device contrat actif existe. Le setup le supprime automatiquement uniquement s'il correspond exactement à l'ancien format et qu'aucune entité, autre ConfigEntry ou device enfant n'en dépend.
+- **Migration sûre et idempotente** : tous les devices contrats sont vérifiés avant suppression. Aucun registre d'entités, `entity_id`, `unique_id`, `statistic_id` ni historique Recorder n'est modifié.
+
+### Tests et formatage
+
+- Ajout de tests multi-contrats, protection des entités legacy, idempotence, liens sous/hors `www`, faux sous-répertoire et traversal.
+- Le formatage Black couvre désormais aussi `tests/` et le smoke test, sans modification de leur logique.
+
 ## [3.5.1] - 2026-08-30
 
 ### Corrections
