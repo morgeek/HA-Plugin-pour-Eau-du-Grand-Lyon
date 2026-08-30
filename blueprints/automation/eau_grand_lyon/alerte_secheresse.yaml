@@ -1,11 +1,13 @@
 blueprint:
   name: "🌵 Eau Grand Lyon — Alerte Niveau Sécheresse"
   description: >
-    Envoie une notification quand le niveau de sécheresse change (ex: passage de
-    "Normal" à "Vigilance"). Vous rappelle les restrictions d'usage de l'eau en
-    vigueur dans votre département.
+    Envoie une notification quand l'indicateur saisonnier local passe en
+    vigilance. Cet indicateur est une heuristique calendaire et ne reflète pas
+    les arrêtés préfectoraux ni les restrictions réellement en vigueur.
   domain: automation
-  source_url: https://github.com/Morgeek/eau_grand_lyon
+  source_url: https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/blob/main/blueprints/automation/eau_grand_lyon/alerte_secheresse.yaml
+  homeassistant:
+    min_version: 2024.11.0
   input:
     sensor_secheresse:
       name: Capteur Niveau de Sécheresse
@@ -20,18 +22,15 @@ blueprint:
       name: Niveaux déclenchant une notification
       description: "Sélectionnez les niveaux qui doivent envoyer une alerte"
       default:
-        - "Vigilance"
-        - "Alerte"
-        - "Alerte renforcée"
-        - "Crise"
+        - "vigilance"
       selector:
         select:
           multiple: true
           options:
-            - "Vigilance"
-            - "Alerte"
-            - "Alerte renforcée"
-            - "Crise"
+            - label: "Vigilance"
+              value: "vigilance"
+            - label: "Crise"
+              value: "crise"
     service_notification:
       name: Service de notification
       description: "Nom du service de notification (ex: notify.mobile_app_iphone)"
@@ -53,7 +52,9 @@ condition:
   - condition: template
     value_template: "{{ niveau_actuel in niveaux }}"
   - condition: template
-    value_template: "{{ trigger.from_state.state != trigger.to_state.state }}"
+    value_template: >-
+      {{ trigger.from_state is not none and trigger.to_state is not none
+         and trigger.from_state.state != trigger.to_state.state }}
 
 action:
   - service: !input service_notification
@@ -67,16 +68,16 @@ action:
         - 🚫 Lavage de véhicules
         - 🚫 Remplissage de piscines
 
-        Consultez les restrictions en vigueur sur le site de la préfecture du Rhône
-        ou sur https://agence.eaudugrandlyon.com
+        Vérifiez les restrictions réellement en vigueur sur VigiEau ou sur le
+        site de la préfecture du Rhône.
 
         💡 Pensez à réduire votre consommation pour préserver la ressource.
       data:
         tag: eau_grand_lyon_secheresse
         actions:
           - action: URI
-            title: "📋 Restrictions en vigueur"
-            uri: https://www.rhone.gouv.fr
+            title: "📋 Vérifier sur VigiEau"
+            uri: https://vigieau.gouv.fr
           - action: URI
             title: "🌐 Espace client"
             uri: https://agence.eaudugrandlyon.com

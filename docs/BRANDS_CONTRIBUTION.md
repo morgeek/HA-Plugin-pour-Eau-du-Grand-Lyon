@@ -11,7 +11,7 @@ Audit des fichiers présents dans `custom_components/eau_grand_lyon/brand/` :
 | `icon.png` | 220 × 68 px | Non : une icône doit être carrée en 256 × 256 px |
 | `logo.png` | 220 × 68 px | Non : le côté le plus court doit mesurer entre 128 et 256 px |
 
-Les deux fichiers contiennent actuellement le même logo horizontal. Il ne faut pas étirer ce visuel pour fabriquer une icône carrée : une source officielle haute définition ou une déclinaison d'icône autorisée est nécessaire.
+Les deux fichiers sont des PNG RGBA transparents, au ratio horizontal 3,24:1, sans bordure opaque ajoutée et avec le contenu recadré jusqu'aux bords. Ils sont strictement identiques et contiennent le même logo horizontal. La signature blanche « DU GRAND LYON » manque de contraste sur fond clair. Il ne faut ni étirer ce visuel pour fabriquer une icône carrée, ni produire artificiellement une variante claire : une source officielle haute définition ou une déclinaison d'icône autorisée est nécessaire.
 
 ## Assets à préparer
 

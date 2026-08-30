@@ -5,7 +5,9 @@ blueprint:
     est détectée ou imminente (dans les 48h). Basé sur le binary_sensor
     "Interruption de service" de l'intégration Eau du Grand Lyon.
   domain: automation
-  source_url: https://github.com/Morgeek/eau_grand_lyon
+  source_url: https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/blob/main/blueprints/automation/eau_grand_lyon/alerte_coupure.yaml
+  homeassistant:
+    min_version: 2024.11.0
   input:
     binary_sensor_coupure:
       name: Capteur d'interruption de service
@@ -46,7 +48,10 @@ variables:
   sensor_coupure: !input binary_sensor_coupure
   sensor_date: !input sensor_date_coupure
   titre_coupure: "{{ state_attr(sensor_coupure, 'prochaine_titre') or 'Interruption eau planifiée' }}"
-  date_debut: "{{ state_attr(sensor_coupure, 'prochaine_date') or 'date inconnue' }}"
+  date_debut: >-
+    {% set date_sensor = states(sensor_date) if sensor_date else none %}
+    {{ date_sensor if date_sensor not in [none, 'unknown', 'unavailable', '']
+       else (state_attr(sensor_coupure, 'prochaine_date') or 'date inconnue') }}
   date_fin: "{{ state_attr(sensor_coupure, 'prochaine_fin') or date_debut }}"
   type_inter: "{{ state_attr(sensor_coupure, 'prochaine_type') or 'TRAVAUX' }}"
 

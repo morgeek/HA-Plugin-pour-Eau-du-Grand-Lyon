@@ -3,9 +3,11 @@ blueprint:
   description: >
     Envoie une notification quand la prédiction de coût mensuel (ou le coût réel
     avec abonnement) dépasse un seuil configurable. Idéal pour surveiller sa
-    facture eau en temps réel.
+    estimation de facture lors de ses mises à jour.
   domain: automation
-  source_url: https://github.com/Morgeek/eau_grand_lyon
+  source_url: https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/blob/main/blueprints/automation/eau_grand_lyon/alerte_budget.yaml
+  homeassistant:
+    min_version: 2024.11.0
   input:
     sensor_cout:
       name: Capteur de coût à surveiller
@@ -35,16 +37,6 @@ blueprint:
         select:
           custom_value: true
           options: []
-    notification_cooldown:
-      name: Délai entre notifications (heures)
-      description: "Évite le spam de notifications lors d'un même dépassement"
-      default: 24
-      selector:
-        number:
-          min: 1
-          max: 168
-          unit_of_measurement: "heures"
-
 variables:
   sensor_entity: !input sensor_cout
   seuil: !input seuil_eur

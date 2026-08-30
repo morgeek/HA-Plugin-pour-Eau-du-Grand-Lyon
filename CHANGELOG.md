@@ -21,6 +21,7 @@ Tous les changements notables apportés à cette intégration seront documentés
 
 - Couverture globale relevée à plus de 95 %, avec un contrôle CI supplémentaire exigeant strictement plus de 95 % pour chaque module Python non vide de l'intégration.
 - Documentation du warning normal des custom integrations, de la date de facture réellement fournie, des transitions hors-ligne, des contrats dynamiques et de l'état non conforme des assets Brands locaux.
+- Validation manuelle réussie de la 3.5.3 par l'utilisateur sur une installation Home Assistant bare metal réelle ; il s'agit d'un smoke test utilisateur, pas d'une certification ni d'un job CI automatisé.
 - La règle `brands` reste `todo` et aucun niveau Gold n'est déclaré tant que la contribution officielle n'est pas acceptée.
 
 

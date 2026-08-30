@@ -128,7 +128,7 @@ L'intégration récupère vos données de consommation selon un intervalle confi
 - **Intervalle configurable** : 6h, 12h, 24h, 48h — accessible via Paramètres > Appareils et services > Options
 - **Mise à jour manuelle** : Service `update_now` pour forcer un rafraîchissement immédiat
 - **Cache persistant** : En cas d'indisponibilité API, les dernières données connues restent affichées localement
-- **Retry automatique** : En cas d'erreur réseau ou blocage WAF, l'intégration réessaie après un délai croissant (1 min, 5 min)
+- **Retry automatique** : les délais augmentent exponentiellement et incluent un léger jitter de ±20 %. Avec les trois tentatives par défaut (tentative initiale comprise), une panne réseau/API utilise environ 10 puis 20 secondes entre les tentatives, tandis qu'un blocage WAF utilise environ 60 puis 120 secondes. Ces durées sont indicatives en raison du jitter.
 
 Les services `eau_grand_lyon.update_now` et `eau_grand_lyon.clear_cache` permettent respectivement de forcer une synchronisation et de repartir d'un cache vide.
 
@@ -419,6 +419,17 @@ En cas de doute, la structure valide est :
 
 ## Cas d'usage & Exemples
 
+### Blueprints inclus
+
+Quatre Blueprints d'automatisation sont fournis dans [`blueprints/automation/eau_grand_lyon/`](blueprints/automation/eau_grand_lyon/) :
+
+- [Alerte budget](blueprints/automation/eau_grand_lyon/alerte_budget.yaml) : notifie lorsqu'un capteur de coût franchit un seuil configurable.
+- [Alerte coupure](blueprints/automation/eau_grand_lyon/alerte_coupure.yaml) : notifie lorsqu'une interruption de service est active ou prévue dans les 48 heures et peut lancer des actions de préparation.
+- [Alerte fuite/surconsommation](blueprints/automation/eau_grand_lyon/alerte_fuite.yaml) : surveille l'un des `binary_sensor` d'anomalie, de surconsommation ou de fuite fournis par l'intégration.
+- [Alerte sécheresse](blueprints/automation/eau_grand_lyon/alerte_secheresse.yaml) : signale le passage de l'heuristique saisonnière au niveau `vigilance`. Cet indicateur ne remplace pas les arrêtés préfectoraux ni [VigiEau](https://vigieau.gouv.fr/).
+
+Ces Blueprints sont inclus dans ce dépôt, mais ne sont pas annoncés comme publiés sur Blueprint Exchange. Pour satisfaire la règle officielle `docs-examples` lors d'une future soumission Home Assistant Core, un ensemble limité devra être publié dans le dépôt documentaire Home Assistant ou sur Blueprint Exchange, puis lié depuis la page officielle de l'intégration.
+
 ### Alerte de surconsommation mensuelle
 
 Créez une automation qui vous avertit lorsque l'heuristique mensuelle se déclenche. Remplacez l'`entity_id` par celui de votre installation :
@@ -510,9 +521,9 @@ Créez un template pour afficher une estimation personnalisée :
 {% endif %}
 ```
 
-### Fonctionnalités à venir
-**Multi-utilisateurs**
-   - Support pour plusieurs comptes utilisateur
+### Plusieurs comptes
+
+Une même instance Home Assistant peut configurer plusieurs comptes Eau du Grand Lyon sous forme de Config Entries séparées, à condition que chaque compte utilise une adresse email distincte. « Multi-utilisateurs » ne désigne donc pas une fonctionnalité future séparée et aucune gestion de profils ou de droits entre utilisateurs Home Assistant n'est promise.
 
 ### Contributions
 Les contributions sont les bienvenues ! N'hésitez pas à proposer des features

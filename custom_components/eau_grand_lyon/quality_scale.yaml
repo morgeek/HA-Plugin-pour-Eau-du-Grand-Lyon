@@ -61,7 +61,13 @@ rules:
     status: exempt
     comment: Cloud-polling integration; no local discovery.
   docs-data-update: done
-  docs-examples: done
+  docs-examples:
+    status: todo
+    comment: >-
+      Le dépôt fournit quatre Blueprints et des exemples YAML dans le README,
+      mais la règle officielle demande la publication d'un ensemble limité dans
+      home-assistant.io ou sur Blueprint Exchange, puis un lien depuis la page
+      officielle de l'intégration. Ce travail upstream reste à effectuer.
   docs-known-limitations: done
   docs-supported-devices: done
   docs-supported-functions: done
