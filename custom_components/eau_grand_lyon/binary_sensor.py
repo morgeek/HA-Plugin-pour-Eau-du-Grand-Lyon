@@ -86,7 +86,7 @@ class _EauGrandLyonBinaryBase(CoordinatorEntity[EauGrandLyonCoordinator], Binary
 
 
 class EauGrandLyonLeakAlertSensor(_EauGrandLyonBinaryBase):
-    """Alerte possible fuite basée sur surconsommation mensuelle."""
+    """Anomalie de consommation mensuelle calculée localement."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _attr_translation_key = "leak_alert"
@@ -96,11 +96,20 @@ class EauGrandLyonLeakAlertSensor(_EauGrandLyonBinaryBase):
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_leak_alert"
 
     @property
+    def available(self) -> bool:
+        c = self._contract
+        return bool(
+            super().available
+            and c.get("consommation_mois_courant") is not None
+            and c.get("consommation_mois_precedent") is not None
+        )
+
+    @property
     def is_on(self) -> bool:
         c = self._contract
         conso_courant = c.get("consommation_mois_courant")
         conso_precedent = c.get("consommation_mois_precedent")
-        if conso_courant and conso_precedent:
+        if conso_courant is not None and conso_precedent is not None and conso_precedent > 0:
             multiplier = float(
                 (self.coordinator.config_entry.options or {}).get(CONF_LEAK_MULTIPLIER, DEFAULT_LEAK_MULTIPLIER)
             )
@@ -117,11 +126,12 @@ class EauGrandLyonLeakAlertSensor(_EauGrandLyonBinaryBase):
             "consommation_courant_m3": c.get("consommation_mois_courant"),
             "consommation_precedent_m3": c.get("consommation_mois_precedent"),
             "seuil_alerte": f"Consommation actuelle > {multiplier}x precedente (configurable)",
+            "source": "Calcul local sur deux consommations mensuelles",
         }
 
 
 class EauGrandLyonRealTimeLeakSensor(_EauGrandLyonBinaryBase):
-    """Alerte fuite en temps réel basée sur les données journalières (Téléo)."""
+    """Indicateur fournisseur fondé sur son volume de fuite estimé sur 30 jours."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _attr_translation_key = "real_time_leak"
@@ -154,7 +164,7 @@ class EauGrandLyonRealTimeLeakSensor(_EauGrandLyonBinaryBase):
 
 
 class EauGrandLyonLocalLeakSensor(_EauGrandLyonBinaryBase):
-    """Alerte fuite basée sur une analyse de pattern locale (spike statistique).
+    """Anomalie locale basée sur une courbe horaire ou un pic journalier.
 
     Désactivé par défaut : l'algorithme nécessite au moins 7 jours d'historique
     journalier et peut produire des faux positifs sur les compteurs sans courbe
@@ -170,14 +180,22 @@ class EauGrandLyonLocalLeakSensor(_EauGrandLyonBinaryBase):
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_local_leak_pattern"
 
     @property
+    def available(self) -> bool:
+        courbe = self._contract.get("courbe_de_charge") or []
+        daily = self._contract.get("consommations_journalieres") or []
+        return bool(super().available and (len(courbe) >= 24 or len(daily) >= 7))
+
+    @property
     def is_on(self) -> bool:
         return self._contract.get("local_leak_pattern", False)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        courbe = self._contract.get("courbe_de_charge") or []
+        method = "Flux horaire non nul pendant 24 points" if len(courbe) >= 24 else "Pic journalier vs moyenne 7 jours"
         return {
-            "méthode": "Analyse de pattern (flux constant > 0)",
-            "note": "Détecté localement par l'intégration si la consommation ne tombe jamais à 0 sur 24h.",
+            "méthode": method,
+            "note": "Heuristique locale indicative, distincte d'une alerte du fournisseur.",
         }
 
 

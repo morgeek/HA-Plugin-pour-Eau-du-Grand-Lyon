@@ -592,14 +592,22 @@ class EauGrandLyonApi:
                 return None
             raise
 
-    async def get_invoice_pdf(self, invoice_ref: str) -> bytes:
+    async def get_invoice_pdf(self, invoice_id: str) -> bytes:
+        """Télécharge le duplicata PDF d'une facture à partir de son identifiant API.
+
+        Le portail officiel utilise ``/factures/{id}/duplicata``. La référence
+        lisible de la facture n'est pas acceptée par cette route.
+        """
         correlation_id = _new_correlation_id()
         await self._ensure_auth(correlation_id=correlation_id)
-        url = f"{PRODUITS_BASE}/factures/{invoice_ref}/document"
+        url = f"{PRODUITS_BASE}/factures/{invoice_id}/duplicata"
         start = time.perf_counter()
 
         async def _download() -> tuple[int, bytes]:
-            headers = {"Authorization": f"Bearer {self._auth.access_token}"}
+            headers = {
+                "Authorization": f"Bearer {self._auth.access_token}",
+                "Accept": "application/pdf,application/octet-stream",
+            }
             async with self._session.get(url, headers=headers) as resp:
                 status = resp.status
                 body = await resp.read() if status == 200 else b""
@@ -609,7 +617,7 @@ class EauGrandLyonApi:
             status, body = await _download()
             if status == 401:
                 # Token expiré : ré-authentifier puis réessayer (comme _request).
-                _LOGGER.debug("invoice_pdf_reauth cid=%s ref=%s", correlation_id, invoice_ref)
+                _LOGGER.debug("invoice_pdf_reauth cid=%s id=%s", correlation_id, invoice_id)
                 await self._auth.authenticate(correlation_id=correlation_id)
                 status, body = await _download()
             _log_http_event(
@@ -621,9 +629,11 @@ class EauGrandLyonApi:
                 status=status,
             )
             if status == 403:
-                raise WafBlockedError(f"WAF 403 sur telechargement PDF {invoice_ref}.")
+                raise WafBlockedError(f"WAF 403 sur telechargement PDF {invoice_id}.")
             if status != 200:
                 raise NetworkError(f"Erreur telechargement PDF ({status})")
+            if not body.startswith(b"%PDF-"):
+                raise NetworkError("La réponse du portail n'est pas un document PDF valide")
             return body
         except (WafBlockedError, AuthenticationError):
             raise
@@ -913,6 +923,7 @@ class EauGrandLyonApi:
                 date_ex = (facture.get("dateExigibilite") or "")[:10] or None
                 result.append(
                     {
+                        "id": facture.get("id", ""),
                         "reference": facture.get("reference", ""),
                         "date_edition": date_ed,
                         "date_exigibilite": date_ex,
@@ -921,6 +932,7 @@ class EauGrandLyonApi:
                         "volume_m3": float(facture.get("volume", 0) or 0),
                         "statut_paiement": statut_raw.get("libelle", ""),
                         "contrat_id": (facture.get("contrat") or {}).get("id", ""),
+                        "telechargeable": facture.get("telechargeable") is not False,
                     }
                 )
             except (KeyError, ValueError, TypeError):

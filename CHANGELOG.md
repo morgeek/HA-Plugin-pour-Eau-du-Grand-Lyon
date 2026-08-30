@@ -5,6 +5,19 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.1] - 2026-08-30
+
+### Corrections
+
+- **Téléchargement de facture** : utilisation de la route actuelle du portail (`/factures/{id}/duplicata`) avec l'identifiant API de la facture, au lieu de l'ancienne route non valide fondée sur sa référence. Les réponses HTTP 200 qui ne sont pas des PDF sont désormais rejetées.
+- **Disponibilité du bouton facture** : le bouton ne dépend plus du mode expérimental et indique `indisponible` tant qu'aucune facture munie d'un identifiant téléchargeable n'est fournie.
+- **Alertes de fuite ambiguës** : clarification des trois sources (surconsommation mensuelle locale, anomalie locale, estimation fournisseur sur 30 jours) sans changer leurs `unique_id`. Les heuristiques locales passent indisponibles lorsqu'elles ne disposent pas d'assez de données.
+
+### Documentation
+
+- Remplacement des promesses imprécises par une matrice indiquant ce qui est fonctionnel, conditionnel, expérimental, indicatif ou incomplet.
+- Documentation des limites du mode vacances, de la qualité de l'eau, du calendrier, des estimations environnementales et du téléchargement PDF.
+
 ## [3.5.0] - 2026-08-30
 
 ### Facturation

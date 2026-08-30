@@ -335,13 +335,26 @@ class TestRequestPaths:
         session = _FakeSession(
             [
                 _FakeContextManager(_FakeResponse(status=401)),
-                _FakeContextManager(_FakeResponse(status=200, text="PDFBYTES")),
+                _FakeContextManager(_FakeResponse(status=200, text="%PDF-test")),
             ]
         )
         api = self._make_api(session)
         result = await api.get_invoice_pdf("INV-1")
-        assert result == b"PDFBYTES"
+        assert result == b"%PDF-test"
         api._auth.authenticate.assert_awaited_once()
+        method, url, kwargs = session.calls[-1]
+        assert method == "GET"
+        assert url.endswith("/factures/INV-1/duplicata")
+        assert kwargs["headers"]["Accept"].startswith("application/pdf")
+
+    @pytest.mark.asyncio
+    async def test_get_invoice_pdf_rejects_html_success_response(self, patched_aiohttp):
+        session = _FakeSession(
+            [_FakeContextManager(_FakeResponse(status=200, text="<html>login</html>"))]
+        )
+        api = self._make_api(session)
+        with pytest.raises(NetworkError, match="pas un document PDF"):
+            await api.get_invoice_pdf("INV-1")
 
     @pytest.mark.asyncio
     async def test_get_invoice_pdf_403_raises_waf_blocked(self, patched_aiohttp):

@@ -11,7 +11,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_EXPERIMENTAL, DOMAIN
+from .const import DOMAIN
 from .coordinator import EauGrandLyonCoordinator
 from .device import account_device_info
 
@@ -27,13 +27,12 @@ async def async_setup_entry(
 ) -> None:
     """Crée les boutons de l'intégration."""
     coordinator = entry.runtime_data
-    entities = [EauGrandLyonRefreshButton(coordinator, entry)]
-
-    # Bouton facture (si expérimental)
-    if entry.options.get(CONF_EXPERIMENTAL):
-        entities.append(EauGrandLyonDownloadInvoiceButton(coordinator, entry))
-
-    async_add_entities(entities)
+    async_add_entities(
+        [
+            EauGrandLyonRefreshButton(coordinator, entry),
+            EauGrandLyonDownloadInvoiceButton(coordinator, entry),
+        ]
+    )
 
 
 class EauGrandLyonRefreshButton(CoordinatorEntity[EauGrandLyonCoordinator], ButtonEntity):
@@ -79,6 +78,19 @@ class EauGrandLyonDownloadInvoiceButton(CoordinatorEntity[EauGrandLyonCoordinato
     @property
     def device_info(self) -> DeviceInfo:
         return account_device_info(self.coordinator, self._entry)
+
+    @property
+    def available(self) -> bool:
+        """Disponible si au moins une facture possède un document téléchargeable."""
+        if not super().available:
+            return False
+        for contract in (self.coordinator.data or {}).get("contracts", {}).values():
+            if any(
+                invoice.get("id") not in (None, "") and invoice.get("telechargeable") is not False
+                for invoice in contract.get("factures", [])
+            ):
+                return True
+        return False
 
     async def async_press(self) -> None:
         """Déclenche le téléchargement via le service."""

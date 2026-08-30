@@ -100,6 +100,23 @@ class TestOptionalEndpointParsing:
         api._get_produits = AsyncMock(return_value={"content": [{"reference": "INV-1"}]})
         assert await api.get_factures() == [{"reference": "INV-1"}]
 
+    def test_invoice_formatter_preserves_download_identifier_and_flag(self):
+        result = EauGrandLyonApi.format_factures(
+            [
+                {
+                    "id": "API-ID-1",
+                    "reference": "INV-1",
+                    "telechargeable": False,
+                    "montantTTC": 328.42,
+                    "volume": 88,
+                    "contrat": {"id": "C1"},
+                }
+            ]
+        )
+
+        assert result[0]["id"] == "API-ID-1"
+        assert result[0]["telechargeable"] is False
+
     @pytest.mark.asyncio
     async def test_load_curve_sorts_daily_points(self):
         api = _api()

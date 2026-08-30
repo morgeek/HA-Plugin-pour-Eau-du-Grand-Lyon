@@ -122,6 +122,17 @@ class TestDownloadInvoiceButton:
         await b.async_press()
         hass.services.async_call.assert_called_once()
 
+    def test_unavailable_without_downloadable_invoice(self):
+        b = _make_button(EauGrandLyonDownloadInvoiceButton)
+        assert b.available is False
+
+    def test_available_with_downloadable_invoice(self):
+        b = _make_button(
+            EauGrandLyonDownloadInvoiceButton,
+            {"contracts": {"REF1": {"factures": [{"id": "API-ID-1"}]}}},
+        )
+        assert b.available is True
+
 
 # ── EauGrandLyonVacationSwitch ──────────────────────────────────────────────
 

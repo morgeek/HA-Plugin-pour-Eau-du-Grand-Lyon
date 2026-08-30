@@ -89,6 +89,9 @@
     },
     "no_invoices": {
       "message": "No invoices found for the configured contract(s)."
+    },
+    "no_downloadable_invoices": {
+      "message": "Invoices are present, but the portal does not provide a downloadable PDF document."
     }
   },
   "options": {
@@ -321,13 +324,13 @@
     },
     "binary_sensor": {
       "leak_alert": {
-        "name": "Possible leak alert"
+        "name": "Monthly overconsumption alert (heuristic)"
       },
       "real_time_leak": {
-        "name": "Real-time leak detection (Téléo)"
+        "name": "Provider leak alert (30-day estimate)"
       },
       "local_leak": {
-        "name": "Local leak pattern alert"
+        "name": "Local anomaly alert (heuristic)"
       },
       "battery": {
         "name": "Téléo module battery"
@@ -370,7 +373,7 @@
     },
     "download_latest_invoice": {
       "name": "Download latest invoice",
-      "description": "Downloads the PDF of the most recent available invoice.",
+      "description": "Downloads the PDF duplicate of the latest invoice made downloadable by the portal.",
       "fields": {
         "path": {
           "name": "Destination path",

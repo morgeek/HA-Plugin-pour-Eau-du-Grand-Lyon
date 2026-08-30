@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.eau_grand_lyon import (
     _async_update_options,
@@ -172,7 +173,15 @@ class TestServiceHandlers:
     @pytest.mark.asyncio
     async def test_download_invoice_writes_pdf_and_notifies(self, tmp_path):
         coordinator = MagicMock()
-        coordinator.data = {"contracts": {"REF1": {"factures": [{"reference": "INV-1"}]}}}
+        coordinator.data = {
+            "contracts": {
+                "REF1": {
+                    "factures": [
+                        {"id": "API-ID-1", "reference": "INV-1", "telechargeable": True}
+                    ]
+                }
+            }
+        }
         coordinator.api.get_invoice_pdf = AsyncMock(return_value=b"%PDF-test")
         hass, handlers = _service_hass(coordinator)
         hass.config.is_allowed_path.return_value = True
@@ -183,5 +192,34 @@ class TestServiceHandlers:
         await handlers["download_latest_invoice"](MagicMock(data={"path": str(target), "contract_reference": "REF1"}))
 
         assert target.read_bytes() == b"%PDF-test"
-        coordinator.api.get_invoice_pdf.assert_awaited_once_with("INV-1")
+        coordinator.api.get_invoice_pdf.assert_awaited_once_with("API-ID-1")
         hass.services.async_call.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_download_invoice_reports_invoice_without_downloadable_document(self, tmp_path):
+        coordinator = MagicMock()
+        coordinator.data = {
+            "contracts": {
+                "REF1": {
+                    "factures": [
+                        {"id": "API-ID-1", "reference": "INV-1", "telechargeable": False}
+                    ]
+                }
+            }
+        }
+        coordinator.api.get_invoice_pdf = AsyncMock()
+        hass, handlers = _service_hass(coordinator)
+        hass.config.is_allowed_path.return_value = True
+
+        with pytest.raises(HomeAssistantError) as err:
+            await handlers["download_latest_invoice"](
+                MagicMock(
+                    data={
+                        "path": str(tmp_path / "invoice.pdf"),
+                        "contract_reference": "REF1",
+                    }
+                )
+            )
+
+        assert err.value.translation_key == "no_downloadable_invoices"
+        coordinator.api.get_invoice_pdf.assert_not_awaited()

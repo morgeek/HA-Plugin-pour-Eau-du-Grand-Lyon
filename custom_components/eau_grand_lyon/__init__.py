@@ -175,6 +175,7 @@ def _async_setup_services(hass: HomeAssistant) -> None:
         target_path = call.data.get("path", "/config/www/eau_grand_lyon/latest_invoice.pdf")
         contract_ref_filter = call.data.get("contract_reference")
         _validate_write_path(hass, target_path)
+        found_invoice = False
 
         for coord in _iter_coordinators(hass):
             if not coord.data:
@@ -185,9 +186,20 @@ def _async_setup_services(hass: HomeAssistant) -> None:
                 factures = contract.get("factures", [])
                 if not factures:
                     continue
-                ref = factures[0]["reference"]
+                found_invoice = True
+                facture = next(
+                    (
+                        item
+                        for item in factures
+                        if item.get("id") not in (None, "") and item.get("telechargeable") is not False
+                    ),
+                    None,
+                )
+                if facture is None:
+                    continue
+                invoice_id = str(facture["id"])
                 try:
-                    pdf_data = await coord.api.get_invoice_pdf(ref)
+                    pdf_data = await coord.api.get_invoice_pdf(invoice_id)
                 except (
                     NetworkError,
                     WafBlockedError,
@@ -238,7 +250,10 @@ def _async_setup_services(hass: HomeAssistant) -> None:
                     )
                 return
 
-        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="no_invoices")
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key=("no_downloadable_invoices" if found_invoice else "no_invoices"),
+        )
 
     hass.services.async_register(DOMAIN, "clear_cache", async_handle_clear_cache)
     hass.services.async_register(DOMAIN, "update_now", async_handle_update_now)

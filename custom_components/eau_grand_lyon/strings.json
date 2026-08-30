@@ -89,6 +89,9 @@
     },
     "no_invoices": {
       "message": "Aucune facture trouvée pour le(s) contrat(s) configuré(s)."
+    },
+    "no_downloadable_invoices": {
+      "message": "Des factures sont présentes, mais le portail ne fournit aucun document PDF téléchargeable."
     }
   },
   "options": {
@@ -150,7 +153,7 @@
     },
     "download_latest_invoice": {
       "name": "Télécharger la dernière facture",
-      "description": "Télécharge le PDF de la dernière facture disponible.",
+      "description": "Télécharge le duplicata PDF de la facture la plus récente que le portail rend téléchargeable.",
       "fields": {
         "path": {
           "name": "Chemin de destination",
@@ -357,13 +360,13 @@
     },
     "binary_sensor": {
       "leak_alert": {
-        "name": "Alerte fuite possible"
+        "name": "Alerte surconsommation mensuelle (heuristique)"
       },
       "real_time_leak": {
-        "name": "Détection fuite (Téléo)"
+        "name": "Alerte fuite fournisseur (estimation 30 j)"
       },
       "local_leak": {
-        "name": "Alerte fuite (Pattern local)"
+        "name": "Alerte anomalie locale (heuristique)"
       },
       "battery": {
         "name": "Batterie module Téléo"

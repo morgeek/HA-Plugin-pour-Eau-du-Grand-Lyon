@@ -62,6 +62,21 @@ class TestLeakAlertSensor:
     def test_no_alert_when_missing_data(self):
         s = _make_binary_sensor(EauGrandLyonLeakAlertSensor, {"contracts": {"REF1": {}}})
         assert s.is_on is False
+        assert s.available is False
+
+    def test_available_when_both_months_are_present(self):
+        s = _make_binary_sensor(
+            EauGrandLyonLeakAlertSensor,
+            {
+                "contracts": {
+                    "REF1": {
+                        "consommation_mois_courant": 0.0,
+                        "consommation_mois_precedent": 4.0,
+                    }
+                }
+            },
+        )
+        assert s.available is True
 
     def test_custom_multiplier_from_options(self):
         """CONF_LEAK_MULTIPLIER=3 → alerte seulement si conso > 3× précédent."""
@@ -122,6 +137,29 @@ class TestLocalLeakSensor:
     def test_disabled_by_default(self):
         """Capteur désactivé par défaut — trop de faux positifs sans courbe intra-jour."""
         assert EauGrandLyonLocalLeakSensor._attr_entity_registry_enabled_default is False
+
+    def test_unavailable_without_enough_input_data(self):
+        s = _make_binary_sensor(
+            EauGrandLyonLocalLeakSensor,
+            {"contracts": {"REF1": {"local_leak_pattern": False}}},
+        )
+        assert s.available is False
+
+    def test_available_with_seven_daily_values(self):
+        s = _make_binary_sensor(
+            EauGrandLyonLocalLeakSensor,
+            {
+                "contracts": {
+                    "REF1": {
+                        "local_leak_pattern": False,
+                        "consommations_journalieres": [
+                            {"consommation_m3": 0.1} for _ in range(7)
+                        ],
+                    }
+                }
+            },
+        )
+        assert s.available is True
 
 
 # ── EauGrandLyonBatterySensor ───────────────────────────────────────────────
