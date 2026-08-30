@@ -12,6 +12,7 @@ from custom_components.eau_grand_lyon.api.auth import (
     ApiError,
     AuthenticationError,
     EauGrandLyonAuth,
+    HttpError,
     NetworkError,
     WafBlockedError,
 )
@@ -282,6 +283,25 @@ class TestRequestPaths:
             await api._request("GET", "https://example.test/data")
 
     @pytest.mark.asyncio
+    async def test_request_http_200_bad_json_raises_api_error(self, patched_aiohttp):
+        api = self._make_api(_FakeSession([_FakeContextManager(_FakeResponse(status=200, text="<html>WAF</html>"))]))
+        with pytest.raises(ApiError, match="non-JSON"):
+            await api._request("GET", "https://example.test/data")
+
+    @pytest.mark.asyncio
+    async def test_request_401_after_reauth_raises_authentication_error(self, patched_aiohttp):
+        api = self._make_api(
+            _FakeSession(
+                [
+                    _FakeContextManager(_FakeResponse(status=401)),
+                    _FakeContextManager(_FakeResponse(status=401)),
+                ]
+            )
+        )
+        with pytest.raises(AuthenticationError):
+            await api._request("GET", "https://example.test/data")
+
+    @pytest.mark.asyncio
     async def test_request_401_reauth_then_403_raises_waf_blocked(self, patched_aiohttp):
         api = self._make_api(
             _FakeSession(
@@ -348,11 +368,7 @@ class TestRequestPaths:
     @pytest.mark.asyncio
     async def test_get_derniere_releve_siamm_500_is_optional_debug_only(self, patched_aiohttp, caplog):
         session = _FakeSession(
-            [
-                _FakeContextManager(
-                    _FakeResponse(status=500, json_error=_ClientResponseError(500, "provider down"))
-                )
-            ]
+            [_FakeContextManager(_FakeResponse(status=500, json_error=_ClientResponseError(500, "provider down")))]
         )
         api = self._make_api(session)
 
@@ -365,3 +381,51 @@ class TestRequestPaths:
         assert method == "GET"
         assert url.endswith("/application/rest/produits/contrats/C1/derniereReleveSIAMM")
         assert kwargs.get("params") == {"expand": "grandeursPhysiques(modeleGrandeurPhysique)"}
+
+
+class TestEndpointFallbacks:
+    def _make_api(self) -> EauGrandLyonApi:
+        return EauGrandLyonApi(MagicMock(), "user@example.com", "secret")
+
+    @pytest.mark.asyncio
+    async def test_modern_404_falls_back_to_legacy(self):
+        api = self._make_api()
+        api._get_produits = AsyncMock(side_effect=HttpError(404, "GET", "modern", "missing"))
+        api._get = AsyncMock(return_value={"data": [{"date": "2026-08-01", "consommation": 1.25}]})
+
+        result = await api.get_daily_consumptions("C1", nb_jours=30)
+
+        assert result["source"] == "Legacy (Standard)"
+        assert result["entries"] == [{"date": "2026-08-01", "consommation_m3": 1.25}]
+        api._get.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("error", [NetworkError("offline"), WafBlockedError("blocked"), AuthenticationError("bad")])
+    async def test_modern_significant_errors_are_propagated(self, error):
+        api = self._make_api()
+        api._get_produits = AsyncMock(side_effect=error)
+        api._get = AsyncMock()
+
+        with pytest.raises(type(error)):
+            await api.get_daily_consumptions("C1", nb_jours=30)
+
+        api._get.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_all_legacy_404s_return_expected_empty_value(self):
+        api = self._make_api()
+        api._get = AsyncMock(side_effect=HttpError(404, "GET", "legacy", "missing"))
+
+        entries, source = await api._get_daily_legacy("C1", 30)
+
+        assert entries == []
+        assert source == "Aucune"
+        assert api._get.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_legacy_network_error_is_propagated(self):
+        api = self._make_api()
+        api._get = AsyncMock(side_effect=NetworkError("offline"))
+
+        with pytest.raises(NetworkError):
+            await api._get_daily_legacy("C1", 30)

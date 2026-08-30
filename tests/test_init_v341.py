@@ -1,4 +1,5 @@
 """Tests pour les correctifs v3.4.1 au niveau __init__ (migration, stale-devices, exceptions)."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -10,20 +11,40 @@ from custom_components.eau_grand_lyon import (
     async_remove_config_entry_device,
     _validate_write_path,
 )
-from custom_components.eau_grand_lyon.const import DOMAIN
+from custom_components.eau_grand_lyon.const import CONF_TARIF_M3, DOMAIN
 from homeassistant.exceptions import ServiceValidationError
 
 
 class TestMigrateEntry:
     @pytest.mark.asyncio
-    async def test_v1_to_v2_updates_version(self):
+    async def test_v1_to_v3_moves_tariff_to_options(self):
         hass = MagicMock()
         entry = MagicMock()
         entry.version = 1
+        entry.data = {"email": "user@example.com", "password": "secret", CONF_TARIF_M3: 4.2}
+        entry.options = {"experimental": True}
         assert await async_migrate_entry(hass, entry) is True
-        hass.config_entries.async_update_entry.assert_called_once()
-        _, kwargs = hass.config_entries.async_update_entry.call_args
-        assert kwargs.get("version") == 2
+        hass.config_entries.async_update_entry.assert_called_once_with(
+            entry,
+            data={"email": "user@example.com", "password": "secret"},
+            options={"experimental": True, CONF_TARIF_M3: 4.2},
+            version=3,
+        )
+
+    @pytest.mark.asyncio
+    async def test_v2_migration_keeps_existing_option_tariff(self):
+        hass = MagicMock()
+        entry = MagicMock()
+        entry.version = 2
+        entry.data = {"email": "user@example.com", "password": "secret", CONF_TARIF_M3: 3.1}
+        entry.options = {CONF_TARIF_M3: 5.7}
+        assert await async_migrate_entry(hass, entry) is True
+        hass.config_entries.async_update_entry.assert_called_once_with(
+            entry,
+            data={"email": "user@example.com", "password": "secret"},
+            options={CONF_TARIF_M3: 5.7},
+            version=3,
+        )
 
     @pytest.mark.asyncio
     async def test_unknown_version_fails(self):

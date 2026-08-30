@@ -43,7 +43,7 @@ jobs:
           pytest tests/ -v --tb=short \
             --cov=custom_components/eau_grand_lyon \
             --cov-report=term-missing \
-            --cov-fail-under=60
+            --cov-fail-under=75
 
   typing:
     name: Typage (mypy)
@@ -58,12 +58,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install mypy voluptuous
+        run: pip install mypy==1.17.1 voluptuous
 
-      # Non bloquant : le typage strict (Platinum strict-typing) est amélioré
-      # progressivement. Le job donne un retour sans faire échouer le build.
       - name: Run mypy
-        continue-on-error: true
         run: mypy custom_components/eau_grand_lyon/
 
   validate:

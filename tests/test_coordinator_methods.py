@@ -1,4 +1,5 @@
 """Tests for EauGrandLyonCoordinator instance methods."""
+
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
@@ -66,15 +67,11 @@ class TestGetCumulativeIndex:
         assert self.coord.get_cumulative_index("REF1") is None
 
     def test_real_index_used_when_present(self):
-        self.coord.data = {
-            "contracts": {"REF1": {"real_index": 1234.567, "consommations": []}}
-        }
+        self.coord.data = {"contracts": {"REF1": {"real_index": 1234.567, "consommations": []}}}
         assert self.coord.get_cumulative_index("REF1") == 1234.567
 
     def test_sum_used_when_no_real_index(self, sample_consos):
-        self.coord.data = {
-            "contracts": {"REF1": {"consommations": sample_consos}}
-        }
+        self.coord.data = {"contracts": {"REF1": {"consommations": sample_consos}}}
         expected = round(sum(e["consommation_m3"] for e in sample_consos), 3)
         assert self.coord.get_cumulative_index("REF1") == expected
 
@@ -83,9 +80,7 @@ class TestGetCumulativeIndex:
         assert self.coord.get_cumulative_index("REF1") is None
 
     def test_cache_hit_avoids_recompute(self, sample_consos):
-        self.coord.data = {
-            "contracts": {"REF1": {"consommations": sample_consos}}
-        }
+        self.coord.data = {"contracts": {"REF1": {"consommations": sample_consos}}}
         first = self.coord.get_cumulative_index("REF1")
         # Corrupt the underlying data — cache should still return first value
         self.coord.data["contracts"]["REF1"]["consommations"] = []
@@ -132,8 +127,9 @@ class TestUpdateErrorPaths:
     async def test_api_error_retries_then_raises_update_failed(self):
         # HTTP 5xx / réponse malformée : retenté comme une erreur réseau puis UpdateFailed.
         self.coord._fetch_all_data.side_effect = ApiError("server exploded")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), \
-             patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]):
+        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), patch.object(
+            self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]
+        ):
             with pytest.raises(UpdateFailed):
                 await self.coord._async_update_data()
         assert self.coord._consecutive_failures == 3
@@ -146,9 +142,9 @@ class TestUpdateErrorPaths:
         }
         self.coord.data = None
         self.coord._fetch_all_data.side_effect = ApiError("server exploded")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), \
-             patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]), \
-             patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
+        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), patch.object(
+            self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]
+        ), patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
             result = await self.coord._async_update_data()
         assert result["offline_mode"] is True
         assert result["last_error_type"] == "ApiError"
@@ -156,8 +152,9 @@ class TestUpdateErrorPaths:
     @pytest.mark.asyncio
     async def test_waf_failures_without_cache_raise_update_failed(self):
         self.coord._fetch_all_data.side_effect = WafBlockedError("blocked")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), \
-             patch.object(self.coord, "_compute_retry_delay", side_effect=[60.0, 120.0]):
+        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), patch.object(
+            self.coord, "_compute_retry_delay", side_effect=[60.0, 120.0]
+        ):
             with pytest.raises(UpdateFailed):
                 await self.coord._async_update_data()
         assert self.coord._consecutive_failures == 3
@@ -165,8 +162,9 @@ class TestUpdateErrorPaths:
     @pytest.mark.asyncio
     async def test_network_failures_without_cache_raise_update_failed(self):
         self.coord._fetch_all_data.side_effect = NetworkError("offline")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), \
-             patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]):
+        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), patch.object(
+            self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]
+        ):
             with pytest.raises(UpdateFailed):
                 await self.coord._async_update_data()
         assert self.coord._consecutive_failures == 3
@@ -180,9 +178,9 @@ class TestUpdateErrorPaths:
         }
         self.coord.data = None
         self.coord._fetch_all_data.side_effect = WafBlockedError("blocked")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), \
-             patch.object(self.coord, "_compute_retry_delay", side_effect=[60.0, 120.0]), \
-             patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue") as outage:
+        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), patch.object(
+            self.coord, "_compute_retry_delay", side_effect=[60.0, 120.0]
+        ), patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue") as outage:
             result = await self.coord._async_update_data()
         assert result["offline_mode"] is True
         assert result["last_error_type"] == "WafBlockedError"
@@ -199,9 +197,9 @@ class TestUpdateErrorPaths:
         }
         self.coord.data = {"offline_mode": True, "offline_since": offline_since}
         self.coord._fetch_all_data.side_effect = NetworkError("offline")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), \
-             patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]), \
-             patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
+        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), patch.object(
+            self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]
+        ), patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
             result = await self.coord._async_update_data()
         assert result["offline_mode"] is True
         assert result["offline_since"] == offline_since
@@ -230,9 +228,7 @@ class TestUpdateErrorPaths:
             side_effect=[110.0, 140.0],
         ), patch(
             "custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()
-        ) as sleep_mock, patch(
-            "custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"
-        ):
+        ) as sleep_mock, patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
             await self.coord._async_update_data()
         sleep_mock.assert_awaited_once_with(20.0)
 
@@ -258,8 +254,9 @@ class TestUpdateErrorPaths:
     async def test_custom_max_retries_is_honored(self):
         self.coord._max_retries = 4
         self.coord._fetch_all_data.side_effect = NetworkError("offline")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()) as sleep_mock, \
-             patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0, 40.0]):
+        with patch(
+            "custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()
+        ) as sleep_mock, patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0, 40.0]):
             with pytest.raises(UpdateFailed):
                 await self.coord._async_update_data()
         assert self.coord._consecutive_failures == 4
@@ -289,8 +286,7 @@ class TestUpdateErrorPaths:
             await self.coord._inject_statistics(contract_data)
 
         cost_calls = [
-            call for call in add_stats.call_args_list
-            if call.args[1]["statistic_id"] == "eau_grand_lyon:cost_ref1"
+            call for call in add_stats.call_args_list if call.args[1]["statistic_id"] == "eau_grand_lyon:cost_ref1"
         ]
         assert cost_calls, "expected cost statistics to be injected"
         cost_metadata = cost_calls[0].args[1]
@@ -369,7 +365,7 @@ class TestUpdateErrorPaths:
         consos = [
             {"mois_index": 0, "annee": 2025, "consommation_m3": 10.0},  # Jan, déjà enregistré
             {"mois_index": 1, "annee": 2025, "consommation_m3": 12.0},  # Fév = dernier enregistré
-            {"mois_index": 2, "annee": 2025, "consommation_m3": 8.0},   # Mars = nouveau
+            {"mois_index": 2, "annee": 2025, "consommation_m3": 8.0},  # Mars = nouveau
         ]
         # Recorder : dernier point = Fév 2025, somme cumulée 122 (base avant Fév = 110).
         anchor = ((2025, 2), 110.0)
@@ -465,9 +461,9 @@ class TestUpdateErrorPaths:
             "last_update_success_time": now - timedelta(days=7),
         }
         self.coord._fetch_all_data.side_effect = NetworkError("offline")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), \
-             patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]), \
-             patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
+        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), patch.object(
+            self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]
+        ), patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
             result = await self.coord._async_update_data()
         assert isinstance(result["last_failure_time"], datetime)
         assert result["last_failure_reason"] == "offline"
@@ -514,8 +510,8 @@ class TestMergeMonthlyHistory:
 
     def test_accumulates_old_and_new_months(self):
         # Simulates API returning months 13-24 (old) stored, now returning months 1-12 (new)
-        stored = [self._make_month(2024, m, 10.0) for m in range(1, 13)]   # 12 months 2024
-        fresh = [self._make_month(2025, m, 12.0) for m in range(1, 13)]    # 12 months 2025
+        stored = [self._make_month(2024, m, 10.0) for m in range(1, 13)]  # 12 months 2024
+        fresh = [self._make_month(2025, m, 12.0) for m in range(1, 13)]  # 12 months 2025
         result = EauGrandLyonCoordinator._merge_monthly_history(stored, fresh)
         assert len(result) == 24
         assert result[0]["annee"] == 2024
@@ -529,8 +525,8 @@ class TestMergeMonthlyHistory:
         assert years_months == sorted(years_months)
 
     def test_capped_at_max_months(self):
-        stored = [self._make_month(2023, m, 10.0) for m in range(1, 13)]   # 12 months 2023
-        fresh = [self._make_month(2024, m, 11.0) for m in range(1, 13)]    # 12 months 2024
+        stored = [self._make_month(2023, m, 10.0) for m in range(1, 13)]  # 12 months 2023
+        fresh = [self._make_month(2024, m, 11.0) for m in range(1, 13)]  # 12 months 2024
         result = EauGrandLyonCoordinator._merge_monthly_history(stored, fresh, max_months=15)
         assert len(result) == 15
         # Most recent months kept
@@ -545,3 +541,100 @@ class TestMergeMonthlyHistory:
         last_24 = merged[-24:-12]
         conso_n1 = sum(e["consommation_m3"] for e in last_24)
         assert conso_n1 == pytest.approx(120.0)  # 12 × 10.0 from 2024
+
+
+class TestCoordinatorFetchOrchestration:
+    @pytest.mark.asyncio
+    async def test_fetch_all_data_without_contracts_keeps_optional_global_data(self):
+        coord = _make_coordinator()
+        coord._entry.options = {}
+        coord._monthly_history = {"OLD": [{"annee": 2025}]}
+        coord._daily_history = {"OLD": [{"date": "2025-01-01"}]}
+        coord.api = MagicMock()
+        coord.api.experimental = False
+        coord.api.get_contracts = AsyncMock(return_value=[])
+        coord.api.get_alertes = AsyncMock(return_value=[])
+        coord.api.get_water_quality = AsyncMock(return_value={"commune": "Lyon"})
+        coord.api.get_interventions = AsyncMock(return_value=[])
+        coord._calculate_tarif_m3 = MagicMock(return_value=4.0)
+        coord._get_drought_level = MagicMock(return_value="normal")
+        coord._check_vacation_alert = MagicMock(return_value=False)
+        coord._inject_statistics = AsyncMock()
+        coord._handle_alert_notifications = MagicMock()
+        coord._save_monthly_history = AsyncMock()
+        coord._save_daily_history = AsyncMock()
+
+        result = await coord._fetch_all_data()
+
+        assert result["contracts"] == {}
+        assert result["global"]["nb_contracts"] == 0
+        assert result["water_quality"] == {"commune": "Lyon"}
+        assert result["api_mode"] == "Legacy"
+        coord._inject_statistics.assert_awaited_once_with({})
+        coord._handle_alert_notifications.assert_called_once_with(0)
+
+    @pytest.mark.asyncio
+    async def test_process_contract_combines_consumption_billing_and_alerts(self):
+        coord = _make_coordinator()
+        coord._entry.options = {"water_hardness": 30, "subscription_annual": 180}
+        coord._daily_history = {}
+        coord._monthly_history = {}
+        cycle_api = MagicMock()
+        cycle_api.get_monthly_consumptions = AsyncMock(
+            return_value=[
+                {"mois": 6, "annee": 2026, "consommation": 8.0},
+                {"mois": 7, "annee": 2026, "consommation": 10.0},
+            ]
+        )
+        daily = [
+            {"date": "2026-08-01", "consommation_m3": 0.2, "index_m3": "100.2"},
+            {"date": "2026-08-02", "consommation_m3": 0.3, "index_m3": "100.5"},
+        ]
+        cycle_api.get_daily_consumptions = AsyncMock(
+            return_value={"entries": daily, "source": "Produits", "nb_entries": 2, "last_date": "2026-08-02"}
+        )
+        cycle_api.get_date_prochaine_facture = AsyncMock(return_value="2026-09-15")
+        cycle_api.get_point_de_service_etendu = AsyncMock(
+            return_value={
+                "date_prochaine_releve": "2026-10-01",
+                "conso_annuelle_ref_m3": 100.0,
+                "mode_releve": "AMM",
+                "communicabilite_amm": True,
+            }
+        )
+        cycle_api.get_alerte_surconsommation = AsyncMock(
+            return_value={
+                "seuil_surconso_jour_m3": 0.25,
+                "seuil_surconso_mois_m3": 9.0,
+                "abonne_alerte_fuite": True,
+            }
+        )
+        cycle_api.get_courbe_de_charge = AsyncMock(
+            return_value=[
+                {"date": "2026-08-02T08:00:00", "consommation": "bad"},
+                {"date": "2026-08-02T09:00:00", "consommation": 0.4},
+            ]
+        )
+        coord._calculate_intelligence = MagicMock(return_value=(12.0, 48.0, 25.0))
+        coord._calculate_eco_score = MagicMock(return_value=(5.0, "A", 2))
+        coord._calculate_experimental_leak = MagicMock(return_value=0.1)
+        coord._detect_local_leak = MagicMock(return_value=True)
+        coord._get_real_index = AsyncMock(return_value=100.5)
+
+        result = await coord._process_contract(
+            cycle_api,
+            {"id": "C1", "reference": "REF1", "date_echeance": "2026-09-01", "teleo_compatible": True},
+            4.0,
+            [{"contrat_id": "C1", "reference": "INV-1"}],
+            True,
+        )
+
+        assert result["consommation_mois_courant"] == 10.0
+        assert result["cout_mois_courant_eur"] == 40.0
+        assert result["next_bill_date"] == "2026-09-15"
+        assert result["index_journalier_dernier"] == 100.5
+        assert result["consommation_derniere_heure_m3"] == 0.4
+        assert result["heure_pic"] == "09:00"
+        assert result["surconso_jour_depassee"] is True
+        assert result["surconso_mois_depassee"] is True
+        assert result["derniere_facture"]["reference"] == "INV-1"

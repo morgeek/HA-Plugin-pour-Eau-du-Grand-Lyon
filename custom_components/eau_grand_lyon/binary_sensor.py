@@ -134,7 +134,7 @@ class EauGrandLyonRealTimeLeakSensor(_EauGrandLyonBinaryBase):
     @property
     def available(self) -> bool:
         """Disponible uniquement si le mode expérimental est actif et données présentes."""
-        return (
+        return bool(
             super().available
             and (self.coordinator.data or {}).get("experimental_mode")
             and self._contract.get("fuite_estime_30j_m3") is not None

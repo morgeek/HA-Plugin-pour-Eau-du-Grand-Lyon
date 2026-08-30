@@ -3,17 +3,22 @@ rules:
   action-setup: done
   appropriate-polling: done
   brands:
-    status: exempt
+    status: todo
     comment: >-
-      Intégration en dépôt personnalisé (HACS custom) : les icônes sont
-      fournies via le dossier brand/ local. La soumission à home-assistant/brands
-      n'est requise que pour le store par défaut, pas pour un install custom
-      (validation HACS lancée avec ignore: brands).
+      Les icônes locales satisfont l'affichage HACS, mais la règle officielle
+      exige aussi leur publication dans home-assistant/brands et n'admet aucune
+      exemption.
   common-modules: done
   config-flow: done
   config-flow-test-coverage: done
   dependency-transparency: done
   docs-actions: done
+  docs-triggers:
+    status: done
+    comment: L'intégration ne fournit aucun déclencheur personnalisé à documenter.
+  docs-conditions:
+    status: done
+    comment: L'intégration ne fournit aucune condition personnalisée à documenter.
   docs-high-level-description: done
   docs-installation-instructions: done
   docs-removal-instructions: done
@@ -35,7 +40,11 @@ rules:
   log-when-unavailable: done
   parallel-updates: done
   reauthentication-flow: done
-  test-coverage: done
+  test-coverage:
+    status: todo
+    comment: >-
+      Couverture globale portée d'environ 64 % à 77 % dans la version 3.4.6,
+      mais plusieurs modules restent sous le seuil requis de 95 %.
 
   # Gold
   devices: done
@@ -54,8 +63,10 @@ rules:
   docs-troubleshooting: done
   docs-use-cases: done
   dynamic-devices:
-    status: exempt
-    comment: Devices = water meters under one account; cardinality fixed by API.
+    status: todo
+    comment: >-
+      Les contrats d'un compte peuvent changer après le setup. Les plateformes
+      ne créent pas encore automatiquement les entités d'un nouveau contrat.
   entity-category: done
   entity-device-class: done
   entity-disabled-by-default: done
@@ -80,10 +91,12 @@ rules:
   # Platinum
   async-dependency: done
   inject-websession:
-    status: exempt
-    comment: Provider requires CookieJar(unsafe=True) for OAuth cookie; a dedicated session is created and closed with the entry.
+    status: done
+    comment: >-
+      Les cookies OAuth sont isolés dans une session dédiée créée avec
+      async_create_clientsession et un CookieJar sécurisé par défaut.
   strict-typing:
     status: todo
     comment: >-
-      Un job CI mypy (non bloquant) est en place ; le durcissement complet vers
-      le typage strict reste à faire.
+      Le job CI mypy est bloquant et passe avec une configuration progressive ;
+      le typage strict complet de tous les modules reste à faire.

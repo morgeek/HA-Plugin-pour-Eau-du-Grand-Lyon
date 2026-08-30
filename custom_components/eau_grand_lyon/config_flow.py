@@ -10,6 +10,8 @@ import aiohttp
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers import selector
 
 from .api import (
@@ -53,11 +55,14 @@ def _is_valid_email(value: str) -> bool:
     return bool(_EMAIL_REGEX.match((value or "").strip()))
 
 
-async def _authenticate_and_handle_errors(email: str, password: str, context: str = "") -> dict[str, str]:
+async def _authenticate_and_handle_errors(
+    hass: HomeAssistant, email: str, password: str, context: str = ""
+) -> dict[str, str]:
     """Authenticate user and return error dict if authentication fails, or empty dict on success."""
     errors: dict[str, str] = {}
-    async with aiohttp.ClientSession(
-        cookie_jar=aiohttp.CookieJar(unsafe=True),
+    async with async_create_clientsession(
+        hass,
+        cookie_jar=aiohttp.CookieJar(),
         timeout=aiohttp.ClientTimeout(total=30),
     ) as session:
         api = EauGrandLyonApi(session, email, password)
@@ -94,10 +99,10 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 _INTERVAL_VALUES = ["6", "12", "24", "48"]
 
 
-class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     """Flux de configuration de l'intégration Eau du Grand Lyon."""
 
-    VERSION = 2
+    VERSION = 3
 
     @staticmethod
     def async_get_options_flow(
@@ -108,17 +113,11 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_reauth(self, user_input: dict[str, Any] | None = None) -> config_entries.FlowResult:
         """Flux de réauthentification après une erreur d'authentification."""
-        config_entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
-        if not config_entry:
-            return self.async_abort(reason="reauth_failed")
-
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None) -> config_entries.FlowResult:
         """Confirmation de réauthentification : saisie des identifiants."""
-        config_entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
-        if not config_entry:
-            return self.async_abort(reason="reauth_failed")
+        config_entry = self._get_reauth_entry()
 
         errors: dict[str, str] = {}
 
@@ -128,23 +127,18 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not _is_valid_email(email):
                 errors[CONF_EMAIL] = "invalid_email"
             else:
-                errors = await _authenticate_and_handle_errors(email, password, " (reauth)")
+                errors = await _authenticate_and_handle_errors(self.hass, email, password, " (reauth)")
             if not errors:
-                # Garde l'unique_id aligné sur le compte : sans ça, un changement
-                # d'email laissait l'unique_id sur l'ancien compte et cassait la
-                # détection de doublon (already_configured) pour le nouveau.
                 await self.async_set_unique_id(email.lower())
-                self.hass.config_entries.async_update_entry(
+                self._abort_if_unique_id_mismatch()
+                return self.async_update_and_abort(
                     config_entry,
-                    unique_id=email.lower(),
-                    data={
-                        **config_entry.data,
+                    data_updates={
                         CONF_EMAIL: email,
                         CONF_PASSWORD: password,
                     },
+                    reason="reauth_successful",
                 )
-                await self.hass.config_entries.async_reload(config_entry.entry_id)
-                return self.async_abort(reason="reauth_successful")
 
         # Pré-remplir avec l'email courant
         current_email = config_entry.data.get(CONF_EMAIL, "")
@@ -162,9 +156,7 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> config_entries.FlowResult:
         """Flux de reconfiguration : permet de changer les identifiants."""
-        config_entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
-        if not config_entry:
-            return self.async_abort(reason="reconfigure_failed")
+        config_entry = self._get_reconfigure_entry()
 
         errors: dict[str, str] = {}
 
@@ -174,30 +166,21 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not _is_valid_email(email):
                 errors[CONF_EMAIL] = "invalid_email"
             else:
-                errors = await _authenticate_and_handle_errors(email, password, " (reconfigure)")
+                errors = await _authenticate_and_handle_errors(self.hass, email, password, " (reconfigure)")
             if not errors:
-                # Aligne l'unique_id sur le compte (cf. reauth) pour préserver la
-                # détection de doublon si l'email change.
                 await self.async_set_unique_id(email.lower())
-                self.hass.config_entries.async_update_entry(
+                self._abort_if_unique_id_mismatch()
+                return self.async_update_and_abort(
                     config_entry,
-                    unique_id=email.lower(),
-                    data={
-                        **config_entry.data,
+                    data_updates={
                         CONF_EMAIL: email,
                         CONF_PASSWORD: password,
                     },
+                    reason="reconfigure_successful",
                 )
-                await self.hass.config_entries.async_reload(config_entry.entry_id)
-                return self.async_abort(reason="reconfigure_successful")
 
-        # Pré-remplir avec les données courantes
+        # Le tarif est une option et ne doit jamais être dupliqué dans data.
         current_email = config_entry.data.get(CONF_EMAIL, "")
-        current_tarif = float(
-            config_entry.options.get(CONF_TARIF_M3)
-            if CONF_TARIF_M3 in config_entry.options
-            else config_entry.data.get(CONF_TARIF_M3, DEFAULT_TARIF_M3)
-        )
 
         return self.async_show_form(
             step_id="reconfigure",
@@ -205,10 +188,6 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_EMAIL, default=current_email): str,
                     vol.Required(CONF_PASSWORD): vol.All(str, vol.Length(min=4)),
-                    vol.Optional(
-                        CONF_TARIF_M3,
-                        default=current_tarif,
-                    ): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=30.0)),
                 }
             ),
             errors=errors,
@@ -224,7 +203,7 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not _is_valid_email(email):
                 errors[CONF_EMAIL] = "invalid_email"
             else:
-                errors = await _authenticate_and_handle_errors(email, password)
+                errors = await _authenticate_and_handle_errors(self.hass, email, password)
             if not errors:
                 await self.async_set_unique_id(email.lower())
                 self._abort_if_unique_id_configured()
@@ -233,8 +212,8 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data={
                         CONF_EMAIL: email,
                         CONF_PASSWORD: password,
-                        CONF_TARIF_M3: user_input[CONF_TARIF_M3],
                     },
+                    options={CONF_TARIF_M3: user_input[CONF_TARIF_M3]},
                 )
 
         return self.async_show_form(

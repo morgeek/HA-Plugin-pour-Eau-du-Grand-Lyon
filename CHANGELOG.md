@@ -5,6 +5,23 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.6] - 2026-08-30
+
+### Corrections
+
+- **Reconfigure** : le tarif au m³ n'est plus affiché ni ignoré silencieusement ; il est désormais stocké uniquement dans les options, avec migration sans perte des entrées v1/v2.
+- **Reauth/Reconfigure Home Assistant 2026.12** : adoption de `_get_reauth_entry()`, `_get_reconfigure_entry()`, `_abort_if_unique_id_mismatch()` et `async_update_and_abort()` ; suppression des reloads explicites et des risques de double reload/race condition.
+- **Identité de compte** : l'email normalisé reste l'`unique_id` ; un flow ne peut plus convertir une entrée en un autre compte, notamment un compte déjà configuré.
+- **Erreurs API** : ajout d'erreurs HTTP typées ; les erreurs réseau, authentification, WAF, timeout, serveur et JSON invalide remontent désormais au coordinator. Seuls les endpoints explicitement optionnels utilisent un repli borné aux statuts attendus.
+- **Sessions HTTP** : remplacement de `CookieJar(unsafe=True)` par le jar sécurisé par défaut et création des sessions dédiées via le helper Home Assistant, sans modification du flux OAuth/PKCE.
+- **mypy/CI** : résolution du doublon de modules, analyse effective des 26 fichiers Python et suppression du `continue-on-error` trompeur.
+
+### Tests et qualité
+
+- Couverture portée d'environ 64 % à 77 %, avec renforcement ciblé des flows, du transport API, du coordinator, du cycle setup/unload, des services, du calendrier, des devices, du cache et du mode hors-ligne.
+- La déclaration Gold a été retirée : aucun niveau officiel n'est revendiqué tant que `brands` (Bronze), `test-coverage` (Silver) et `dynamic-devices` (Gold) restent en `todo`.
+- Aucun `unique_id`, `statistic_id`, nom d'entité ou format de Store persistant existant n'a été modifié.
+
 ## [3.4.5] - 2026-08-21
 
 ### Ajouts

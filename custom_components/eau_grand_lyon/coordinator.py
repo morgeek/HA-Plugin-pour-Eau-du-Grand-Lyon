@@ -18,6 +18,7 @@ import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 try:
@@ -216,11 +217,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         experimental = bool(options.get(CONF_EXPERIMENTAL, DEFAULT_EXPERIMENTAL))
 
-        # Session dédiée — CookieJar(unsafe=True) pour conserver le cookie HttpOnly OAuth2.
+        # Session dédiée : le fournisseur utilise un hostname HTTPS classique,
+        # donc le CookieJar sécurisé par défaut conserve les cookies OAuth requis.
         # Timeout explicite : sans lui, une requête qui pend bloque le refresh
         # pendant les 5 minutes du timeout aiohttp par défaut.
-        self._own_session = aiohttp.ClientSession(
-            cookie_jar=aiohttp.CookieJar(unsafe=True),
+        self._own_session = async_create_clientsession(
+            hass,
+            cookie_jar=aiohttp.CookieJar(),
             timeout=aiohttp.ClientTimeout(total=30),
         )
         self.api = EauGrandLyonApi(

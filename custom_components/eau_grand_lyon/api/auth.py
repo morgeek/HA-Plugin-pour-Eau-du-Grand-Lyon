@@ -89,6 +89,14 @@ class ApiError(Exception):
     """Erreur generique lors d'un appel API."""
 
 
+class HttpError(ApiError):
+    """Erreur HTTP avec statut exploitable par les fallbacks optionnels."""
+
+    def __init__(self, status: int, method: str, url: str, message: str = "") -> None:
+        self.status = status
+        super().__init__(f"HTTP {status} sur {method} {url}: {message}")
+
+
 class NetworkError(Exception):
     """Erreur reseau / timeout lors d'un appel API."""
 

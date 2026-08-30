@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import logging
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeAlias
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -15,13 +15,13 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from .api import ApiError, AuthenticationError, NetworkError, WafBlockedError
-from .const import DOMAIN
+from .const import CONF_TARIF_M3, DOMAIN
 from .coordinator import EauGrandLyonCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    EauGrandLyonConfigEntry = ConfigEntry[EauGrandLyonCoordinator]
+    EauGrandLyonConfigEntry: TypeAlias = ConfigEntry[EauGrandLyonCoordinator]
 else:
     EauGrandLyonConfigEntry = ConfigEntry
 
@@ -49,8 +49,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate a config entry to a newer version."""
     _LOGGER.debug("Migrating config entry from version %s", entry.version)
-    if entry.version == 1:
-        hass.config_entries.async_update_entry(entry, version=2)
+    if entry.version in (1, 2):
+        data = dict(entry.data)
+        options = dict(entry.options)
+        if CONF_TARIF_M3 in data:
+            options.setdefault(CONF_TARIF_M3, data.pop(CONF_TARIF_M3))
+        hass.config_entries.async_update_entry(entry, data=data, options=options, version=3)
+        return True
+    if entry.version == 3:
         return True
     _LOGGER.error("Cannot migrate config entry from unknown version %s", entry.version)
     return False

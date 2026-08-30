@@ -1,5 +1,7 @@
 """Tests for button, switch, and calendar platforms."""
+
 from datetime import date, timedelta
+from types import SimpleNamespace
 from unittest.mock import MagicMock, AsyncMock
 
 from custom_components.eau_grand_lyon import sensor as sensor_platform
@@ -8,7 +10,10 @@ from custom_components.eau_grand_lyon.button import (
     EauGrandLyonDownloadInvoiceButton,
 )
 from custom_components.eau_grand_lyon.switch import EauGrandLyonVacationSwitch
+from custom_components.eau_grand_lyon import calendar as calendar_platform
 from custom_components.eau_grand_lyon.calendar import EauGrandLyonCalendar
+from custom_components.eau_grand_lyon.device import account_device_info, contract_device_info
+from custom_components.eau_grand_lyon import device as device_module
 
 
 def _make_button(cls, coordinator_data=None, entry=None):
@@ -89,6 +94,7 @@ def _make_calendar(coordinator_data=None, entry=None, hass=None):
 
 # ── EauGrandLyonRefreshButton ───────────────────────────────────────────────
 
+
 class TestRefreshButton:
     def test_unique_id_generation(self):
         b = _make_button(EauGrandLyonRefreshButton)
@@ -101,6 +107,7 @@ class TestRefreshButton:
 
 
 # ── EauGrandLyonDownloadInvoiceButton ────────────────────────────────────────
+
 
 class TestDownloadInvoiceButton:
     def test_unique_id_generation(self):
@@ -117,6 +124,7 @@ class TestDownloadInvoiceButton:
 
 
 # ── EauGrandLyonVacationSwitch ──────────────────────────────────────────────
+
 
 class TestVacationSwitch:
     def test_unique_id_generation(self):
@@ -148,7 +156,20 @@ class TestVacationSwitch:
 
 # ── EauGrandLyonCalendar ───────────────────────────────────────────────────
 
+
 class TestCalendar:
+    async def test_setup_adds_single_account_calendar(self):
+        entry = MagicMock()
+        entry.entry_id = "entry-1"
+        entry.runtime_data = MagicMock()
+        added = MagicMock()
+
+        await calendar_platform.async_setup_entry(MagicMock(), entry, added)
+
+        entities = added.call_args.args[0]
+        assert len(entities) == 1
+        assert entities[0]._attr_unique_id == "entry-1_calendar"
+
     def test_unique_id_generation(self):
         c = _make_calendar()
         assert c._attr_unique_id == "test_entry_calendar"
@@ -208,6 +229,91 @@ class TestCalendar:
         assert c.event is not None
         assert "Maintenance" in c.event.summary
 
+    def test_builds_contract_dates_and_planned_intervention(self):
+        coordinator_data = {
+            "contracts": {
+                "REF1": {
+                    "next_payment_date": "2026-09-01",
+                    "next_bill_date": "2026-09-02",
+                    "date_prochaine_releve": "2026-09-03",
+                    "pds_mode_releve": "AMM automatique",
+                }
+            },
+            "interventions_planifiees": [
+                {
+                    "reference": "I1",
+                    "date_debut": "2026-09-04",
+                    "date_fin": "2026-09-04",
+                    "type": "Remplacement compteur",
+                    "contrat_ref": "REF1",
+                    "presence_requise": True,
+                }
+            ],
+            "interruptions": [],
+        }
+        events = _make_calendar(coordinator_data=coordinator_data)._build_events()
+        summaries = {event.summary for event in events}
+        assert summaries == {
+            "Paiement Eau (REF1)",
+            "Prochaine facture (REF1)",
+            "Relevé AMM automatique (REF1)",
+            "Remplacement compteur (présence requise) (REF1)",
+        }
+
+    def test_invalid_dates_are_ignored_without_losing_valid_events(self):
+        coordinator_data = {
+            "contracts": {
+                "REF1": {
+                    "next_payment_date": "invalid",
+                    "next_bill_date": None,
+                    "date_prochaine_releve": 123,
+                }
+            },
+            "interventions_planifiees": [{"date_debut": "invalid"}, {}],
+            "interruptions": [{"date_debut": "invalid"}, {}],
+        }
+        assert _make_calendar(coordinator_data=coordinator_data)._build_events() == []
+
+
+class TestDeviceInfo:
+    def test_contract_device_metadata_and_stable_identifier(self, monkeypatch):
+        monkeypatch.setattr(device_module, "DeviceInfo", lambda **kwargs: SimpleNamespace(**kwargs))
+        coordinator = MagicMock()
+        coordinator.data = {
+            "contracts": {
+                "REF1": {
+                    "calibre_compteur": "15",
+                    "usage": "Domestique",
+                    "reference_pds": "PDS-1",
+                },
+                "REF2": {},
+            }
+        }
+        entry = MagicMock(entry_id="entry-1")
+
+        info = contract_device_info(coordinator, entry, "REF1")
+
+        assert info.identifiers == {("eau_grand_lyon", "entry-1_REF1")}
+        assert info.name == "Eau du Grand Lyon REF1"
+        assert info.model == "DN15, Domestique"
+        assert info.serial_number == "PDS-1"
+
+    def test_account_device_reuses_first_contract_identifier(self, monkeypatch):
+        monkeypatch.setattr(device_module, "DeviceInfo", lambda **kwargs: SimpleNamespace(**kwargs))
+        coordinator = MagicMock()
+        coordinator.data = {"contracts": {"REF1": {}}}
+        entry = MagicMock(entry_id="entry-1")
+        assert account_device_info(coordinator, entry).identifiers == {("eau_grand_lyon", "entry-1_REF1")}
+
+    def test_account_device_without_contract_has_account_identifier(self, monkeypatch):
+        monkeypatch.setattr(device_module, "DeviceInfo", lambda **kwargs: SimpleNamespace(**kwargs))
+        coordinator = MagicMock()
+        coordinator.data = {"contracts": {}}
+        entry = MagicMock(entry_id="entry-1")
+        info = account_device_info(coordinator, entry)
+        assert info.identifiers == {("eau_grand_lyon", "entry-1")}
+        assert info.name == "Eau du Grand Lyon"
+
 
 class TestSensorAutoDiscovery:
     def _patch_sensor_factories(self, monkeypatch):
@@ -222,6 +328,7 @@ class TestSensorAutoDiscovery:
                 entity._attr_unique_id = f"{entry.entry_id}_{ref}_{suffix}"
                 created.append(entity._attr_unique_id)
                 return entity
+
             return _make
 
         def _global_factory(name):
@@ -230,6 +337,7 @@ class TestSensorAutoDiscovery:
                 entity._attr_unique_id = f"{entry.entry_id}_{name}"
                 created.append(entity._attr_unique_id)
                 return entity
+
             return _make
 
         patches = {

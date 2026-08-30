@@ -15,6 +15,7 @@ from .auth import (
     ApiError,
     AuthenticationError,
     EauGrandLyonAuth,
+    HttpError,
     NetworkError,
     WafBlockedError,
     _log_http_event,
@@ -161,6 +162,8 @@ class EauGrandLyonApi:
                         )
                         if retry_resp.status == 403:
                             raise WafBlockedError(f"WAF 403 sur {method} {url} (apres re-auth).")
+                        if retry_resp.status == 401:
+                            raise AuthenticationError(f"Identifiants refuses sur {method} {url}.")
                         retry_resp.raise_for_status()
                         return self._parse_json(await retry_resp.text(), method, url)
                 if resp.status == 403:
@@ -190,7 +193,7 @@ class EauGrandLyonApi:
                     err.status,
                     type(err).__name__,
                 )
-            raise ApiError(f"HTTP {err.status} sur {method} {url}: {err.message}") from err
+            raise HttpError(err.status, method, url, err.message) from err
         except aiohttp.ClientError as err:
             _LOGGER.warning(
                 "api_request_failed cid=%s method=%s url=%s error=%s",
@@ -297,7 +300,9 @@ class EauGrandLyonApi:
         async def _safe(sub_path: str, label: str) -> Any:
             try:
                 return await self._get_produits(f"contrats/{contract_id}/{sub_path}", log_response_errors=False)
-            except Exception as err:  # noqa: BLE001 - endpoint optionnel selon le contrat
+            except HttpError as err:
+                if err.status != 404:
+                    raise
                 _LOGGER.debug("Endpoint %s indisponible (contrat %s) : %s", label, contract_id, err)
                 return None
 
@@ -359,24 +364,12 @@ class EauGrandLyonApi:
                     len(entries),
                 )
             return entries
-        except ApiError as err:
-            if "404" in str(err):
-                _LOGGER.debug(
-                    "Endpoint /rest/produits/.../consommationsJournalieres -> 404 (contrat %s)",
-                    contract_id,
-                )
-            else:
-                _LOGGER.debug(
-                    "Erreur endpoint journalier /rest/produits/ (contrat %s) : %s",
-                    contract_id,
-                    err,
-                )
-            return []
-        except Exception as err:
+        except HttpError as err:
+            if err.status != 404:
+                raise
             _LOGGER.debug(
-                "Erreur inattendue endpoint journalier /rest/produits/ (contrat %s) : %s",
+                "Endpoint /rest/produits/.../consommationsJournalieres -> 404 (contrat %s)",
                 contract_id,
-                err,
             )
             return []
 
@@ -406,26 +399,22 @@ class EauGrandLyonApi:
                         len(entries),
                     )
                     return entries, source_name
-            except ApiError as err:
+            except HttpError as err:
+                if err.status != 404:
+                    raise
                 _LOGGER.debug(
                     "Endpoint journalier %s non disponible pour %s : %s",
                     source_name,
                     contract_id,
                     err,
                 )
-            except Exception as err:
-                _LOGGER.debug("Error on %s (contract %s): %s", source_name, contract_id, err)
         return [], "Aucune"
 
     async def get_alertes(self) -> list[dict]:
-        try:
-            data = await self._get(
-                "/application/rest/interfaces/ael/contrats/alertes" "?expand=infosAlarme,modeleAction,objetMaitre"
-            )
-            return data if isinstance(data, list) else []
-        except Exception as err:
-            _LOGGER.debug("Failed to fetch alerts: %s", err)
-            return []
+        data = await self._get(
+            "/application/rest/interfaces/ael/contrats/alertes" "?expand=infosAlarme,modeleAction,objetMaitre"
+        )
+        return data if isinstance(data, list) else []
 
     async def get_date_prochaine_facture(self, contract_id: str) -> str | None:
         try:
@@ -438,7 +427,9 @@ class EauGrandLyonApi:
                 raw = data.get("date") or data.get("value") or data.get("dateProchaineFacture")
                 return str(raw)[:10] if raw else None
             return None
-        except Exception as err:
+        except HttpError as err:
+            if err.status != 404:
+                raise
             _LOGGER.debug("get_date_prochaine_facture failed (contract %s): %s", contract_id, err)
             return None
 
@@ -476,7 +467,9 @@ class EauGrandLyonApi:
                 "conso_annuelle_ref_m3": conso_ref,
                 "reference_pds": data.get("reference"),
             }
-        except Exception as err:
+        except HttpError as err:
+            if err.status != 404:
+                raise
             _LOGGER.debug("Erreur get_point_de_service_etendu (contrat %s) : %s", contract_id, err)
             return {}
 
@@ -535,7 +528,9 @@ class EauGrandLyonApi:
                     continue
             _LOGGER.debug("Interventions planifiees : %d trouvees", len(result))
             return result
-        except Exception as err:
+        except HttpError as err:
+            if err.status != 404:
+                raise
             _LOGGER.debug("get_interventions failed: %s", err)
             return []
 
@@ -547,14 +542,10 @@ class EauGrandLyonApi:
             if isinstance(data, dict):
                 return data.get("content", [])
             return []
-        except ApiError as err:
-            if "404" in str(err):
-                _LOGGER.debug("[EXPERIMENTAL] /rest/produits/factures -> 404")
-            else:
-                _LOGGER.debug("[EXPERIMENTAL] get_factures failed: %s", err)
-            return []
-        except Exception as err:
-            _LOGGER.debug("[EXPERIMENTAL] Unexpected error in get_factures: %s", err)
+        except HttpError as err:
+            if err.status != 404:
+                raise
+            _LOGGER.debug("[EXPERIMENTAL] /rest/produits/factures -> 404")
             return []
 
     async def get_courbe_de_charge(self, contract_id: str, nb_jours: int = 30) -> list[dict]:
@@ -575,25 +566,12 @@ class EauGrandLyonApi:
                     len(entries),
                 )
             return entries
-        except ApiError as err:
-            if "404" in str(err):
-                _LOGGER.debug(
-                    "[EXPERIMENTAL] Courbe de charge non dispo contrat %s "
-                    "(compteur non communicant ou endpoint absent)",
-                    contract_id,
-                )
-            else:
-                _LOGGER.debug(
-                    "[EXPERIMENTAL] Erreur get_courbe_de_charge (contrat %s) : %s",
-                    contract_id,
-                    err,
-                )
-            return []
-        except Exception as err:
+        except HttpError as err:
+            if err.status != 404:
+                raise
             _LOGGER.debug(
-                "[EXPERIMENTAL] Erreur inattendue get_courbe_de_charge (contrat %s) : %s",
+                "[EXPERIMENTAL] Courbe de charge non dispo contrat %s " "(compteur non communicant ou endpoint absent)",
                 contract_id,
-                err,
             )
             return []
 
@@ -605,26 +583,14 @@ class EauGrandLyonApi:
                 log_response_errors=False,
             )
             return data if isinstance(data, dict) else None
-        except ApiError as err:
-            if "404" in str(err) or "500" in str(err):
+        except HttpError as err:
+            if err.status in (404, 500):
                 _LOGGER.debug(
                     "[EXPERIMENTAL] Derniere releve SIAMM non dispo (contrat %s)",
                     contract_id,
                 )
-            else:
-                _LOGGER.debug(
-                    "[EXPERIMENTAL] Erreur get_derniere_releve_siamm (contrat %s) : %s",
-                    contract_id,
-                    err,
-                )
-            return None
-        except Exception as err:
-            _LOGGER.debug(
-                "[EXPERIMENTAL] Erreur inattendue get_derniere_releve_siamm " "(contrat %s) : %s",
-                contract_id,
-                err,
-            )
-            return None
+                return None
+            raise
 
     async def get_invoice_pdf(self, invoice_ref: str) -> bytes:
         correlation_id = _new_correlation_id()
@@ -725,7 +691,7 @@ class EauGrandLyonApi:
                         commune,
                     )
 
-            def _safe_float(val: object) -> float | None:
+            def _safe_float(val: Any) -> float | None:
                 try:
                     return float(val) if val is not None else None
                 except (ValueError, TypeError):
@@ -740,11 +706,11 @@ class EauGrandLyonApi:
                 "date_analyse": (row.get("dateanalyse") or "")[:10] or None,
                 "source": "Open Data Metropole de Lyon",
             }
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError, asyncio.TimeoutError) as err:
             _LOGGER.debug("[OPEN DATA] Network error fetching water quality: %s", err)
             return empty
-        except Exception as err:
-            _LOGGER.debug("[OPEN DATA] Unexpected error fetching water quality: %s", err)
+        except (json.JSONDecodeError, ValueError, TypeError, KeyError) as err:
+            _LOGGER.debug("[OPEN DATA] Invalid water quality response: %s", err)
             return empty
 
     @staticmethod
