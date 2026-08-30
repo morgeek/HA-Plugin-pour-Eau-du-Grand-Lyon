@@ -166,7 +166,8 @@ class EauGrandLyonGlobalPredictionCostSensor(_EauGrandLyonGlobalBase):
     """Somme des prédictions de coût pour tous les contrats."""
 
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.TOTAL
+    # Somme de prévisions ponctuelles, pas un compteur cumulatif.
+    _attr_state_class = None
     _attr_native_unit_of_measurement = "EUR"
     _attr_translation_key = "global_prediction"
     _attr_suggested_display_precision = 2

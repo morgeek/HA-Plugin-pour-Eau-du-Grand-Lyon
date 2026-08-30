@@ -37,14 +37,19 @@ rules:
   docs-installation-parameters: done
   entity-unavailable: done
   integration-owner: done
-  log-when-unavailable: done
+  log-when-unavailable:
+    status: done
+    comment: >-
+      Les retries attendus restent en DEBUG. Le coordinator journalise une seule
+      transition healthy -> offline et une seule reprise offline -> healthy ;
+      les cycles toujours hors ligne ne répètent pas le WARNING.
   parallel-updates: done
   reauthentication-flow: done
   test-coverage:
-    status: todo
+    status: done
     comment: >-
-      Couverture globale portée d'environ 64 % à 77 % dans la version 3.4.6,
-      mais plusieurs modules restent sous le seuil requis de 95 %.
+      La CI exige une couverture globale d'au moins 95 % et vérifie en plus que
+      chaque module Python non vide de l'intégration dépasse strictement 95 %.
 
   # Gold
   devices: done
@@ -63,10 +68,12 @@ rules:
   docs-troubleshooting: done
   docs-use-cases: done
   dynamic-devices:
-    status: todo
+    status: done
     comment: >-
-      Les contrats d'un compte peuvent changer après le setup. Les plateformes
-      ne créent pas encore automatiquement les entités d'un nouveau contrat.
+      Sensor et binary_sensor écoutent le coordinator et ajoutent uniquement les
+      unique_id encore inconnus lorsqu'un contrat apparaît après le setup. Une
+      disparition ne supprime aucune entité ni aucun historique ; une réapparition
+      ne crée pas de doublon.
   entity-category: done
   entity-device-class: done
   entity-disabled-by-default: done

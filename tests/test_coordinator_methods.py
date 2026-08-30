@@ -1,10 +1,17 @@
 """Tests for EauGrandLyonCoordinator instance methods."""
 
 from datetime import datetime, timedelta, timezone
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
-from custom_components.eau_grand_lyon.api import ApiError, AuthenticationError, NetworkError, WafBlockedError
+from custom_components.eau_grand_lyon.api import (
+    ApiError,
+    AuthenticationError,
+    EauGrandLyonApi,
+    NetworkError,
+    WafBlockedError,
+)
 from custom_components.eau_grand_lyon.coordinator import EauGrandLyonCoordinator
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -217,6 +224,39 @@ class TestUpdateErrorPaths:
         assert self.coord._consecutive_failures == 0
         self.coord._save_persistent_data.assert_awaited_once()
         outage.assert_called_once_with(self.coord.hass, 0)
+
+    @pytest.mark.asyncio
+    async def test_offline_transition_is_logged_once_and_recovery_once(self, caplog):
+        self.coord._max_retries = 1
+        self.coord._api_offline = False
+        self.coord._last_good_data = {
+            "contracts": {"REF1": {"reference": "REF1"}},
+            "last_update_success_time": datetime(2026, 4, 20, tzinfo=timezone.utc),
+        }
+        self.coord._fetch_all_data.side_effect = [
+            NetworkError("offline"),
+            NetworkError("offline"),
+            {"contracts": {"REF1": {"reference": "REF1"}}},
+        ]
+
+        with caplog.at_level(logging.DEBUG, logger="custom_components.eau_grand_lyon.coordinator"), patch(
+            "custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"
+        ):
+            first = await self.coord._async_update_data()
+            self.coord.data = first
+            second = await self.coord._async_update_data()
+            self.coord.data = second
+            third = await self.coord._async_update_data()
+            self.coord.data = third
+
+        transition_logs = [record for record in caplog.records if "offline mode active" in record.message]
+        recovery_logs = [record for record in caplog.records if "available again" in record.message]
+        assert len(transition_logs) == 1
+        assert transition_logs[0].levelno == logging.WARNING
+        assert len(recovery_logs) == 1
+        assert recovery_logs[0].levelno == logging.INFO
+        assert third["offline_mode"] is False
+        assert third["consecutive_failures"] == 0
 
     @pytest.mark.asyncio
     async def test_rate_limiting_sleeps_when_request_too_soon(self):
@@ -639,6 +679,67 @@ class TestCoordinatorFetchOrchestration:
         assert result["surconso_jour_depassee"] is True
         assert result["surconso_mois_depassee"] is True
         assert result["derniere_facture"]["reference"] == "INV-1"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("optional_body", ["", "<!DOCTYPE html><html>maintenance</html>", "not-json"])
+    async def test_invalid_optional_invoice_date_keeps_contract_online_without_global_retry(
+        self, optional_body, caplog
+    ):
+        coord = _make_coordinator()
+        coord._entry.data = {"tarif_m3": 4.0}
+        coord._entry.options = {"water_hardness": 30}
+        coord._daily_history = {}
+        coord._monthly_history = {}
+        coord._daily_history_store = MagicMock()
+        coord._monthly_history_store = MagicMock()
+        coord._store = MagicMock()
+        coord._save_monthly_history = AsyncMock()
+        coord._save_daily_history = AsyncMock()
+        coord._inject_statistics = AsyncMock()
+        coord._handle_alert_notifications = MagicMock()
+        coord.vacation_mode = False
+
+        api = EauGrandLyonApi(MagicMock(), "user@example.com", "secret")
+        api.get_contracts = AsyncMock(
+            return_value=[
+                {
+                    "id": "C1",
+                    "reference": "REF1",
+                    "dateEcheance": "2026-09-01",
+                    "pointDeReleve": {"moduleRadio": {"etatPile": "OK"}},
+                }
+            ]
+        )
+        api.get_alertes = AsyncMock(return_value=[])
+        api.get_factures = AsyncMock(return_value=[])
+        api.get_water_quality = AsyncMock(return_value={"commune": "Lyon"})
+        api.get_interventions = AsyncMock(return_value=[])
+        api.get_monthly_consumptions = AsyncMock(return_value=[{"mois": 7, "annee": 2026, "consommation": 10.0}])
+        api.get_daily_consumptions = AsyncMock(
+            return_value={
+                "entries": [{"date": "2026-08-01", "consommation_m3": 0.2, "index_m3": 100.2}],
+                "source": "Produits",
+                "nb_entries": 1,
+                "last_date": "2026-08-01",
+            }
+        )
+        api.get_point_de_service_etendu = AsyncMock(return_value={})
+        api.get_alerte_surconsommation = AsyncMock(return_value={})
+        api._request_text = AsyncMock(return_value=(200, "text/html", optional_body))
+        coord.api = api
+
+        with caplog.at_level(logging.DEBUG, logger="custom_components.eau_grand_lyon.coordinator"), patch(
+            "custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()
+        ) as sleep_mock, patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
+            result = await coord._async_update_data()
+
+        contract = result["contracts"]["REF1"]
+        assert contract["next_bill_date"] is None
+        assert contract["consommation_mois_courant"] == 10.0
+        assert contract["index_journalier_dernier"] == 100.2
+        assert result["offline_mode"] is False
+        sleep_mock.assert_not_awaited()
+        assert "skipped for this cycle" not in caplog.text
 
 
 class TestBillingModes:

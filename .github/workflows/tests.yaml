@@ -43,7 +43,9 @@ jobs:
           pytest tests/ -v --tb=short \
             --cov=custom_components/eau_grand_lyon \
             --cov-report=term-missing \
-            --cov-fail-under=75
+            --cov-report=json \
+            --cov-fail-under=95
+          python scripts/check_module_coverage.py coverage.json
 
   ha-config-flow-compat:
     name: ConfigFlow HA ${{ matrix.homeassistant }}

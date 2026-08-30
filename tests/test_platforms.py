@@ -9,6 +9,8 @@ from custom_components.eau_grand_lyon.button import (
     EauGrandLyonRefreshButton,
     EauGrandLyonDownloadInvoiceButton,
 )
+from custom_components.eau_grand_lyon import button as button_platform
+from custom_components.eau_grand_lyon import switch as switch_platform
 from custom_components.eau_grand_lyon.switch import EauGrandLyonVacationSwitch
 from custom_components.eau_grand_lyon import calendar as calendar_platform
 from custom_components.eau_grand_lyon.calendar import EauGrandLyonCalendar
@@ -96,6 +98,21 @@ def _make_calendar(coordinator_data=None, entry=None, hass=None):
 
 
 class TestRefreshButton:
+    async def test_setup_builds_both_buttons_with_device_info(self):
+        entry = MagicMock()
+        entry.entry_id = "entry-1"
+        entry.runtime_data = MagicMock(data={"contracts": {}})
+        added = MagicMock()
+
+        await button_platform.async_setup_entry(MagicMock(), entry, added)
+
+        entities = added.call_args.args[0]
+        assert [entity._attr_unique_id for entity in entities] == [
+            "entry-1_refresh",
+            "entry-1_download_invoice",
+        ]
+        assert all(entity.device_info is not None for entity in entities)
+
     def test_unique_id_generation(self):
         b = _make_button(EauGrandLyonRefreshButton)
         assert b._attr_unique_id == "test_entry_refresh"
@@ -138,6 +155,39 @@ class TestDownloadInvoiceButton:
 
 
 class TestVacationSwitch:
+    async def test_setup_builds_switch_and_restores_on_state(self, monkeypatch):
+        entry = MagicMock()
+        entry.entry_id = "entry-1"
+        entry.runtime_data = MagicMock()
+        added = MagicMock()
+
+        await switch_platform.async_setup_entry(MagicMock(), entry, added)
+
+        switch = added.call_args.args[0][0]
+        switch.async_get_last_state = AsyncMock(return_value=SimpleNamespace(state="on"))
+        monkeypatch.setattr(
+            "custom_components.eau_grand_lyon.switch.CoordinatorEntity.async_added_to_hass",
+            AsyncMock(),
+            raising=False,
+        )
+        await switch.async_added_to_hass()
+        assert switch._attr_is_on is True
+        assert switch.coordinator.vacation_mode is True
+        assert switch.device_info is not None
+
+    async def test_restore_without_previous_state_keeps_default(self, monkeypatch):
+        entry = MagicMock()
+        entry.entry_id = "entry-1"
+        switch = EauGrandLyonVacationSwitch(MagicMock(), entry)
+        switch.async_get_last_state = AsyncMock(return_value=None)
+        monkeypatch.setattr(
+            "custom_components.eau_grand_lyon.switch.CoordinatorEntity.async_added_to_hass",
+            AsyncMock(),
+            raising=False,
+        )
+        await switch.async_added_to_hass()
+        assert switch._attr_is_on is False
+
     def test_unique_id_generation(self):
         s = _make_switch()
         assert s._attr_unique_id == "test_entry_vacation_mode"

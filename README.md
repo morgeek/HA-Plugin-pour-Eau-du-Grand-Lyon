@@ -7,6 +7,8 @@ Ceci est une intégration personnalisée non officielle pour [Home Assistant](ht
 
 > **À savoir** : l'intégration interroge le portail Eau du Grand Lyon. Elle nécessite un compte client valide et peut être limitée par le pare-feu anti-abus du service.
 
+> **Message Home Assistant normal** : `We found a custom integration eau_grand_lyon which has not been tested by Home Assistant` est affiché pour les intégrations installées dans `custom_components`. Il ne signale pas une panne et ne peut pas être supprimé proprement par l'intégration.
+
 ## Démarrage rapide
 
 1. Installez l'intégration avec HACS, ou copiez le dossier `custom_components/eau_grand_lyon/` dans votre configuration Home Assistant.
@@ -39,7 +41,7 @@ Ce tableau distingue les données fournies par Eau du Grand Lyon des calculs eff
 | Téléchargement du PDF | Conditionnel | Utilise l'identifiant interne et la route `duplicata` du portail ; nécessite une facture marquée téléchargeable et un dossier autorisé dans Home Assistant |
 | Prédictions, Eco-Score, coaching, CO₂e et calcaire | Indicatif | Formules locales déterministes, pas de modèle d'IA ni de barème officiel garanti |
 | Qualité de l'eau | Conditionnel | Configurez la commune ; sinon la première mesure Open Data disponible peut concerner une autre commune |
-| Calendrier | Partiellement estimé | Les dates viennent de l'API lorsqu'elles existent ; la prochaine facture peut sinon être estimée à échéance + 180 jours |
+| Calendrier | Fonctionnel selon les dates fournies | La prochaine facture n'est publiée comme état que si l'API renvoie une date exploitable ; l'estimation locale à échéance + 180 jours reste séparée dans l'attribut `date_estimée` |
 | Mode vacances | Incomplet | Le seuil est calculé et journalisé, mais aucune entité d'alerte ni notification dédiée n'est actuellement exposée |
 | Sécheresse | Indicatif | Heuristique calendaire : vigilance de juin à septembre, pas les arrêtés réels |
 
@@ -82,11 +84,18 @@ homeassistant:
 Redémarrez Home Assistant après avoir modifié cette liste.
 
 ### Mode hors-ligne
+
 Si l'API Eau du Grand Lyon est indisponible (coupure réseau, maintenance, blocage WAF), l'intégration bascule automatiquement en **mode hors-ligne** :
 - Les capteurs restent disponibles et affichent les dernières données connues
 - Le capteur **Statut API** affiche `Hors-ligne` (état brut `offline`) avec l'horodatage du début de la panne
 - Le cache est persistant sur disque — il survit à un redémarrage de Home Assistant
 - Dès que l'API répond à nouveau, les données sont rafraîchies et le mode hors-ligne se désactive automatiquement
+
+Les tentatives intermédiaires restent au niveau `DEBUG`. Une panne persistante produit un seul avertissement lors du passage en mode hors-ligne, puis un seul message d'information au retour du service ; les cycles identiques suivants ne répètent pas le même avertissement.
+
+### Contrats ajoutés après l'installation
+
+Les plateformes `sensor` et `binary_sensor` surveillent les contrats découverts à chaque mise à jour. Un nouveau contrat et ses entités sont ajoutés sans recharger l'intégration et sans recréer les entités déjà présentes. Si un contrat disparaît temporairement, aucune entité, statistique Recorder ou donnée historique n'est supprimée automatiquement ; sa réapparition ne crée pas de doublon.
 
 ### Mode Expérimental (données étendues)
 Une option **Mode expérimental** (désactivée par défaut) active la récupération de données supplémentaires, lorsque votre compteur et votre compte les exposent :
@@ -260,7 +269,7 @@ Après la mise à jour, Home Assistant peut conserver l'ancien nom personnalisé
 
 ### Le téléchargement de facture ne fonctionne pas
 
-La version 3.5.2 utilise la route actuelle du portail (`/factures/{id}/duplicata`) et l'identifiant interne de la facture, au lieu de sa référence lisible. Le bouton est indisponible si aucun document n'est annoncé comme téléchargeable. Un lien `/local/...` est ajouté uniquement lorsque le fichier se trouve réellement sous `/config/www` ; ailleurs, la notification indique seulement le chemin de sauvegarde local.
+La version 3.5.3 utilise la route actuelle du portail (`/factures/{id}/duplicata`) et l'identifiant interne de la facture, au lieu de sa référence lisible. Le bouton est indisponible si aucun document n'est annoncé comme téléchargeable. Un lien `/local/...` est ajouté uniquement lorsque le fichier se trouve réellement sous `/config/www` ; ailleurs, la notification indique seulement le chemin de sauvegarde local.
 
 Vérifiez ensuite :
 

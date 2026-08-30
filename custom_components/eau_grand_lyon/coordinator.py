@@ -263,6 +263,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         # Suivi de la santé des mises à jour
         self._consecutive_failures: int = 0
+        self._api_offline: bool = False
 
         # Cache du résultat de get_cumulative_index — invalidé à chaque mise à jour réussie
         self._cumulative_index_cache: dict[str, float | None] = {}
@@ -537,6 +538,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         for attempt in range(self._max_retries):
             try:
                 data = await self._fetch_all_data()
+                was_offline = bool(
+                    getattr(self, "_api_offline", False) or (self.data and self.data.get("offline_mode"))
+                )
                 now = datetime.now(timezone.utc)
                 data["last_update_success_time"] = now
                 data["last_error"] = None
@@ -548,25 +552,22 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 data["cache_age_days"] = 0
                 data["consecutive_failures"] = 0
                 self._consecutive_failures = 0
+                self._api_offline = False
                 self._cumulative_index_cache = {}
                 self._last_good_data = data
                 await self._save_persistent_data()
                 await check_long_outage_issue(self.hass, 0)
+                if was_offline:
+                    _LOGGER.info("Eau du Grand Lyon API available again")
                 return data
 
             except WafBlockedError as err:
                 last_exc = err
                 last_err_type = "WafBlockedError"
                 self._consecutive_failures += 1
-                if self._consecutive_failures >= 5:
-                    _LOGGER.warning(
-                        "Eau du Grand Lyon — %d consecutive WAF failures. "
-                        "Check the update interval in integration options (recommended: 24h).",
-                        self._consecutive_failures,
-                    )
                 if attempt < self._max_retries - 1:
                     delay = self._compute_retry_delay(WAF_RETRY_BASE_DELAY_S, attempt)
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "WAF blocked (attempt %d/%d), retrying in %.1fs — %s",
                         attempt + 1,
                         self._max_retries,
@@ -579,15 +580,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 last_exc = err
                 last_err_type = "NetworkError"
                 self._consecutive_failures += 1
-                if self._consecutive_failures >= 5:
-                    _LOGGER.warning(
-                        "Eau du Grand Lyon — %d consecutive network failures. "
-                        "Check connectivity and the upstream service status.",
-                        self._consecutive_failures,
-                    )
                 if attempt < self._max_retries - 1:
                     delay = self._compute_retry_delay(NETWORK_RETRY_BASE_DELAY_S, attempt)
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "Network error (attempt %d/%d), retrying in %.1fs — %s",
                         attempt + 1,
                         self._max_retries,
@@ -604,7 +599,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 self._consecutive_failures += 1
                 if attempt < self._max_retries - 1:
                     delay = self._compute_retry_delay(NETWORK_RETRY_BASE_DELAY_S, attempt)
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "API error (attempt %d/%d), retrying in %.1fs — %s",
                         attempt + 1,
                         self._max_retries,
@@ -628,17 +623,22 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         # Toutes les tentatives ont échoué — mode hors-ligne si cache disponible
         cache = self._last_good_data
         if cache and cache.get("contracts"):
+            already_offline = bool(
+                getattr(self, "_api_offline", False) or (self.data and self.data.get("offline_mode"))
+            )
             offline_since = (
                 self.data.get("offline_since")
                 if self.data and self.data.get("offline_mode")
                 else datetime.now(timezone.utc)
             )
-            _LOGGER.warning(
-                "API unavailable after %d attempts (%s) — offline mode active " "(data from %s)",
-                self._max_retries,
-                last_err_type,
-                cache.get("last_update_success_time", "inconnu"),
-            )
+            if not already_offline:
+                _LOGGER.warning(
+                    "API unavailable after %d attempts (%s) — offline mode active " "(data from %s)",
+                    self._max_retries,
+                    last_err_type,
+                    cache.get("last_update_success_time", "inconnu"),
+                )
+            self._api_offline = True
             days_offline = (datetime.now(timezone.utc) - offline_since).days
             await check_long_outage_issue(self.hass, days_offline)
 
@@ -713,7 +713,12 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 ref = details["reference"]
                 # Un contrat en échec ne doit pas faire tomber les autres du compte.
                 if isinstance(contract_data, BaseException):
-                    _LOGGER.warning("Contrat %s ignoré ce cycle (erreur : %s)", ref, contract_data)
+                    _LOGGER.debug(
+                        "Contract %s skipped for this cycle (error=%s: %s)",
+                        ref,
+                        type(contract_data).__name__,
+                        contract_data,
+                    )
                     if first_contract_error is None:
                         first_contract_error = contract_data
                     continue
@@ -1009,8 +1014,10 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         # ── [BILLING] Dates clés ──────────────────────────────────────────
         next_payment_date = details.get("date_echeance")
-        # Utilise la date réelle de l'API si disponible, sinon estimation locale
-        next_bill_date = date_prochaine_facture or self._estimate_next_bill_date(next_payment_date)
+        # L'état public reste strictement la valeur fournisseur. L'ancienne
+        # estimation locale est conservée séparément à titre indicatif.
+        next_bill_date = date_prochaine_facture
+        estimated_next_bill_date = self._estimate_next_bill_date(next_payment_date)
         # Date du prochain relevé compteur (endpoint /pointDeService)
         date_prochaine_releve = pds_etendu.get("date_prochaine_releve")
         conso_annuelle_ref_m3 = pds_etendu.get("conso_annuelle_ref_m3")
@@ -1106,6 +1113,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             "co2_footprint_kg": co2_footprint,
             "next_payment_date": next_payment_date,
             "next_bill_date": next_bill_date,
+            "estimated_next_bill_date": estimated_next_bill_date,
             "date_prochaine_releve": date_prochaine_releve,
             "conso_annuelle_ref_m3": conso_annuelle_ref_m3,
             "pds_mode_releve": pds_etendu.get("mode_releve"),

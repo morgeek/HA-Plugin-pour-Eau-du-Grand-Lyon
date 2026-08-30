@@ -38,6 +38,13 @@ class TestSetupLifecycle:
         assert hass.services.async_register.call_count == 4
 
     @pytest.mark.asyncio
+    async def test_component_setup_is_idempotent_when_services_already_exist(self):
+        hass = MagicMock()
+        hass.services.has_service.return_value = True
+        assert await async_setup(hass, {}) is True
+        hass.services.async_register.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_setup_registers_options_listener_after_success(self):
         hass = MagicMock()
         hass.config_entries.async_forward_entry_setups = AsyncMock()
@@ -58,6 +65,23 @@ class TestSetupLifecycle:
         entry.async_on_unload.assert_called_once_with(entry.add_update_listener.return_value)
         cleanup.assert_called_once_with(hass, entry)
         coordinator.async_close.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_setup_keeps_running_when_legacy_cleanup_best_effort_fails(self):
+        hass = MagicMock()
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+        entry = _entry()
+        coordinator = MagicMock()
+        coordinator.async_initialize = AsyncMock()
+        coordinator.async_config_entry_first_refresh = AsyncMock()
+
+        with patch("custom_components.eau_grand_lyon.EauGrandLyonCoordinator", return_value=coordinator), patch(
+            "custom_components.eau_grand_lyon._async_cleanup_legacy_device",
+            side_effect=RuntimeError("registry unavailable"),
+        ):
+            assert await async_setup_entry(hass, entry) is True
+
+        entry.add_update_listener.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_failed_setup_always_closes_owned_session(self):
@@ -183,6 +207,17 @@ class TestServiceHandlers:
         content = target.read_text(encoding="utf-8")
         assert "REF1,MENSUEL,Août 2026,3.2,Année 2026" in content
         assert "REF1,JOURNALIER,2026-08-01,0.1,Index 42.0" in content
+
+    @pytest.mark.asyncio
+    async def test_export_data_skips_coordinator_without_loaded_data(self, tmp_path):
+        coordinator = MagicMock(data=None)
+        hass, handlers = _service_hass(coordinator)
+        hass.config.is_allowed_path.return_value = True
+        target = tmp_path / "empty.csv"
+
+        await handlers["export_data"](MagicMock(data={"path": str(target)}))
+
+        assert target.read_text(encoding="utf-8").splitlines() == ["Contrat,Type,Date/Label,Valeur (m3),Détails"]
 
     @pytest.mark.asyncio
     async def test_download_invoice_under_www_writes_pdf_and_links_local_url(self, tmp_path):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -127,7 +128,24 @@ class EauGrandLyonApi:
         except (json.JSONDecodeError, ValueError) as err:
             raise ApiError(f"Réponse non-JSON sur {method} {url}: {err}") from err
 
-    async def _request(self, method: str, url: str, *, log_response_errors: bool = True, **kwargs) -> Any:
+    @staticmethod
+    async def _read_response_body(resp, accepted_statuses: frozenset[int]) -> tuple[int, str, str]:
+        """Return response metadata and text without imposing a payload format."""
+        if resp.status not in accepted_statuses:
+            resp.raise_for_status()
+        content_type = str(getattr(resp, "content_type", "") or "")
+        return resp.status, content_type, await resp.text()
+
+    async def _request_body(
+        self,
+        method: str,
+        url: str,
+        *,
+        accepted_statuses: frozenset[int] = frozenset(),
+        log_response_errors: bool = True,
+        **kwargs,
+    ) -> tuple[int, str, str]:
+        """Run an authenticated request and return its unparsed response body."""
         correlation_id = _new_correlation_id()
         await self._ensure_auth(correlation_id=correlation_id)
         headers = {"Authorization": f"Bearer {self._auth.access_token}"}
@@ -164,19 +182,17 @@ class EauGrandLyonApi:
                             raise WafBlockedError(f"WAF 403 sur {method} {url} (apres re-auth).")
                         if retry_resp.status == 401:
                             raise AuthenticationError(f"Identifiants refuses sur {method} {url}.")
-                        retry_resp.raise_for_status()
-                        return self._parse_json(await retry_resp.text(), method, url)
+                        return await self._read_response_body(retry_resp, accepted_statuses)
                 if resp.status == 403:
                     raise WafBlockedError(f"WAF 403 sur {method} {url}.")
-                resp.raise_for_status()
-                return self._parse_json(await resp.text(), method, url)
+                return await self._read_response_body(resp, accepted_statuses)
         except (WafBlockedError, AuthenticationError, ApiError):
             raise
         except (TimeoutError, asyncio.TimeoutError) as err:
             # aiohttp.ClientTimeout lève asyncio.TimeoutError, qui n'est PAS un
             # aiohttp.ClientError — sans ce bloc il remonterait brut jusqu'au
             # except générique du coordinator et court-circuiterait retry + cache.
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "api_request_timeout cid=%s method=%s url=%s",
                 correlation_id,
                 method,
@@ -185,7 +201,7 @@ class EauGrandLyonApi:
             raise NetworkError(f"Timeout sur {method} {url}: {err}") from err
         except aiohttp.ClientResponseError as err:
             if log_response_errors:
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "api_request_failed cid=%s method=%s url=%s status=%s error=%s",
                     correlation_id,
                     method,
@@ -195,7 +211,7 @@ class EauGrandLyonApi:
                 )
             raise HttpError(err.status, method, url, err.message) from err
         except aiohttp.ClientError as err:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "api_request_failed cid=%s method=%s url=%s error=%s",
                 correlation_id,
                 method,
@@ -203,6 +219,32 @@ class EauGrandLyonApi:
                 type(err).__name__,
             )
             raise NetworkError(f"Erreur reseau sur {method} {url}: {err}") from err
+
+    async def _request(self, method: str, url: str, *, log_response_errors: bool = True, **kwargs) -> Any:
+        """Run a request whose response is required to contain valid JSON."""
+        _status, _content_type, text = await self._request_body(
+            method,
+            url,
+            log_response_errors=log_response_errors,
+            **kwargs,
+        )
+        return self._parse_json(text, method, url)
+
+    async def _request_text(
+        self,
+        method: str,
+        url: str,
+        *,
+        accepted_statuses: frozenset[int] = frozenset(),
+        **kwargs,
+    ) -> tuple[int, str, str]:
+        """Run a request whose optional payload may be JSON or plain text."""
+        return await self._request_body(
+            method,
+            url,
+            accepted_statuses=accepted_statuses,
+            **kwargs,
+        )
 
     async def _do_get(self, url: str, params: dict | None = None, *, log_response_errors: bool = True) -> Any:
         return await self._request("GET", url, params=params, log_response_errors=log_response_errors)
@@ -417,21 +459,52 @@ class EauGrandLyonApi:
         return data if isinstance(data, list) else []
 
     async def get_date_prochaine_facture(self, contract_id: str) -> str | None:
+        """Return the optional next invoice date from JSON or plain text."""
+        url = f"{BASE_URL}/application/rest/produits/contrats/{contract_id}/dateProchaineFacture"
+        status, content_type, text = await self._request_text(
+            "GET",
+            url,
+            accepted_statuses=frozenset({204, 404}),
+        )
+        if status in (204, 404) or not text.strip():
+            return None
+
+        stripped = text.strip()
+        payload: Any = stripped
         try:
-            data = await self._do_get(
-                f"{BASE_URL}/application/rest/produits/contrats/{contract_id}/dateProchaineFacture"
+            payload = json.loads(stripped)
+        except (json.JSONDecodeError, ValueError):
+            # Plain ISO text is a documented provider variant for this endpoint.
+            pass
+
+        if isinstance(payload, dict):
+            raw = (
+                payload.get("dateProchaineFacture")
+                or payload.get("date")
+                or payload.get("value")
+                or payload.get("valeur")
             )
-            if isinstance(data, str):
-                return data[:10] if len(data) >= 10 else None
-            if isinstance(data, dict):
-                raw = data.get("date") or data.get("value") or data.get("dateProchaineFacture")
-                return str(raw)[:10] if raw else None
-            return None
-        except HttpError as err:
-            if err.status != 404:
-                raise
-            _LOGGER.debug("get_date_prochaine_facture failed (contract %s): %s", contract_id, err)
-            return None
+        elif isinstance(payload, str):
+            raw = payload
+        else:
+            raw = None
+
+        candidate = str(raw or "").strip()
+        match = re.fullmatch(r"(\d{4}-\d{2}-\d{2})(?:[Tt ].*)?", candidate)
+        if match:
+            try:
+                datetime.strptime(match.group(1), "%Y-%m-%d")
+                return match.group(1)
+            except ValueError:
+                pass
+
+        _LOGGER.debug(
+            "Optional next invoice date is unusable for contract %s (status=%s, content_type=%s)",
+            contract_id,
+            status,
+            content_type or "unknown",
+        )
+        return None
 
     async def get_point_de_service_etendu(self, contract_id: str) -> dict:
         select = (
@@ -935,7 +1008,7 @@ class EauGrandLyonApi:
                         "telechargeable": facture.get("telechargeable") is not False,
                     }
                 )
-            except (KeyError, ValueError, TypeError):
+            except (AttributeError, KeyError, ValueError, TypeError):
                 _LOGGER.debug("Skipping invoice (unexpected format): %s", facture)
         result.sort(key=lambda item: item.get("date_edition") or "", reverse=True)
         return result

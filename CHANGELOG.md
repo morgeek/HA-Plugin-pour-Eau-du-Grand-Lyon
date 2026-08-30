@@ -3,6 +3,27 @@
 Tous les changements notables apportés à cette intégration seront documentés dans ce fichier.
 
 
+## [3.5.3] - 2026-08-30
+
+### Robustesse runtime
+
+- **Prochaine facture facultative** : ajout d'un transport texte dédié qui conserve les protections réseau, authentification, WAF et HTTP sans affaiblir le parsing JSON des autres endpoints. Les chaînes JSON, objets JSON, dates ou datetimes ISO en texte brut sont acceptés ; les réponses vides, 204, 404, HTML ou dates inexploitables donnent désormais `None` sans faire tomber le contrat.
+- **Contrat préservé** : une réponse 200 non JSON sur `dateProchaineFacture` ne déclenche plus le backoff global, le mode hors-ligne ou la perte des consommations, index, appareils et statistiques. Les erreurs réseau, authentification, WAF et serveur continuent de remonter.
+- **Journalisation hors-ligne** : les retries restent en `DEBUG`, le passage en mode hors-ligne produit un seul avertissement, les cycles suivants restent silencieux et le retour du service produit un seul message d'information.
+
+### Entités et statistiques
+
+- **Prévision de coût** : les capteurs de prédiction mensuelle conservent leur valeur en EUR et leurs `unique_id`, mais n'utilisent plus la combinaison invalide `MONETARY + MEASUREMENT`. Une prévision ponctuelle porte désormais `state_class = None`.
+- **Audit automatisé** : tests de non-régression sur les combinaisons `MONETARY`, `WATER`, `MEASUREMENT` et `TOTAL_INCREASING`, sans modification des `statistic_id` publics.
+- **Contrats dynamiques** : `sensor` et `binary_sensor` ajoutent les entités d'un contrat découvert après le setup, une seule fois et sans suppression destructive lors d'une disparition temporaire.
+
+### Qualité et documentation
+
+- Couverture globale relevée à plus de 95 %, avec un contrôle CI supplémentaire exigeant strictement plus de 95 % pour chaque module Python non vide de l'intégration.
+- Documentation du warning normal des custom integrations, de la date de facture réellement fournie, des transitions hors-ligne, des contrats dynamiques et de l'état non conforme des assets Brands locaux.
+- La règle `brands` reste `todo` et aucun niveau Gold n'est déclaré tant que la contribution officielle n'est pas acceptée.
+
+
 ## [3.5.2] - 2026-08-30
 
 ### Compatibilité Home Assistant

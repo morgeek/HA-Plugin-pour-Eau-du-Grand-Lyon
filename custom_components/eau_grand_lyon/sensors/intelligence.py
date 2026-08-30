@@ -60,9 +60,9 @@ class EauGrandLyonPredictionConsoSensor(_EauGrandLyonBase):
 class EauGrandLyonPredictionCostSensor(_EauGrandLyonBase):
     """Sensor de prédiction de coût mensuel (EUR)."""
 
-    # Prévision de coût (valeur estimée, non cumulative) : MEASUREMENT.
+    # Prévision ponctuelle : aucune state_class statistique/cumulative.
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_state_class = None
     _attr_native_unit_of_measurement = "EUR"
     _attr_entity_registry_enabled_default = False
     _attr_translation_key = "prediction_cost"

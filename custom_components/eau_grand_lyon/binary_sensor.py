@@ -35,28 +35,53 @@ async def async_setup_entry(
     entry: EauGrandLyonConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Crée les binary sensors Eau du Grand Lyon."""
+    """Create binary sensors and follow contracts discovered after setup."""
     coordinator = entry.runtime_data
+    added_unique_ids: set[str] = set()
 
+    def _add_new_entities() -> None:
+        candidates: list[BinarySensorEntity] = []
+        for ref, contract in (coordinator.data or {}).get("contracts", {}).items():
+            candidates.extend(_contract_binary_sensor_candidates(coordinator, entry, ref, contract))
+
+        # [FEAT 3] Coupure/Travaux planifiés — capteur global
+        candidates.append(EauGrandLyonOutageSensor(coordinator, entry))
+
+        new_entities = []
+        for entity in candidates:
+            unique_id = entity._attr_unique_id
+            if unique_id not in added_unique_ids:
+                added_unique_ids.add(unique_id)
+                new_entities.append(entity)
+        if new_entities:
+            async_add_entities(new_entities, update_before_add=False)
+
+    _add_new_entities()
+    entry.async_on_unload(coordinator.async_add_listener(_add_new_entities))
+
+
+def _contract_binary_sensor_candidates(
+    coordinator,
+    entry,
+    ref: str,
+    contract: dict,
+) -> list[BinarySensorEntity]:
+    """Build the currently applicable binary sensors for one contract."""
     entities: list[BinarySensorEntity] = []
-    for ref, contract in (coordinator.data or {}).get("contracts", {}).items():
-        entities.append(EauGrandLyonLeakAlertSensor(coordinator, entry, ref))
-        entities.append(EauGrandLyonRealTimeLeakSensor(coordinator, entry, ref))
-        entities.append(EauGrandLyonLocalLeakSensor(coordinator, entry, ref))
-        entities.append(EauGrandLyonBatterySensor(coordinator, entry, ref))
-        entities.append(EauGrandLyonLimescaleAlertSensor(coordinator, entry, ref))
-        # ── Alertes serveur (seuils configurés dans l'espace Eau du Grand Lyon) ──
-        if contract.get("abonne_alerte_fuite") is not None:
-            entities.append(EauGrandLyonLeakSubscriptionSensor(coordinator, entry, ref))
-        if contract.get("seuil_surconso_jour_m3") is not None:
-            entities.append(EauGrandLyonSurconsoJourSensor(coordinator, entry, ref))
-        if contract.get("seuil_surconso_mois_m3") is not None:
-            entities.append(EauGrandLyonSurconsoMoisSensor(coordinator, entry, ref))
 
-    # [FEAT 3] Coupure/Travaux planifiés — capteur global
-    entities.append(EauGrandLyonOutageSensor(coordinator, entry))
-
-    async_add_entities(entities, update_before_add=False)
+    entities.append(EauGrandLyonLeakAlertSensor(coordinator, entry, ref))
+    entities.append(EauGrandLyonRealTimeLeakSensor(coordinator, entry, ref))
+    entities.append(EauGrandLyonLocalLeakSensor(coordinator, entry, ref))
+    entities.append(EauGrandLyonBatterySensor(coordinator, entry, ref))
+    entities.append(EauGrandLyonLimescaleAlertSensor(coordinator, entry, ref))
+    # ── Alertes serveur (seuils configurés dans l'espace Eau du Grand Lyon) ──
+    if contract.get("abonne_alerte_fuite") is not None:
+        entities.append(EauGrandLyonLeakSubscriptionSensor(coordinator, entry, ref))
+    if contract.get("seuil_surconso_jour_m3") is not None:
+        entities.append(EauGrandLyonSurconsoJourSensor(coordinator, entry, ref))
+    if contract.get("seuil_surconso_mois_m3") is not None:
+        entities.append(EauGrandLyonSurconsoMoisSensor(coordinator, entry, ref))
+    return entities
 
 
 class _EauGrandLyonBinaryBase(CoordinatorEntity[EauGrandLyonCoordinator], BinarySensorEntity):

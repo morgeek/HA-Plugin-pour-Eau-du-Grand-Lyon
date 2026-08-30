@@ -95,7 +95,8 @@ class EauGrandLyonProchaineFactureSensor(_EauGrandLyonBase):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
-            "source": "API /dateProchaineFacture" if self._contract.get("next_bill_date") else "estimation",
+            "source": "API /dateProchaineFacture" if self._contract.get("next_bill_date") else "indisponible",
+            "date_estimée": self._contract.get("estimated_next_bill_date"),
         }
 
 

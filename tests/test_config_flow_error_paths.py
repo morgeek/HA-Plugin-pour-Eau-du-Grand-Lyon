@@ -492,6 +492,25 @@ class TestOptionsFlow:
         assert placeholders["subscription_example"] == "50.66"
 
     @pytest.mark.asyncio
+    async def test_invalid_legacy_tariff_mode_falls_back_to_supported_default(self, monkeypatch):
+        optional_defaults = {}
+
+        def spy_optional(key, default=None, **kwargs):
+            optional_defaults[key] = default
+            return key
+
+        monkeypatch.setattr("custom_components.eau_grand_lyon.config_flow.vol.Optional", spy_optional)
+        flow = EauGrandLyonOptionsFlowHandler()
+        flow.config_entry = MagicMock()
+        flow.config_entry.options = {CONF_TARIFF_MODE: "removed-provider-mode"}
+        flow.config_entry.data = {}
+        flow.async_show_form = MagicMock(side_effect=lambda **kw: {"type": "form", **kw})
+
+        await flow.async_step_init()
+
+        assert optional_defaults[CONF_TARIFF_MODE] == DEFAULT_TARIFF_MODE
+
+    @pytest.mark.asyncio
     async def test_price_entity_field_has_no_invalid_default(self, monkeypatch):
         """Régression (retour utilisateur) : un EntitySelector avec `default=""`
         crashe ("Entity is neither a valid entity ID nor a valid UUID.") dès

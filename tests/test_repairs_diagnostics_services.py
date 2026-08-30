@@ -101,6 +101,19 @@ class TestDiagnosticsModule:
         assert "SECRET-REF-123" not in contracts
         assert contracts == {"contract_1": {"solde_eur": 1.0}}
 
+    @pytest.mark.asyncio
+    async def test_diagnostics_reports_empty_coordinator_data(self) -> None:
+        from custom_components.eau_grand_lyon.diagnostics import async_get_config_entry_diagnostics
+
+        entry = MagicMock()
+        entry.version = 2
+        entry.options = {}
+        entry.runtime_data = MagicMock(data=None)
+
+        result = await async_get_config_entry_diagnostics(MagicMock(), entry)
+
+        assert result["coordinator_data"] == {"status": "no_data_available"}
+
 
 class TestServiceHandlersExist:
     """Test that service handlers are properly defined."""

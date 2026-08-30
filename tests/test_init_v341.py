@@ -100,6 +100,13 @@ class TestMigrateEntry:
         entry.version = 99
         assert await async_migrate_entry(hass, entry) is False
 
+    @pytest.mark.asyncio
+    async def test_current_v4_entry_needs_no_migration(self):
+        hass = MagicMock()
+        entry = MagicMock(version=4)
+        assert await async_migrate_entry(hass, entry) is True
+        hass.config_entries.async_update_entry.assert_not_called()
+
 
 class TestStaleDeviceRemoval:
     def _entry_with_contracts(self, *refs):
@@ -259,6 +266,20 @@ class TestLegacyDeviceCleanup:
         device_registry.devices["legacy"].config_entries = {"e1"}
         child = self._device("child", "other_device", via_device_id="legacy")
         device_registry.devices[child.id] = child
+        assert _async_cleanup_legacy_device(MagicMock(), entry) is False
+        assert device_registry.removed == []
+
+    def test_cleanup_defers_without_contracts_current_device_or_current_entity(self, monkeypatch):
+        empty_entry = MagicMock()
+        empty_entry.runtime_data.data = {"contracts": {}}
+        assert _async_cleanup_legacy_device(MagicMock(), empty_entry) is False
+
+        entry, device_registry, entity_registry = self._setup_registries(monkeypatch)
+        device_registry.devices.pop("device-REF1")
+        assert _async_cleanup_legacy_device(MagicMock(), entry) is False
+
+        entry, device_registry, entity_registry = self._setup_registries(monkeypatch)
+        entity_registry.entries["device-REF1"] = []
         assert _async_cleanup_legacy_device(MagicMock(), entry) is False
         assert device_registry.removed == []
 

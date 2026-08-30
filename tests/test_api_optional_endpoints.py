@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.eau_grand_lyon.api import HttpError, NetworkError
+from custom_components.eau_grand_lyon.api import AuthenticationError, HttpError, NetworkError, WafBlockedError
 from custom_components.eau_grand_lyon.api.client import EauGrandLyonApi
 from custom_components.eau_grand_lyon.api import client as client_module
 
@@ -26,16 +26,25 @@ class TestOptionalEndpointParsing:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("payload", "expected"),
+        ("status", "body", "expected"),
         [
-            ("2026-09-15T00:00:00Z", "2026-09-15"),
-            ({"dateProchaineFacture": "2026-10-02T00:00:00Z"}, "2026-10-02"),
-            ({"value": None}, None),
+            (200, '"2026-09-15"', "2026-09-15"),
+            (200, '{"date": "2026-09-16T00:00:00Z"}', "2026-09-16"),
+            (200, '{"dateProchaineFacture": "2026-10-02T00:00:00Z"}', "2026-10-02"),
+            (200, '{"valeur": "2026-10-03"}', "2026-10-03"),
+            (200, "2026-09-17", "2026-09-17"),
+            (200, "2026-09-18T00:00:00Z", "2026-09-18"),
+            (200, "", None),
+            (204, "", None),
+            (404, "missing", None),
+            (200, "<!DOCTYPE html><html>maintenance</html>", None),
+            (200, '{"value": null}', None),
+            (200, "2026-02-30", None),
         ],
     )
-    async def test_next_invoice_date_formats_supported_payloads(self, payload, expected):
+    async def test_next_invoice_date_formats_supported_payloads(self, status, body, expected):
         api = _api()
-        api._do_get = AsyncMock(return_value=payload)
+        api._request_text = AsyncMock(return_value=(status, "text/plain", body))
         assert await api.get_date_prochaine_facture("C1") == expected
 
     @pytest.mark.asyncio
@@ -145,7 +154,6 @@ class TestOptionalEndpointFailurePolicy:
     @pytest.mark.parametrize(
         ("method_name", "dependency", "args", "empty"),
         [
-            ("get_date_prochaine_facture", "_do_get", ("C1",), None),
             ("get_point_de_service_etendu", "_do_get", ("C1",), {}),
             ("get_interventions", "_do_get", (), []),
             ("get_factures", "_get_produits", (), []),
@@ -158,11 +166,16 @@ class TestOptionalEndpointFailurePolicy:
         assert await getattr(api, method_name)(*args) == empty
 
     @pytest.mark.asyncio
+    async def test_next_invoice_date_404_is_optional(self):
+        api = _api()
+        api._request_text = AsyncMock(return_value=(404, "text/plain", "missing"))
+        assert await api.get_date_prochaine_facture("C1") is None
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("method_name", "dependency", "args"),
         [
             ("get_alertes", "_get", ()),
-            ("get_date_prochaine_facture", "_do_get", ("C1",)),
             ("get_point_de_service_etendu", "_do_get", ("C1",)),
             ("get_interventions", "_do_get", ()),
             ("get_factures", "_get_produits", ()),
@@ -175,6 +188,17 @@ class TestOptionalEndpointFailurePolicy:
         setattr(api, dependency, AsyncMock(side_effect=NetworkError("offline")))
         with pytest.raises(NetworkError):
             await getattr(api, method_name)(*args)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "error",
+        [NetworkError("offline"), AuthenticationError("bad auth"), WafBlockedError("blocked")],
+    )
+    async def test_next_invoice_date_significant_errors_are_propagated(self, error):
+        api = _api()
+        api._request_text = AsyncMock(side_effect=error)
+        with pytest.raises(type(error)):
+            await api.get_date_prochaine_facture("C1")
 
 
 class _ResponseContext:

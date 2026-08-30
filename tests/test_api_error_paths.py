@@ -27,11 +27,13 @@ class _FakeResponse:
         text: str = "{}",
         url: str = "https://example.test/callback?code=abc",
         json_error: Exception | None = None,
+        content_type: str = "application/json",
     ) -> None:
         self.status = status
         self._text = text
         self.url = url
         self._json_error = json_error
+        self.content_type = content_type
 
     async def text(self) -> str:
         return self._text
@@ -131,6 +133,16 @@ class TestAuthPaths:
             await auth.authenticate()
 
     @pytest.mark.asyncio
+    async def test_authenticate_login_500_raises_api_error(self, patched_aiohttp):
+        auth = EauGrandLyonAuth(
+            _FakeSession([_FakeContextManager(_FakeResponse(status=500, text="provider down"))]),
+            "user@example.com",
+            "secret",
+        )
+        with pytest.raises(ApiError, match="Login echoue"):
+            await auth.authenticate()
+
+    @pytest.mark.asyncio
     async def test_authenticate_login_client_error_raises_network_error(self, patched_aiohttp):
         auth = EauGrandLyonAuth(
             _FakeSession([_FakeContextManager(error=_ClientError("down"))]),
@@ -172,6 +184,36 @@ class TestDailyFetchMetadata:
             "secret",
         )
         with pytest.raises(WafBlockedError):
+            await auth.authenticate()
+
+    @pytest.mark.asyncio
+    async def test_authenticate_authorize_404_raises_api_error(self, patched_aiohttp):
+        auth = EauGrandLyonAuth(
+            _FakeSession(
+                [
+                    _FakeContextManager(_FakeResponse(status=200)),
+                    _FakeContextManager(_FakeResponse(status=404)),
+                ]
+            ),
+            "user@example.com",
+            "secret",
+        )
+        with pytest.raises(ApiError, match="authorize"):
+            await auth.authenticate()
+
+    @pytest.mark.asyncio
+    async def test_authenticate_authorize_network_error(self, patched_aiohttp):
+        auth = EauGrandLyonAuth(
+            _FakeSession(
+                [
+                    _FakeContextManager(_FakeResponse(status=200)),
+                    _FakeContextManager(error=_ClientError("authorize offline")),
+                ]
+            ),
+            "user@example.com",
+            "secret",
+        )
+        with pytest.raises(NetworkError, match="authorize"):
             await auth.authenticate()
 
     @pytest.mark.asyncio
@@ -253,6 +295,51 @@ class TestDailyFetchMetadata:
         with pytest.raises(AuthenticationError):
             await auth.authenticate()
 
+    @pytest.mark.asyncio
+    async def test_authenticate_token_network_error(self, patched_aiohttp):
+        auth = EauGrandLyonAuth(
+            _FakeSession(
+                [
+                    _FakeContextManager(_FakeResponse(status=200)),
+                    _FakeContextManager(_FakeResponse(status=200)),
+                    _FakeContextManager(error=_ClientError("token offline")),
+                ]
+            ),
+            "user@example.com",
+            "secret",
+        )
+        with pytest.raises(NetworkError, match="token"):
+            await auth.authenticate()
+
+    @pytest.mark.asyncio
+    async def test_authenticate_success_and_revoke_success(self, patched_aiohttp):
+        session = _FakeSession(
+            [
+                _FakeContextManager(_FakeResponse(status=200)),
+                _FakeContextManager(_FakeResponse(status=200)),
+                _FakeContextManager(_FakeResponse(status=200, text='{"access_token":"token-1"}')),
+                _FakeContextManager(_FakeResponse(status=200)),
+            ]
+        )
+        auth = EauGrandLyonAuth(session, "user@example.com", "secret")
+
+        assert await auth.authenticate() == "token-1"
+        await auth.revoke_token()
+        assert auth.access_token is None
+        assert session.calls[-1][1].endswith("/revoke")
+
+    @pytest.mark.asyncio
+    async def test_revoke_is_best_effort_and_noop_without_token(self, patched_aiohttp):
+        session = _FakeSession([_FakeContextManager(error=RuntimeError("revoke down"))])
+        auth = EauGrandLyonAuth(session, "user@example.com", "secret")
+
+        await auth.revoke_token()
+        assert session.calls == []
+
+        auth.access_token = "token-1"
+        await auth.revoke_token("cid-test")
+        assert auth.access_token is None
+
 
 class TestRequestPaths:
     def _make_api(self, session: _FakeSession) -> EauGrandLyonApi:
@@ -313,6 +400,49 @@ class TestRequestPaths:
         )
         with pytest.raises(WafBlockedError):
             await api._request("GET", "https://example.test/data")
+        api._auth.authenticate.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("status", "text", "expected"),
+        [
+            (200, '"2026-09-15"', "2026-09-15"),
+            (200, "2026-09-16T00:00:00Z", "2026-09-16"),
+            (200, "", None),
+            (204, "", None),
+            (404, "missing", None),
+            (200, "<html>maintenance</html>", None),
+        ],
+    )
+    async def test_next_invoice_date_real_text_transport(self, patched_aiohttp, status, text, expected):
+        api = self._make_api(
+            _FakeSession([_FakeContextManager(_FakeResponse(status=status, text=text, content_type="text/plain"))])
+        )
+
+        assert await api.get_date_prochaine_facture("C1") == expected
+
+    @pytest.mark.asyncio
+    async def test_next_invoice_date_http_500_is_not_hidden(self, patched_aiohttp):
+        api = self._make_api(
+            _FakeSession([_FakeContextManager(_FakeResponse(status=500, json_error=_ClientResponseError(500, "boom")))])
+        )
+
+        with pytest.raises(HttpError) as err:
+            await api.get_date_prochaine_facture("C1")
+        assert err.value.status == 500
+
+    @pytest.mark.asyncio
+    async def test_next_invoice_date_401_reauth_then_plain_text(self, patched_aiohttp):
+        api = self._make_api(
+            _FakeSession(
+                [
+                    _FakeContextManager(_FakeResponse(status=401)),
+                    _FakeContextManager(_FakeResponse(status=200, text="2026-09-15", content_type="text/plain")),
+                ]
+            )
+        )
+
+        assert await api.get_date_prochaine_facture("C1") == "2026-09-15"
         api._auth.authenticate.assert_awaited_once()
 
     @pytest.mark.asyncio

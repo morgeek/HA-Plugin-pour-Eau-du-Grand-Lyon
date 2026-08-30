@@ -63,6 +63,12 @@ def test_non_finite_inputs_are_safely_zeroed():
     assert estimate.effective_rate_eur_m3 is None
 
 
+def test_invalid_volume_type_is_safely_zeroed():
+    estimate = linear_estimate("not-a-number", 3.5, source="invalid_fixture")
+    assert estimate.volume_m3 == 0
+    assert estimate.total_eur == 0
+
+
 @pytest.mark.parametrize(
     ("calibre", "amount", "source"),
     [
