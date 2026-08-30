@@ -2,8 +2,6 @@
 
 Tous les changements notables apportés à cette intégration seront documentés dans ce fichier.
 
-Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
 ## [3.5.2] - 2026-08-30
 
