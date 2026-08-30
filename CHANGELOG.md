@@ -5,6 +5,20 @@ Tous les changements notables apportés à cette intégration seront documentés
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-08-30
+
+### Facturation
+
+- **Montant réel distinct des estimations** : le capteur `derniere_facture` expose le montant TTC renvoyé par le fournisseur, indépendamment du mode expérimental. Les capteurs historiques conservent leurs `unique_id`, mais leurs noms et attributs indiquent désormais clairement qu'ils sont estimés.
+- **Mode dernière facture** : nouveau mode recommandé qui calcule un taux TTC tout compris à partir de `montant TTC ÷ volume facturé`. Le cas de régression anonymisé de 88 m³ reproduit ainsi 328,42 € au lieu de 367,40 €.
+- **Grille officielle 2026** : ajout des tranches annuelles d'eau potable, des composantes variables TTC et des parts fixes par calibre de compteur publiées par Eau du Grand Lyon. Ce mode sert aussi de repli si la dernière facture n'a pas de montant ou de volume exploitable.
+- **Modes manuel et dynamique** : ils restent disponibles pour les configurations personnalisées. Les entrées existantes sont migrées vers leur comportement antérieur (manuel ou dynamique) et peuvent sélectionner le nouveau mode depuis les options.
+- **Transparence** : ajout du mode, de la source, du volume, du taux effectif et de la ventilation variable/fixe dans les attributs des capteurs de coût.
+
+### Tests
+
+- Ajout de tests unitaires pour les paliers 2026, les diamètres de compteur, les valeurs non finies, le repli automatique et la facture anonymisée de référence.
+
 ## [3.4.6] - 2026-08-30
 
 ### Corrections

@@ -22,6 +22,8 @@ from custom_components.eau_grand_lyon.const import (
     CONF_PASSWORD,
     CONF_PRICE_ENTITY,
     CONF_TARIF_M3,
+    CONF_TARIFF_MODE,
+    DEFAULT_TARIFF_MODE,
 )
 
 
@@ -165,7 +167,10 @@ class TestUserFlow:
             )
         assert result["type"] == "create_entry"
         assert result["data"] == {CONF_EMAIL: "New@Example.com", CONF_PASSWORD: "secret"}
-        assert result["options"] == {CONF_TARIF_M3: 5.2}
+        assert result["options"] == {
+            CONF_TARIF_M3: 5.2,
+            CONF_TARIFF_MODE: DEFAULT_TARIFF_MODE,
+        }
         # unique_id doit être l'email en minuscules (détection de doublon).
         flow.async_set_unique_id.assert_awaited_once_with("new@example.com")
         flow._abort_if_unique_id_configured.assert_called_once()
@@ -450,7 +455,7 @@ class TestOptionsFlow:
         # These keys are referenced by water_hardness / subscription_annual
         # data_description strings; missing them raises formatjs MISSING_VALUE.
         assert placeholders["hardness_lyon_avg"] == "30"
-        assert placeholders["subscription_example"] == "180"
+        assert placeholders["subscription_example"] == "50.66"
 
     @pytest.mark.asyncio
     async def test_price_entity_field_has_no_invalid_default(self, monkeypatch):

@@ -47,8 +47,8 @@ class TestDerniereFactureSensor:
         s = _make(EauGrandLyonDerniereFactureSensor, {})
         assert s.native_value is None
 
-    def test_disabled_by_default(self):
-        assert EauGrandLyonDerniereFactureSensor._attr_entity_registry_enabled_default is False
+    def test_enabled_by_default(self):
+        assert EauGrandLyonDerniereFactureSensor._attr_entity_registry_enabled_default is True
 
     def test_extra_attrs_nb_factures(self):
         s = _make(EauGrandLyonDerniereFactureSensor, {

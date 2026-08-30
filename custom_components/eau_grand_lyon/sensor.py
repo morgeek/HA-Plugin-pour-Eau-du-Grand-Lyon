@@ -145,7 +145,7 @@ async def async_setup_entry(
         entities.append(EauGrandLyonCoutAnnuelSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonCoutCumuleSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonEconomieSensor(coordinator, entry, ref))
-        # ── Coût réel avec abonnement ─────────────────────────────────
+        # ── Estimations avec part fixe ────────────────────────────────
         entities.append(EauGrandLyonCoutReelMoisSensor(coordinator, entry, ref))
         entities.append(EauGrandLyonCoutReelAnnuelSensor(coordinator, entry, ref))
         # ── Compte & contrat ──────────────────────────────────────────
@@ -168,9 +168,11 @@ async def async_setup_entry(
             entities.append(EauGrandLyonSeuilSurconsoJourSensor(coordinator, entry, ref))
         if contract.get("seuil_surconso_mois_m3") is not None:
             entities.append(EauGrandLyonSeuilSurconsoMoisSensor(coordinator, entry, ref))
+        # ── Facture réelle ────────────────────────────────────────────
+        if contract.get("derniere_facture") is not None:
+            entities.append(EauGrandLyonDerniereFactureSensor(coordinator, entry, ref))
         # ── Expérimental ──────────────────────────────────────────────
         if experimental:
-            entities.append(EauGrandLyonDerniereFactureSensor(coordinator, entry, ref))
             entities.append(EauGrandLyonFuiteEstimeeSensor(coordinator, entry, ref))
             if supports_hourly:
                 entities.append(EauGrandLyonHourlyConsoSensor(coordinator, entry, ref))

@@ -13,7 +13,7 @@ Ceci est une intégration personnalisée non officielle pour [Home Assistant](ht
 2. Redémarrez Home Assistant.
 3. Allez dans **Paramètres > Appareils et services > Ajouter une intégration**.
 4. Recherchez **Eau du Grand Lyon**, puis saisissez votre email et votre mot de passe.
-5. Ouvrez **Configurer** pour régler le tarif au m³ et la fréquence de mise à jour.
+5. Ouvrez **Configurer** pour choisir le mode de calcul des coûts et la fréquence de mise à jour.
 
 Les données apparaissent après la première synchronisation. Celle-ci peut prendre quelques minutes et les données Téléo peuvent être publiées avec un décalage fourni par le distributeur.
 
@@ -71,8 +71,10 @@ Si l'API Eau du Grand Lyon est indisponible (coupure réseau, maintenance, bloca
 
 ### Mode Expérimental (données étendues)
 Une option **Mode expérimental** (désactivée par défaut) active la récupération de données supplémentaires, lorsque votre compteur et votre compte les exposent :
-- **Factures détaillées**, **courbe de charge horaire** (compteurs Téléo) et **volumes de fuite estimés**.
+- **Courbe de charge horaire** (compteurs Téléo) et **volumes de fuite estimés**.
 - Ces données proviennent d'endpoints additionnels de l'API. Si elles ne sont pas disponibles pour votre compteur, les capteurs correspondants restent simplement indisponibles, sans impacter le reste de l'intégration.
+
+Le montant TTC de la dernière facture est une donnée principale et ne dépend plus du mode expérimental.
 
 **Activation** :
 1. Allez dans Paramètres > Appareils et services.
@@ -85,8 +87,8 @@ Si votre compteur est compatible, les capteurs supplémentaires apparaîtront au
 ## Réglages recommandés
 
 - **Fréquence de mise à jour** : 24 heures. Utilisez 48 heures si le portail bloque temporairement les requêtes.
-- **Tarif au m³** : indiquez le tarif total visible sur votre facture, incluant l'eau, l'assainissement et les taxes.
-- **Abonnement annuel** : renseignez uniquement la part fixe annuelle de votre facture. Laissez `0` si vous ne souhaitez pas l'intégrer aux capteurs de coût réel.
+- **Mode de calcul des coûts** : utilisez « Dernière facture » pour une estimation calibrée sur le montant TTC réellement facturé. En l'absence d'une facture avec volume exploitable, l'intégration bascule sur la grille officielle 2026.
+- **Tarif manuel et part fixe** : utilisés uniquement dans les modes manuel et dynamique.
 - **Nombre d'habitants** : utilisé pour l'Éco-Score et les conseils personnalisés.
 - **Mode expérimental** : laissez-le désactivé tant que vous n'avez pas besoin des données étendues Téléo.
 
@@ -130,7 +132,7 @@ Les statistic IDs externes suivants sont injectés automatiquement par le coordi
 
 Configuration :
 1. **Vérifier que le capteur de coût est activé** : `sensor.eau_du_grand_lyon_energie_cout`
-2. **Configurer le tarif €/m³** dans Paramètres > Options
+2. **Choisir le mode de calcul des coûts** dans Paramètres > Options
 3. **Ajouter une source d'eau** au tableau de bord Énergie :
    - Téléo : `sensor.eau_du_grand_lyon_index_journalier_energy` (quotidien, haute précision)
    - Standard : `sensor.eau_du_grand_lyon_index_compteur` (mensuel)
@@ -140,11 +142,15 @@ Configuration :
 
 ### Comprendre les coûts
 
-- `cost_<ref>` et `cost_daily_<ref>` correspondent uniquement au coût variable : consommation × tarif au m³.
-- `cout_reel_mois` inclut la part variable du mois et un douzième de l'abonnement annuel.
-- `cout_reel_annuel` inclut la consommation des douze derniers mois et l'abonnement annuel complet.
+- **Dernière facture** : le capteur `derniere_facture` expose le montant TTC réel renvoyé par le fournisseur. Il ne s'agit jamais d'une estimation.
+- **Automatique depuis la dernière facture** (recommandé) : le taux TTC effectif est `montant TTC ÷ volume facturé`, ce qui intègre les parts eau, assainissement, redevances et part fixe telles qu'elles ont réellement été facturées.
+- **Grille officielle 2026** : applique les tranches annuelles de l'eau potable, les composantes variables et la part fixe correspondant au calibre du compteur. La grille provient du [tarif général Eau du Grand Lyon 2026](https://www.eaudugrandlyon.com/wp-content/uploads/2026/04/Tarif-general-2026.pdf).
+- **Manuel** : applique le tarif au m³ et la part fixe saisis dans les options.
+- **Dynamique** : applique la valeur d'une entité Home Assistant et la part fixe manuelle.
 
-L'abonnement n'est pas ajouté aux statistiques journalières ou mensuelles, afin de ne pas le compter plusieurs fois dans l'historique.
+Les noms historiques et les `unique_id` des capteurs sont conservés, mais les capteurs `cout_mois`, `cout_annuel`, `cout_reel_mois` et `cout_reel_annuel` sont explicitement présentés comme des estimations. Leurs attributs indiquent le mode, la source du tarif, le volume, le taux effectif et la décomposition variable/fixe.
+
+Les statistiques `cost_<ref>` et `cost_daily_<ref>` restent des approximations variables destinées au tableau Énergie. La part fixe n'y est pas ajoutée afin de ne pas la compter plusieurs fois dans l'historique.
 
 #### Dépannage rapide
 - ⚠️ Capteurs grisés ? → Paramètres > Appareils et services > Eau du Grand Lyon > Activer
@@ -268,7 +274,7 @@ Dans ce cas, Home Assistant ne trouvera pas l'intégration et affichera `Non cha
 3. Saisissez votre email et mot de passe du compte Eau du Grand Lyon.
 4. Terminez la configuration.
 
-Une fois installée, vous pouvez modifier les options (tarif au m³, intervalle de mise à jour, mode expérimental) en retournant dans **Appareils et services** > **Eau du Grand Lyon** > **Configurer**.
+Une fois installée, vous pouvez modifier les options (mode de calcul des coûts, tarif manuel, intervalle de mise à jour, mode expérimental) en retournant dans **Appareils et services** > **Eau du Grand Lyon** > **Configurer**.
 
 L'intégration récupérera automatiquement les données toutes les **24 heures** par défaut (car les données eau sont généralement mensuelles). Cet intervalle est modifiable dans les options (6h, 12h, 24h, 48h). Et on ne va pas tabasser leur serveur inutilement.
 
@@ -277,14 +283,15 @@ L'intégration récupérera automatiquement les données toutes les **24 heures*
 | Option | Utilisation | Valeur conseillée |
 | --- | --- | --- |
 | Fréquence de mise à jour | Intervalle entre deux synchronisations | 24 heures |
-| Tarif au m³ | Calcul des coûts variables | Tarif total indiqué sur votre facture |
-| Entité de prix dynamique | Remplace le tarif fixe par une entité Home Assistant | Facultatif |
-| Abonnement annuel | Part fixe utilisée par les coûts réels | Montant annuel de la facture, ou `0` |
+| Mode de calcul des coûts | Choisit la source de l'estimation | Dernière facture |
+| Tarif au m³ | Repli du mode manuel | Tarif TTC personnalisé |
+| Entité de prix dynamique | Source du mode dynamique | Facultatif |
+| Part fixe annuelle | Utilisée en modes manuel et dynamique | Montant TTC personnalisé, ou `0` |
 | Nombre d'habitants | Éco-Score et conseils personnalisés | Nombre réel du foyer |
 | Dureté de l'eau | Estimation du calcaire | Valeur de votre commune ou de votre facture |
 | Commune qualité de l'eau | Filtre les données Open Data | Facultatif |
 | Nombre de tentatives API | Nombre d'essais avant le mode hors-ligne | Valeur par défaut |
-| Mode expérimental | Factures détaillées, courbe horaire et données Téléo étendues | Désactivé au départ |
+| Mode expérimental | Courbe horaire et données Téléo étendues | Désactivé au départ |
 
 L'entité de prix dynamique est facultative. Si elle est indisponible, l'intégration utilise le tarif fixe configuré.
 

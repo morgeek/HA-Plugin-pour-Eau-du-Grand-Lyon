@@ -10,19 +10,14 @@ from .base import _EauGrandLyonBase, _EauGrandLyonHourlyBase
 
 
 class EauGrandLyonDerniereFactureSensor(_EauGrandLyonBase):
-    """[EXPÉRIMENTAL] Montant TTC de la dernière facture.
-
-    Disponible uniquement si le mode expérimental est activé dans les options.
-    Source : GET /rest/produits/factures (bundle Angular 2026).
-    """
+    """Montant TTC réel de la dernière facture renvoyée par le fournisseur."""
 
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "EUR"
     _attr_translation_key = "derniere_facture"
     _attr_suggested_display_precision = 2
-    # Désactivé par défaut — l'utilisateur active manuellement après vérification
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator, entry, contract_ref):
         super().__init__(coordinator, entry, contract_ref)
@@ -52,6 +47,7 @@ class EauGrandLyonDerniereFactureSensor(_EauGrandLyonBase):
             "volume_m3": facture.get("volume_m3"),
             "statut_paiement": facture.get("statut_paiement", ""),
             "nb_factures_total": len(factures),
+            "estimation": False,
             "historique_factures": [
                 {
                     "référence": f.get("reference"),
@@ -61,7 +57,7 @@ class EauGrandLyonDerniereFactureSensor(_EauGrandLyonBase):
                 }
                 for f in factures[:12]  # 12 dernières factures max en attribut
             ],
-            "source": "expérimental — /rest/produits/factures",
+            "source": "API Eau du Grand Lyon — montant TTC facturé",
         }
 
 

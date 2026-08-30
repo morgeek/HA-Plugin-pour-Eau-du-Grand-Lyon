@@ -554,6 +554,7 @@ class TestCoordinatorFetchOrchestration:
         coord.api.experimental = False
         coord.api.get_contracts = AsyncMock(return_value=[])
         coord.api.get_alertes = AsyncMock(return_value=[])
+        coord.api.get_factures = AsyncMock(return_value=[])
         coord.api.get_water_quality = AsyncMock(return_value={"commune": "Lyon"})
         coord.api.get_interventions = AsyncMock(return_value=[])
         coord._calculate_tarif_m3 = MagicMock(return_value=4.0)
@@ -638,3 +639,48 @@ class TestCoordinatorFetchOrchestration:
         assert result["surconso_jour_depassee"] is True
         assert result["surconso_mois_depassee"] is True
         assert result["derniere_facture"]["reference"] == "INV-1"
+
+
+class TestBillingModes:
+    def test_latest_invoice_reproduces_anonymized_real_total(self):
+        coord = _make_coordinator(options={"tariff_mode": "latest_invoice", "subscription_annual": 999})
+
+        result = coord._calculate_billing(
+            {"calibre_compteur": "DN15"},
+            {"montant_ttc": 328.42, "volume_m3": 88},
+            8,
+            88,
+            88,
+            5.20,
+        )
+
+        assert result["billing_mode"] == "latest_invoice"
+        assert result["tariff_source"] == "latest_invoice_ttc_per_m3"
+        assert result["cout_reel_annuel"] == 328.42
+        assert result["subscription_annual"] == 0
+        assert result["latest_invoice_effective_rate_eur_m3"] == pytest.approx(3.732045, abs=1e-6)
+
+    def test_latest_invoice_without_volume_falls_back_to_official_grid(self):
+        coord = _make_coordinator(options={"tariff_mode": "latest_invoice"})
+
+        result = coord._calculate_billing(
+            {"calibre_compteur": "15"},
+            {"montant_ttc": 328.42, "volume_m3": 0},
+            8,
+            88,
+            88,
+            5.20,
+        )
+
+        assert result["billing_mode"] == "official_2026"
+        assert result["subscription_annual"] == 50.66
+        assert result["tariff_source"] == "official_2026_dn15"
+
+    def test_manual_mode_preserves_legacy_flat_calculation(self):
+        coord = _make_coordinator(options={"tariff_mode": "manual", "subscription_annual": 180})
+
+        result = coord._calculate_billing({}, None, 10, 18, 18, 4.0)
+
+        assert result["cout_mois_courant_eur"] == 40
+        assert result["cout_reel_mois"] == 55
+        assert result["cout_reel_annuel"] == 252

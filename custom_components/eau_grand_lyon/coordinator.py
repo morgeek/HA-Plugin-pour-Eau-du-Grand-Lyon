@@ -46,7 +46,9 @@ except ImportError:
 # mois. Optionnel : toute absence/erreur retombe sur un cumul à partir de 0.
 try:
     from homeassistant.components.recorder import get_instance as _get_recorder_instance
-    from homeassistant.components.recorder.statistics import get_last_statistics as _get_last_statistics
+    from homeassistant.components.recorder.statistics import (
+        get_last_statistics as _get_last_statistics,
+    )
 
     _HAS_LAST_STATS = True
 except ImportError:
@@ -63,6 +65,13 @@ from .api import (
     NetworkError,
     WafBlockedError,
 )
+from .billing import (
+    OFFICIAL_2026_TIER_2_TOTAL_TTC_M3,
+    effective_invoice_rate,
+    linear_estimate,
+    official_2026_estimate,
+    official_2026_subscription,
+)
 from .const import (
     CACHE_MAX_AGE_DAYS,
     CONF_EMAIL,
@@ -74,6 +83,7 @@ from .const import (
     CONF_PRICE_ENTITY,
     CONF_SUBSCRIPTION_ANNUAL,
     CONF_TARIF_M3,
+    CONF_TARIFF_MODE,
     CONF_UPDATE_INTERVAL_HOURS,
     CONF_WATER_HARDNESS,
     CONF_WATER_QUALITY_COMMUNE,
@@ -94,6 +104,11 @@ from .const import (
     STATISTIC_COST_DAILY,
     STATISTIC_WATER,
     STATISTIC_WATER_DAILY,
+    TARIFF_MODE_DYNAMIC,
+    TARIFF_MODE_LATEST_INVOICE,
+    TARIFF_MODE_MANUAL,
+    TARIFF_MODE_OFFICIAL_2026,
+    TARIFF_MODES,
     WAF_RETRY_BASE_DELAY_S,
 )
 from .repairs import check_long_outage_issue
@@ -135,6 +150,17 @@ class ContractData(TypedDict, total=False):
     cout_mois_courant_eur: float | None
     cout_annuel_eur: float | None
     tarif_m3: float
+    tariff_source: str
+    billing_mode: str
+    estimation: bool
+    cost_breakdown_monthly: dict
+    cost_breakdown_annual: dict
+    latest_invoice_ttc: float | None
+    latest_invoice_volume_m3: float | None
+    latest_invoice_effective_rate_eur_m3: float | None
+    cout_reel_mois: float | None
+    cout_reel_annuel: float
+    subscription_annual: float
     factures: list[dict]
     derniere_facture: dict | None
     fuite_estime_30j_m3: float | None
@@ -292,7 +318,10 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                     len(self._monthly_history),
                 )
         except (json.JSONDecodeError, OSError, NotImplementedError, ValueError) as err:
-            _LOGGER.warning("Failed to load monthly history (cache ignoré, reconstruit depuis l'API) : %s", err)
+            _LOGGER.warning(
+                "Failed to load monthly history (cache ignoré, reconstruit depuis l'API) : %s",
+                err,
+            )
 
         try:
             stored_daily_history = await self._daily_history_store.async_load()
@@ -305,7 +334,10 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                     and all(isinstance(entry, dict) for entry in entries)
                 }
         except (json.JSONDecodeError, OSError, NotImplementedError, ValueError) as err:
-            _LOGGER.warning("Failed to load daily history (cache ignoré, reconstruit depuis l'API) : %s", err)
+            _LOGGER.warning(
+                "Failed to load daily history (cache ignoré, reconstruit depuis l'API) : %s",
+                err,
+            )
 
         try:
             stored = await self._store.async_load()
@@ -338,7 +370,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 self.data = stored
                 self._last_good_data = stored
                 _LOGGER.debug("Loaded persistent data (offline cache available)")
-        except (json.JSONDecodeError, OSError, KeyError, NotImplementedError, ValueError) as err:
+        except (
+            json.JSONDecodeError,
+            OSError,
+            KeyError,
+            NotImplementedError,
+            ValueError,
+        ) as err:
             _LOGGER.warning("Failed to load persisted data: %s", err)
 
     async def _save_persistent_data(self) -> None:
@@ -474,7 +512,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         return max(0.0, raw_delay + jitter)
 
     @staticmethod
-    def _calculate_cache_age_days(last_update_success_time: datetime | None) -> int | None:
+    def _calculate_cache_age_days(
+        last_update_success_time: datetime | None,
+    ) -> int | None:
         if not isinstance(last_update_success_time, datetime):
             return None
         return max(0, (datetime.now(timezone.utc) - last_update_success_time).days)
@@ -636,10 +676,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         try:
             tarif_m3 = self._calculate_tarif_m3()
 
-            factures_raw: list[dict] = []
-            if experimental:
-                factures_raw = await cycle_api.get_factures()
-
+            # Le montant TTC réel est une donnée de facturation essentielle,
+            # pas une expérimentation. Un 404 reste géré comme endpoint absent.
+            factures_raw = await cycle_api.get_factures()
             factures = EauGrandLyonApi.format_factures(factures_raw) if factures_raw else []
 
             contracts_data: dict[str, dict] = {}
@@ -696,7 +735,12 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             water_quality = await water_quality_task
             try:
                 interventions_planifiees = await interventions_task
-            except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError) as err:
+            except (
+                aiohttp.ClientError,
+                asyncio.TimeoutError,
+                ValueError,
+                KeyError,
+            ) as err:
                 _LOGGER.debug("Lazy interventions fetch failed: %s", err)
                 interventions_planifiees = []
 
@@ -758,12 +802,97 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 try:
                     return float(state.state)
                 except (ValueError, TypeError):
-                    _LOGGER.warning("Invalid value for price entity %s: %s", price_entity, state.state)
+                    _LOGGER.warning(
+                        "Invalid value for price entity %s: %s",
+                        price_entity,
+                        state.state,
+                    )
 
         try:
             return float(opts.get(CONF_TARIF_M3, self._entry.data.get(CONF_TARIF_M3, DEFAULT_TARIF_M3)))
         except (ValueError, TypeError):
             return DEFAULT_TARIF_M3
+
+    def _get_tariff_mode(self) -> str:
+        """Return the configured billing mode with a legacy-safe fallback."""
+        opts = self._entry.options or {}
+        mode = opts.get(CONF_TARIFF_MODE)
+        if mode in TARIFF_MODES:
+            return str(mode)
+        return TARIFF_MODE_DYNAMIC if opts.get(CONF_PRICE_ENTITY) else TARIFF_MODE_MANUAL
+
+    def _calculate_billing(
+        self,
+        details: dict,
+        latest_invoice: dict | None,
+        conso_courant: float | None,
+        conso_annuelle: float,
+        conso_cumulee_annee: float,
+        configured_rate: float,
+    ) -> dict:
+        """Build transparent monthly and rolling-annual cost estimates."""
+        mode = self._get_tariff_mode()
+        monthly_volume = conso_courant or 0.0
+
+        if mode == TARIFF_MODE_LATEST_INVOICE:
+            invoice_rate = effective_invoice_rate(latest_invoice)
+            if invoice_rate is not None:
+                source = "latest_invoice_ttc_per_m3"
+                monthly = linear_estimate(monthly_volume, invoice_rate, source=source)
+                annual = linear_estimate(conso_annuelle, invoice_rate, source=source)
+                rate = invoice_rate
+                subscription = 0.0
+            else:
+                # Aucune facture exploitable : la grille officielle vaut mieux
+                # que l'ancien tarif indicatif 5,20 €/m³.
+                mode = TARIFF_MODE_OFFICIAL_2026
+
+        if mode == TARIFF_MODE_OFFICIAL_2026:
+            subscription, subscription_source = official_2026_subscription(details.get("calibre_compteur"))
+            annual = official_2026_estimate(conso_annuelle, fixed_eur=subscription)
+            volume_before_month = max(0.0, conso_cumulee_annee - monthly_volume)
+            monthly = official_2026_estimate(
+                monthly_volume,
+                fixed_eur=subscription / 12.0,
+                starting_annual_volume_m3=volume_before_month,
+            )
+            rate = OFFICIAL_2026_TIER_2_TOTAL_TTC_M3
+            source = subscription_source
+        elif mode in (TARIFF_MODE_MANUAL, TARIFF_MODE_DYNAMIC):
+            subscription = float((self._entry.options or {}).get(CONF_SUBSCRIPTION_ANNUAL, DEFAULT_SUBSCRIPTION_ANNUAL))
+            source = "dynamic_entity" if mode == TARIFF_MODE_DYNAMIC else "manual_flat_rate"
+            monthly = linear_estimate(
+                monthly_volume,
+                configured_rate,
+                subscription / 12.0,
+                source=source,
+            )
+            annual = linear_estimate(conso_annuelle, configured_rate, subscription, source=source)
+            rate = configured_rate
+
+        invoice_amount = None
+        invoice_volume = None
+        invoice_rate = effective_invoice_rate(latest_invoice)
+        if latest_invoice:
+            invoice_amount = latest_invoice.get("montant_ttc")
+            invoice_volume = latest_invoice.get("volume_m3")
+
+        return {
+            "billing_mode": mode,
+            "tariff_source": source,
+            "estimation": True,
+            "tarif_m3": round(rate, 6),
+            "subscription_annual": round(subscription, 2),
+            "cout_mois_courant_eur": (monthly.variable_eur if conso_courant is not None else None),
+            "cout_annuel_eur": annual.variable_eur,
+            "cout_reel_mois": (monthly.total_eur if conso_courant is not None or monthly.fixed_eur else None),
+            "cout_reel_annuel": annual.total_eur,
+            "cost_breakdown_monthly": monthly.as_dict(),
+            "cost_breakdown_annual": annual.as_dict(),
+            "latest_invoice_ttc": invoice_amount,
+            "latest_invoice_volume_m3": invoice_volume,
+            "latest_invoice_effective_rate_eur_m3": (round(invoice_rate, 6) if invoice_rate is not None else None),
+        }
 
     async def _process_contract(
         self,
@@ -778,7 +907,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         cid = details["id"]
 
         # ── Consommations mensuelles + journalières + données PdS (en parallèle) ──
-        raw_consos, raw_daily_data, date_prochaine_facture, pds_etendu, alerte_surconso = await asyncio.gather(
+        (
+            raw_consos,
+            raw_daily_data,
+            date_prochaine_facture,
+            pds_etendu,
+            alerte_surconso,
+        ) = await asyncio.gather(
             cycle_api.get_monthly_consumptions(cid),
             cycle_api.get_daily_consumptions(cid, nb_jours=365),
             cycle_api.get_date_prochaine_facture(cid),
@@ -815,7 +950,25 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         conso_annuelle = round(sum(e["consommation_m3"] for e in last_12), 1)
 
         current_year = datetime.now(timezone.utc).year
-        conso_cumulee_annee = round(sum(e["consommation_m3"] for e in consos if e.get("annee") == current_year), 1)
+        conso_cumulee_annee = round(
+            sum(e["consommation_m3"] for e in consos if e.get("annee") == current_year),
+            1,
+        )
+
+        factures_contrat = [f for f in factures if str(f.get("contrat_id") or "") == str(cid)]
+        derniere_facture = factures_contrat[0] if factures_contrat else None
+        billing = self._calculate_billing(
+            details,
+            derniere_facture,
+            conso_courant,
+            conso_annuelle,
+            conso_cumulee_annee,
+            tarif_m3,
+        )
+        # Tarif proxy conservé pour les statistiques historiques et les
+        # prédictions existantes. Les capteurs de coût utilisent le détail
+        # mensuel/annuel calculé ci-dessus.
+        tarif_m3 = billing["tarif_m3"]
 
         # Comparaison N-1 (Mois vs Mois N-1) — utilise les données fraîches uniquement
         conso_mois_n1, label_n1 = self._get_consumption_n1(consos)
@@ -909,9 +1062,6 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
         limescale_g = round(annual_volume * hardness * 10, 0)
         limescale_alert = limescale_g > 100000
 
-        factures_contrat = [f for f in factures if f.get("contrat_id") == cid]
-        derniere_facture = factures_contrat[0] if factures_contrat else None
-
         # ── [ALERTES SERVEUR] Seuils de surconsommation configurés côté Eau du Grand Lyon ──
         seuil_surconso_jour = alerte_surconso.get("seuil_surconso_jour_m3")
         seuil_surconso_mois = alerte_surconso.get("seuil_surconso_mois_m3")
@@ -943,17 +1093,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             "daily_nb_entries": raw_daily_data.get("nb_entries"),
             "daily_last_date": raw_daily_data.get("last_date"),
             "consommation_7j": conso_7j,
-            "conso_moyenne_7j_litres": round((conso_7j * 1000) / 7, 1) if conso_7j is not None else None,
+            "conso_moyenne_7j_litres": (round((conso_7j * 1000) / 7, 1) if conso_7j is not None else None),
             "consommation_30j": conso_30j,
-            "cout_mois_courant_eur": round(conso_courant * tarif_m3, 2) if conso_courant is not None else None,
-            "cout_annuel_eur": round(conso_annuelle * tarif_m3, 2),
-            "tarif_m3": tarif_m3,
-            # Coût réel = variable (conso × tarif) + fixe (abonnement proratisé)
-            "cout_reel_mois": self._get_real_monthly_cost(conso_courant, tarif_m3),
-            "cout_reel_annuel": self._get_real_annual_cost(conso_annuelle, tarif_m3),
-            "subscription_annual": float(
-                self._entry.options.get(CONF_SUBSCRIPTION_ANNUAL, DEFAULT_SUBSCRIPTION_ANNUAL)
-            ),
+            **billing,
             "tendance_n1_pct": tendance_n1_pct,
             "prediction_conso_mois": prediction_conso_mois,
             "prediction_cout_mois": prediction_cout_mois,
@@ -1219,7 +1361,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[CoordinatorData]):
             if last_ym is not None and (annee, mois_num) < last_ym:
                 continue  # déjà enregistré : préserver la somme existante
             cumulative += value
-            series.append(StatisticData(start=dt, sum=round(cumulative, ndigits), state=round(value, ndigits)))
+            series.append(
+                StatisticData(
+                    start=dt,
+                    sum=round(cumulative, ndigits),
+                    state=round(value, ndigits),
+                )
+            )
         return series
 
     async def _last_recorded_anchor(self, statistic_id: str) -> tuple[tuple[int, int], float] | None:

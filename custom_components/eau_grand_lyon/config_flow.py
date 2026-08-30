@@ -31,6 +31,7 @@ from .const import (
     CONF_PRICE_ENTITY,
     CONF_SUBSCRIPTION_ANNUAL,
     CONF_TARIF_M3,
+    CONF_TARIFF_MODE,
     CONF_UPDATE_INTERVAL_HOURS,
     CONF_WATER_HARDNESS,
     CONF_WATER_QUALITY_COMMUNE,
@@ -40,10 +41,12 @@ from .const import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_SUBSCRIPTION_ANNUAL,
     DEFAULT_TARIF_M3,
+    DEFAULT_TARIFF_MODE,
     DEFAULT_UPDATE_INTERVAL_HOURS,
     DEFAULT_WATER_HARDNESS,
     DEFAULT_WATER_QUALITY_COMMUNE,
     DOMAIN,
+    TARIFF_MODES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -102,7 +105,7 @@ _INTERVAL_VALUES = ["6", "12", "24", "48"]
 class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     """Flux de configuration de l'intégration Eau du Grand Lyon."""
 
-    VERSION = 3
+    VERSION = 4
 
     @staticmethod
     def async_get_options_flow(
@@ -213,7 +216,10 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type:
                         CONF_EMAIL: email,
                         CONF_PASSWORD: password,
                     },
-                    options={CONF_TARIF_M3: user_input[CONF_TARIF_M3]},
+                    options={
+                        CONF_TARIF_M3: user_input[CONF_TARIF_M3],
+                        CONF_TARIFF_MODE: DEFAULT_TARIFF_MODE,
+                    },
                 )
 
         return self.async_show_form(
@@ -241,6 +247,9 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
             if CONF_TARIF_M3 in opts
             else self.config_entry.data.get(CONF_TARIF_M3, DEFAULT_TARIF_M3)
         )
+        current_tariff_mode = opts.get(CONF_TARIFF_MODE, DEFAULT_TARIFF_MODE)
+        if current_tariff_mode not in TARIFF_MODES:
+            current_tariff_mode = DEFAULT_TARIFF_MODE
         current_experimental = bool(opts.get(CONF_EXPERIMENTAL, DEFAULT_EXPERIMENTAL))
         current_max_retries = int(opts.get(CONF_MAX_RETRIES, DEFAULT_MAX_RETRIES))
         current_price_entity = opts.get(CONF_PRICE_ENTITY, "")
@@ -259,6 +268,16 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
                     selector.SelectSelectorConfig(
                         options=_INTERVAL_VALUES,
                         translation_key="update_interval",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    CONF_TARIFF_MODE,
+                    default=current_tariff_mode,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=TARIFF_MODES,
+                        translation_key="tariff_mode",
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
@@ -312,6 +331,6 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=options_schema,
             description_placeholders={
                 "hardness_lyon_avg": "30",
-                "subscription_example": "180",
+                "subscription_example": "50.66",
             },
         )

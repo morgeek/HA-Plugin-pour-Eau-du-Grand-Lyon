@@ -15,7 +15,14 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from .api import ApiError, AuthenticationError, NetworkError, WafBlockedError
-from .const import CONF_TARIF_M3, DOMAIN
+from .const import (
+    CONF_PRICE_ENTITY,
+    CONF_TARIF_M3,
+    CONF_TARIFF_MODE,
+    DOMAIN,
+    TARIFF_MODE_DYNAMIC,
+    TARIFF_MODE_MANUAL,
+)
 from .coordinator import EauGrandLyonCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,14 +56,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate a config entry to a newer version."""
     _LOGGER.debug("Migrating config entry from version %s", entry.version)
-    if entry.version in (1, 2):
+    if entry.version in (1, 2, 3):
         data = dict(entry.data)
         options = dict(entry.options)
         if CONF_TARIF_M3 in data:
             options.setdefault(CONF_TARIF_M3, data.pop(CONF_TARIF_M3))
-        hass.config_entries.async_update_entry(entry, data=data, options=options, version=3)
+        options.setdefault(
+            CONF_TARIFF_MODE,
+            (TARIFF_MODE_DYNAMIC if options.get(CONF_PRICE_ENTITY) else TARIFF_MODE_MANUAL),
+        )
+        hass.config_entries.async_update_entry(entry, data=data, options=options, version=4)
         return True
-    if entry.version == 3:
+    if entry.version == 4:
         return True
     _LOGGER.error("Cannot migrate config entry from unknown version %s", entry.version)
     return False

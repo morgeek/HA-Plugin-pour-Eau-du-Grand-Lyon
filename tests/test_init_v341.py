@@ -11,13 +11,21 @@ from custom_components.eau_grand_lyon import (
     async_remove_config_entry_device,
     _validate_write_path,
 )
-from custom_components.eau_grand_lyon.const import CONF_TARIF_M3, DOMAIN
+from custom_components.eau_grand_lyon.const import (
+    CONF_PRICE_ENTITY,
+    CONF_TARIF_M3,
+    CONF_TARIFF_MODE,
+    DOMAIN,
+    TARIFF_MODE_DYNAMIC,
+    TARIFF_MODE_MANUAL,
+    TARIFF_MODE_OFFICIAL_2026,
+)
 from homeassistant.exceptions import ServiceValidationError
 
 
 class TestMigrateEntry:
     @pytest.mark.asyncio
-    async def test_v1_to_v3_moves_tariff_to_options(self):
+    async def test_v1_to_v4_moves_tariff_to_manual_options(self):
         hass = MagicMock()
         entry = MagicMock()
         entry.version = 1
@@ -27,8 +35,12 @@ class TestMigrateEntry:
         hass.config_entries.async_update_entry.assert_called_once_with(
             entry,
             data={"email": "user@example.com", "password": "secret"},
-            options={"experimental": True, CONF_TARIF_M3: 4.2},
-            version=3,
+            options={
+                "experimental": True,
+                CONF_TARIF_M3: 4.2,
+                CONF_TARIFF_MODE: TARIFF_MODE_MANUAL,
+            },
+            version=4,
         )
 
     @pytest.mark.asyncio
@@ -42,9 +54,42 @@ class TestMigrateEntry:
         hass.config_entries.async_update_entry.assert_called_once_with(
             entry,
             data={"email": "user@example.com", "password": "secret"},
-            options={CONF_TARIF_M3: 5.7},
-            version=3,
+            options={CONF_TARIF_M3: 5.7, CONF_TARIFF_MODE: TARIFF_MODE_MANUAL},
+            version=4,
         )
+
+    @pytest.mark.asyncio
+    async def test_v3_dynamic_price_entity_keeps_dynamic_behaviour(self):
+        hass = MagicMock()
+        entry = MagicMock()
+        entry.version = 3
+        entry.data = {"email": "user@example.com", "password": "secret"}
+        entry.options = {CONF_PRICE_ENTITY: "sensor.water_price"}
+
+        assert await async_migrate_entry(hass, entry) is True
+
+        hass.config_entries.async_update_entry.assert_called_once_with(
+            entry,
+            data=entry.data,
+            options={
+                CONF_PRICE_ENTITY: "sensor.water_price",
+                CONF_TARIFF_MODE: TARIFF_MODE_DYNAMIC,
+            },
+            version=4,
+        )
+
+    @pytest.mark.asyncio
+    async def test_v3_explicit_mode_is_preserved(self):
+        hass = MagicMock()
+        entry = MagicMock()
+        entry.version = 3
+        entry.data = {"email": "user@example.com", "password": "secret"}
+        entry.options = {CONF_TARIFF_MODE: TARIFF_MODE_OFFICIAL_2026}
+
+        assert await async_migrate_entry(hass, entry) is True
+
+        options = hass.config_entries.async_update_entry.call_args.kwargs["options"]
+        assert options[CONF_TARIFF_MODE] == TARIFF_MODE_OFFICIAL_2026
 
     @pytest.mark.asyncio
     async def test_unknown_version_fails(self):

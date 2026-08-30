@@ -426,6 +426,30 @@ class TestSensorAutoDiscovery:
         assert f"{entry.entry_id}_REF1_avg_flow" not in unique_ids
         assert f"{entry.entry_id}_REF1_compatibility" in unique_ids
 
+    async def test_real_invoice_sensor_does_not_require_experimental_mode(self, monkeypatch):
+        created = self._patch_sensor_factories(monkeypatch)
+        coordinator = MagicMock()
+        coordinator.data = {
+            "contracts": {
+                "REF1": {
+                    "teleo_compatible": False,
+                    "derniere_facture": {"montant_ttc": 328.42},
+                }
+            },
+            "experimental_mode": False,
+            "global": {},
+        }
+        entry = MagicMock()
+        entry.runtime_data = coordinator
+        entry.entry_id = "test_entry"
+
+        await sensor_platform.async_setup_entry(
+            MagicMock(), entry, lambda entities, update_before_add=False: None
+        )
+
+        assert f"{entry.entry_id}_REF1_derniere_facture" in set(created)
+        assert f"{entry.entry_id}_REF1_fuite_estimee" not in set(created)
+
     async def test_teleo_meter_keeps_daily_and_hourly_sensors(self, monkeypatch):
         created = self._patch_sensor_factories(monkeypatch)
         coordinator = MagicMock()
