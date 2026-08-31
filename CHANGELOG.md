@@ -19,6 +19,7 @@ Tous les changements notables apportés à cette intégration seront documentés
 
 ### Qualité et documentation
 
+- **Typage strict** : ajout de modèles `TypedDict` normalisés pour les contrats, consommations, factures, alertes, données de facturation et agrégats globaux ; adaptation du client API, du coordinator et des plateformes d'entités afin que l'intégration passe désormais la vérification mypy en mode strict.
 - Couverture globale relevée à plus de 95 %, avec un contrôle CI supplémentaire exigeant strictement plus de 95 % pour chaque module Python non vide de l'intégration.
 - Documentation du warning normal des custom integrations, de la date de facture réellement fournie, des transitions hors-ligne, des contrats dynamiques et de l'état non conforme des assets Brands locaux.
 - Validation manuelle réussie de la 3.5.3 par l'utilisateur sur une installation Home Assistant bare metal réelle ; il s'agit d'un smoke test utilisateur, pas d'une certification ni d'un job CI automatisé.
