@@ -41,9 +41,11 @@ Ce tableau distingue les données fournies par Eau du Grand Lyon des calculs eff
 | Téléchargement du PDF | Conditionnel | Utilise l'identifiant interne et la route `duplicata` du portail ; nécessite une facture marquée téléchargeable et un dossier autorisé dans Home Assistant |
 | Prédictions, Eco-Score, coaching, CO₂e et calcaire | Indicatif | Formules locales déterministes, pas de modèle d'IA ni de barème officiel garanti |
 | Qualité de l'eau | Conditionnel | Configurez la commune ; sinon la première mesure Open Data disponible peut concerner une autre commune |
+| PFAS | Expérimental/opt-in | Valeurs publiques du widget Eau du Grand Lyon, au plus une lecture par jour ; entités désactivées par défaut |
 | Calendrier | Fonctionnel selon les dates fournies | La prochaine facture n'est publiée comme état que si l'API renvoie une date exploitable ; l'estimation locale à échéance + 180 jours reste séparée dans l'attribut `date_estimée` |
 | Mode vacances | Incomplet | Le seuil est calculé et journalisé, mais aucune entité d'alerte ni notification dédiée n'est actuellement exposée |
-| Sécheresse | Indicatif | Heuristique calendaire : vigilance de juin à septembre, pas les arrêtés réels |
+| Sécheresse | Indicatif + officiel opt-in | L'heuristique calendaire est conservée ; VigiEau peut fournir séparément le niveau officiel AEP de la commune |
+| Aide Warsmann | Indicatif | Compare une période aux trois périodes homologues précédentes ; indisponible sans historique complet et désactivée par défaut |
 
 ### Alertes de consommation et de fuite
 
@@ -56,6 +58,14 @@ Trois capteurs différents existent ; ils ne représentent pas la même informat
 | **Alerte fuite fournisseur (estimation 30 j)** | Champ `volumeFuiteEstime` du portail, désactivé par défaut | Disponible en mode expérimental uniquement si le fournisseur renvoie ce champ ; ce n'est pas une détection temps réel |
 
 L'ancienne présentation « Alerte Fuite possible » et « Alerte Fuite (Pattern local) » donnait l'impression d'un doublon. Les `unique_id` sont conservés pour ne pas casser les automatisations, mais les noms affichés ont été clarifiés.
+
+Les seuils journalier et mensuel configurés dans l'espace fournisseur sont exposés comme attributs informatifs de l'alerte mensuelle locale. Ils ne remplacent pas son multiplicateur et ne modifient pas son état ON/OFF.
+
+### PFAS, VigiEau et aide Warsmann
+
+- **PFAS** : après activation explicite, l'intégration résout la commune configurée via l'autocomplétion publique puis lit la [page Qualité de mon eau](https://www.eaudugrandlyon.com/mon-eau/eau-chez-moi/qualite-de-mon-eau/). Les valeurs moyenne/maximale et le nombre de prélèvements sont mis en cache 24 h. Une valeur maximale inférieure ou égale à 0,1 µg/L donne l'indication « conforme » ; si le HTML change, les entités deviennent indisponibles.
+- **VigiEau** : après activation explicite, la commune est résolue en code INSEE puis l'[API officielle VigiEau](https://api.vigieau.gouv.fr/swagger/) est interrogée pour le profil `particulier` et l'eau potable (`AEP`). Le capteur officiel complète l'heuristique saisonnière sans la remplacer.
+- **Warsmann** : le capteur désactivé par défaut applique le seuil du double de la moyenne sur trois périodes homologues, conformément à [l'article L2224-12-4 du CGCT](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000041410387). Il reste une aide : il ne vérifie ni la nature de la fuite, ni la réparation, ni la notification du fournisseur. Le délai légal actuel est d'un mois après l'information, et aucun compte à rebours automatique n'est créé.
 
 ### Estimations locales indicatives
 
@@ -119,6 +129,7 @@ Si votre compteur est compatible, les capteurs supplémentaires apparaîtront au
 - **Tarif manuel et part fixe** : utilisés uniquement dans les modes manuel et dynamique.
 - **Nombre d'habitants** : utilisé pour l'Éco-Score et les conseils personnalisés.
 - **Mode expérimental** : laissez-le désactivé tant que vous n'avez pas besoin des données étendues Téléo.
+- **PFAS / VigiEau** : configurez d'abord une commune exacte, puis activez uniquement la source souhaitée. Chaque source est limitée à une interrogation par 24 heures.
 
 ## Mise à jour des données
 
@@ -204,12 +215,13 @@ L'intégration fonctionne avec deux types de compteurs :
 
 - **Mise à jour mensuelle** : Les données de consommation sont généralement mises à jour une fois par mois par le service. La vue quotidienne n'est disponible que pour les compteurs Téléo.
 - **Blocage WAF** : L'API officielle peut bloquer les requêtes trop fréquentes. Consultez la section "Mise à jour des données" pour plus de détails.
-- **Données historiques API** : L'API Eau du Grand Lyon ne retourne qu'une fenêtre historique limitée. L'intégration accumule cependant jusqu'à **36 mois** en cache local persistant.
+- **Données historiques API** : L'API Eau du Grand Lyon ne retourne qu'une fenêtre historique limitée. L'intégration accumule jusqu'à **37 mois** mensuels et **1 097 jours** Téléo en cache local persistant. L'aide Warsmann reste indisponible tant que les trois périodes homologues exactes ne sont pas toutes présentes.
 - **Compteurs Standard** : Les détails horaires et alertes temps réel ne sont disponibles que sur compteurs Téléo.
 - **Mode hors-ligne** : En cas d'indisponibilité prolongée (>7 jours), une alerte apparaît dans les réparations HA.
 - **Alertes locales** : elles détectent une surconsommation ou une anomalie statistique, pas une fuite certaine. Le capteur local est indisponible sans au moins 24 points horaires ou 7 jours de données.
 - **Mode vacances** : son résultat n'est pas encore exposé sous forme de capteur ou de notification ; le switch seul ne constitue donc pas une alarme opérationnelle.
 - **Qualité de l'eau** : renseignez la commune dans les options pour éviter qu'une mesure Open Data d'une autre commune soit affichée.
+- **PFAS et VigiEau** : ces sources publiques optionnelles peuvent changer ou être indisponibles ; leur échec n'affecte jamais le rafraîchissement principal. PFAS dépend du rendu HTML public, VigiEau d'une résolution fiable de la commune.
 - **Indicateurs environnementaux** : Eco-Score, coaching, CO₂e, calcaire et sécheresse sont des calculs locaux indicatifs.
 
 ## Dépannage

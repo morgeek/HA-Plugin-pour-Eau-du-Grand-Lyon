@@ -2,6 +2,25 @@
 
 Tous les changements notables apportés à cette intégration seront documentés dans ce fichier.
 
+## [Unreleased]
+
+### Corrections API
+
+- Les factures utilisent désormais les champs réels `statutReglement` et `consommationTotale`, avec conversion litres vers m³ lorsque l'unité le demande, tout en conservant le repli sur l'ancien cache.
+- La courbe de charge accepte l'enveloppe confirmée `valeurs` / `unite`, journalise uniquement les noms de clés d'une première entrée inconnue et reste vide si aucun champ de consommation reconnu n'est disponible.
+- Les seuils serveur de surconsommation sont informatifs, non bloquants en cas d'échec et ajoutés aux attributs de l'alerte heuristique existante. Les entités serveur associées sont désactivées par défaut.
+
+### Fonctions opt-in
+
+- Ajout d'une aide indicative « Éligibilité dégrèvement fuite (loi Warsmann) », désactivée par défaut et indisponible sans trois périodes homologues exactes.
+- Ajout des valeurs PFAS moyenne/maximale et d'une conformité indicative depuis le widget public Eau du Grand Lyon, derrière une option désactivée par défaut et un cache de 24 heures.
+- Ajout du niveau réglementaire VigiEau pour l'eau potable, derrière une option désactivée par défaut et un cache de 24 heures. L'heuristique saisonnière historique reste inchangée.
+
+### Données et robustesse
+
+- Extension du cache à 37 mois mensuels et 1 097 jours Téléo afin de permettre, à terme, les comparaisons sur trois années complètes.
+- Les sources PFAS et VigiEau sont isolées : toute erreur HTTP, réseau ou de format les rend indisponibles sans interrompre les consommations, contrats ou factures.
+
 
 ## [3.5.3] - 2026-08-30
 
