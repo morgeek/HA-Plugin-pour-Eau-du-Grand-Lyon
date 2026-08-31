@@ -62,6 +62,20 @@ async def test_get_alerte_surconsommation_handles_missing_endpoints():
     }
 
 
+async def test_get_alerte_surconsommation_is_non_blocking_for_optional_failures():
+    api = _make_api()
+
+    async def boom(sub_path, params=None, *, log_response_errors=True):
+        raise HttpError(500, "GET", "https://example.test/optional", "maintenance")
+
+    api._get_produits = boom  # type: ignore[assignment]
+    assert await api.get_alerte_surconsommation("CID") == {
+        "seuil_surconso_jour_m3": None,
+        "seuil_surconso_mois_m3": None,
+        "abonne_alerte_fuite": None,
+    }
+
+
 # ── Capteurs / binary_sensors ────────────────────────────────────────────────
 
 
@@ -81,6 +95,14 @@ def test_seuil_sensors_native_value():
     data = {"seuil_surconso_jour_m3": 4.6, "seuil_surconso_mois_m3": 138.0}
     assert _sensor(EauGrandLyonSeuilSurconsoJourSensor, data).native_value == 4.6
     assert _sensor(EauGrandLyonSeuilSurconsoMoisSensor, data).native_value == 138.0
+
+
+def test_server_threshold_entities_are_disabled_by_default():
+    assert EauGrandLyonSeuilSurconsoJourSensor._attr_entity_registry_enabled_default is False
+    assert EauGrandLyonSeuilSurconsoMoisSensor._attr_entity_registry_enabled_default is False
+    assert EauGrandLyonLeakSubscriptionSensor._attr_entity_registry_enabled_default is False
+    assert EauGrandLyonSurconsoJourSensor._attr_entity_registry_enabled_default is False
+    assert EauGrandLyonSurconsoMoisSensor._attr_entity_registry_enabled_default is False
 
 
 def test_surconso_jour_binary_on_and_off():

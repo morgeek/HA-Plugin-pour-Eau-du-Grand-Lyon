@@ -28,6 +28,7 @@ class _EauGrandLyonSeuilBase(_EauGrandLyonBase):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "m³"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
     _attr_suggested_display_precision = 1
 
     _data_key: str = ""
@@ -47,7 +48,12 @@ class EauGrandLyonSeuilSurconsoJourSensor(_EauGrandLyonSeuilBase):
     _attr_translation_key = "seuil_surconso_jour"
     _data_key = "seuil_surconso_jour_m3"
 
-    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
+    def __init__(
+        self,
+        coordinator: EauGrandLyonCoordinator,
+        entry: EauGrandLyonConfigEntry,
+        contract_ref: str,
+    ) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_seuil_surconso_jour"
 
@@ -67,7 +73,12 @@ class EauGrandLyonSeuilSurconsoMoisSensor(_EauGrandLyonSeuilBase):
     _attr_translation_key = "seuil_surconso_mois"
     _data_key = "seuil_surconso_mois_m3"
 
-    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
+    def __init__(
+        self,
+        coordinator: EauGrandLyonCoordinator,
+        entry: EauGrandLyonConfigEntry,
+        contract_ref: str,
+    ) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_seuil_surconso_mois"
 

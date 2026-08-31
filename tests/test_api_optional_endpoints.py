@@ -8,7 +8,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.eau_grand_lyon.api import AuthenticationError, HttpError, NetworkError, WafBlockedError
+from custom_components.eau_grand_lyon.api import (
+    AuthenticationError,
+    HttpError,
+    NetworkError,
+    WafBlockedError,
+)
 from custom_components.eau_grand_lyon.api.client import EauGrandLyonApi
 from custom_components.eau_grand_lyon.api import client as client_module
 
@@ -126,6 +131,26 @@ class TestOptionalEndpointParsing:
         assert result[0]["id"] == "API-ID-1"
         assert result[0]["telechargeable"] is False
 
+    def test_invoice_formatter_uses_confirmed_api_fields_and_converts_litres(self):
+        result = EauGrandLyonApi.format_factures(
+            [
+                {
+                    "id": "API-ID-2",
+                    "reference": "INV-2",
+                    "montantHT": 120.5,
+                    "montantTTC": 132.55,
+                    "statutReglement": {"code": "REGLE", "libelle": "Réglée"},
+                    "consommationTotale": {"value": 42500, "unit": "L"},
+                    "contrat": {"id": "C2"},
+                }
+            ]
+        )
+
+        assert result[0]["statut_paiement"] == "Réglée"
+        assert result[0]["volume_m3"] == 42.5
+        assert result[0]["montant_ht"] == 120.5
+        assert result[0]["montant_ttc"] == 132.55
+
     @pytest.mark.asyncio
     async def test_load_curve_sorts_daily_points(self):
         api = _api()
@@ -139,6 +164,45 @@ class TestOptionalEndpointParsing:
         )
         result = await api.get_courbe_de_charge("C1", nb_jours=7)
         assert [item["date"] for item in result] == ["2026-08-01", "2026-08-02"]
+
+    @pytest.mark.asyncio
+    async def test_load_curve_accepts_confirmed_empty_valeurs_envelope(self):
+        api = _api()
+        api._get_interfaces = AsyncMock(return_value={"valeurs": [], "unite": None})
+
+        assert await api.get_courbe_de_charge("C1", nb_jours=7) == []
+
+    @pytest.mark.asyncio
+    async def test_load_curve_defensively_maps_hypothetical_populated_valeurs(self, caplog):
+        # La forme de valeurs[i] est synthétique : seules l'enveloppe valeurs/unite
+        # et la réponse vide ont été confirmées en production. Ce mapping devra être
+        # révisé si les clés réelles observées sur un compte peuplé diffèrent.
+        api = _api()
+        api._get_interfaces = AsyncMock(
+            return_value={
+                "valeurs": [
+                    {"date": "2026-08-02", "consommation": 250},
+                    {"date": "2026-08-01", "consommation": 100},
+                ],
+                "unite": "l",
+            }
+        )
+
+        with caplog.at_level("DEBUG"):
+            result = await api.get_courbe_de_charge("C1", nb_jours=7)
+
+        assert result == [
+            {"date": "2026-08-01", "consommation": 0.1},
+            {"date": "2026-08-02", "consommation": 0.25},
+        ]
+        assert "cles de la premiere entree valeurs=['consommation', 'date']" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_load_curve_rejects_unknown_populated_valeurs_shape(self):
+        api = _api()
+        api._get_interfaces = AsyncMock(return_value={"valeurs": [{"date": "2026-08-01", "inconnue": 1}]})
+
+        assert await api.get_courbe_de_charge("C1", nb_jours=7) == []
 
     @pytest.mark.asyncio
     async def test_siamm_returns_mapping_only(self):
@@ -162,7 +226,11 @@ class TestOptionalEndpointFailurePolicy:
     )
     async def test_expected_404_returns_endpoint_empty_value(self, method_name, dependency, args, empty):
         api = _api()
-        setattr(api, dependency, AsyncMock(side_effect=HttpError(404, "GET", "optional", "missing")))
+        setattr(
+            api,
+            dependency,
+            AsyncMock(side_effect=HttpError(404, "GET", "optional", "missing")),
+        )
         assert await getattr(api, method_name)(*args) == empty
 
     @pytest.mark.asyncio
@@ -192,7 +260,11 @@ class TestOptionalEndpointFailurePolicy:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "error",
-        [NetworkError("offline"), AuthenticationError("bad auth"), WafBlockedError("blocked")],
+        [
+            NetworkError("offline"),
+            AuthenticationError("bad auth"),
+            WafBlockedError("blocked"),
+        ],
     )
     async def test_next_invoice_date_significant_errors_are_propagated(self, error):
         api = _api()
@@ -236,7 +308,10 @@ class TestWaterQualityOptionalSource:
             }
         )
         monkeypatch.setattr(
-            client_module.aiohttp, "ClientTimeout", lambda total: SimpleNamespace(total=total), raising=False
+            client_module.aiohttp,
+            "ClientTimeout",
+            lambda total: SimpleNamespace(total=total),
+            raising=False,
         )
         api = EauGrandLyonApi(session, "user@example.com", "secret")
 
@@ -251,7 +326,10 @@ class TestWaterQualityOptionalSource:
         session = MagicMock()
         session.get.return_value = _ResponseContext({}, status=503)
         monkeypatch.setattr(
-            client_module.aiohttp, "ClientTimeout", lambda total: SimpleNamespace(total=total), raising=False
+            client_module.aiohttp,
+            "ClientTimeout",
+            lambda total: SimpleNamespace(total=total),
+            raising=False,
         )
         api = EauGrandLyonApi(session, "user@example.com", "secret")
 
