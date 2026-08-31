@@ -8,12 +8,16 @@ locale, et servent de référence aux binary_sensors de dépassement.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, cast
 
 from homeassistant.components.sensor import SensorStateClass
 from homeassistant.const import EntityCategory
 
 from .base import _EauGrandLyonBase
+
+if TYPE_CHECKING:
+    from .. import EauGrandLyonConfigEntry
+    from ..coordinator import EauGrandLyonCoordinator
 
 
 class _EauGrandLyonSeuilBase(_EauGrandLyonBase):
@@ -34,7 +38,7 @@ class _EauGrandLyonSeuilBase(_EauGrandLyonBase):
 
     @property
     def native_value(self) -> float | None:
-        return self._contract.get(self._data_key)
+        return cast(float | None, self._contract.get(self._data_key))
 
 
 class EauGrandLyonSeuilSurconsoJourSensor(_EauGrandLyonSeuilBase):
@@ -43,12 +47,12 @@ class EauGrandLyonSeuilSurconsoJourSensor(_EauGrandLyonSeuilBase):
     _attr_translation_key = "seuil_surconso_jour"
     _data_key = "seuil_surconso_jour_m3"
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_seuil_surconso_jour"
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
         return {
             "consommation_jour_m3": c.get("derniere_conso_jour_m3"),
@@ -63,12 +67,12 @@ class EauGrandLyonSeuilSurconsoMoisSensor(_EauGrandLyonSeuilBase):
     _attr_translation_key = "seuil_surconso_mois"
     _data_key = "seuil_surconso_mois_m3"
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_seuil_surconso_mois"
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
         return {
             "consommation_mois_m3": c.get("consommation_mois_courant"),

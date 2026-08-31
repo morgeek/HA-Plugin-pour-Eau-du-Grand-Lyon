@@ -19,6 +19,7 @@ def _make_binary_sensor(cls, coordinator_data, contract_ref="REF1", options=None
     coordinator.config_entry.options = options or {}
     entry = MagicMock()
     entry.entry_id = "test_entry"
+    entry.options = options or {}
 
     if issubclass(cls, EauGrandLyonOutageSensor):
         sensor = cls.__new__(cls)

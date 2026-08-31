@@ -74,6 +74,8 @@ from .sensors.quality import (
     EauGrandLyonNitratesSensor,
     EauGrandLyonWaterHardnessSensor,
 )
+from .coordinator import EauGrandLyonCoordinator
+from .models import ContractData
 
 PARALLEL_UPDATES = 0
 
@@ -83,7 +85,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-def _is_teleo_meter(contract: dict) -> bool:
+def _is_teleo_meter(contract: ContractData) -> bool:
     """Infer whether a contract uses a communicant Teleo meter."""
     teleo = contract.get("teleo_compatible")
     if teleo is not None:
@@ -100,12 +102,12 @@ def _is_teleo_meter(contract: dict) -> bool:
     return mode == "AMM"
 
 
-def _supports_daily_sensors(contract: dict) -> bool:
+def _supports_daily_sensors(contract: ContractData) -> bool:
     """Daily sensors only make sense on Teleo/TIC-compatible meters."""
     return _is_teleo_meter(contract)
 
 
-def _supports_hourly_sensors(contract: dict) -> bool:
+def _supports_hourly_sensors(contract: ContractData) -> bool:
     """Hourly sensors are only exposed for Teleo communicant meters."""
     return _is_teleo_meter(contract)
 
@@ -137,7 +139,7 @@ async def async_setup_entry(
         new_entities = []
         for entity in candidates:
             unique_id = entity._attr_unique_id
-            if unique_id not in added_unique_ids:
+            if unique_id is not None and unique_id not in added_unique_ids:
                 added_unique_ids.add(unique_id)
                 new_entities.append(entity)
         if new_entities:
@@ -148,10 +150,10 @@ async def async_setup_entry(
 
 
 def _contract_sensor_candidates(
-    coordinator,
-    entry,
+    coordinator: EauGrandLyonCoordinator,
+    entry: EauGrandLyonConfigEntry,
     ref: str,
-    contract: dict,
+    contract: ContractData,
     *,
     experimental: bool,
 ) -> list[SensorEntity]:
@@ -218,7 +220,9 @@ def _contract_sensor_candidates(
     return entities
 
 
-def _global_sensor_candidates(coordinator, entry) -> list[SensorEntity]:
+def _global_sensor_candidates(
+    coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry
+) -> list[SensorEntity]:
     """Build account-level sensors, including multi-contract aggregates."""
     entities: list[SensorEntity] = []
 

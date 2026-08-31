@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import EntityCategory
 
 from .base import _EauGrandLyonBase
+
+if TYPE_CHECKING:
+    from .. import EauGrandLyonConfigEntry
+    from ..coordinator import EauGrandLyonCoordinator
 
 
 class EauGrandLyonTrendSensor(_EauGrandLyonBase):
@@ -20,7 +24,7 @@ class EauGrandLyonTrendSensor(_EauGrandLyonBase):
     _attr_translation_key = "trend"
     _attr_suggested_display_precision = 1
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_trend_n1"
 
@@ -29,7 +33,7 @@ class EauGrandLyonTrendSensor(_EauGrandLyonBase):
         return self._contract.get("tendance_n1_pct")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         return {
             "conso_actuelle": self._contract.get("consommation_mois_courant"),
             "conso_n1": self._contract.get("consommation_n1"),
@@ -48,7 +52,7 @@ class EauGrandLyonPredictionConsoSensor(_EauGrandLyonBase):
     _attr_translation_key = "prediction_conso"
     _attr_suggested_display_precision = 1
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_prediction_conso"
 
@@ -68,7 +72,7 @@ class EauGrandLyonPredictionCostSensor(_EauGrandLyonBase):
     _attr_translation_key = "prediction_cost"
     _attr_suggested_display_precision = 2
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_prediction_cost"
 
@@ -84,7 +88,7 @@ class EauGrandLyonEcoScoreSensor(_EauGrandLyonBase):
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ["a", "b", "c", "d", "e", "f", "g", "unknown"]
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_eco_score"
 
@@ -94,7 +98,7 @@ class EauGrandLyonEcoScoreSensor(_EauGrandLyonBase):
         return grade if grade in self._attr_options else "unknown"
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         return {
             "m3_par_personne": self._contract.get("eco_score_m3_pers"),
             "nb_habitants": self._contract.get("nb_habitants"),
@@ -111,7 +115,7 @@ class EauGrandLyonCO2FootprintSensor(_EauGrandLyonBase):
     _attr_native_unit_of_measurement = "kg CO2e"
     _attr_suggested_display_precision = 2
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_co2_footprint"
 
@@ -120,7 +124,7 @@ class EauGrandLyonCO2FootprintSensor(_EauGrandLyonBase):
         return self._contract.get("co2_footprint_kg")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         return {
             "méthode": "Facteur ADEME (0.52 kg/m3)",
             "note": "Inclut le pompage, le traitement et la distribution.",
@@ -137,7 +141,7 @@ class EauGrandLyonLimescaleSensor(_EauGrandLyonBase):
     _attr_translation_key = "limescale"
     _attr_suggested_display_precision = 0
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_limescale"
 
@@ -146,7 +150,7 @@ class EauGrandLyonLimescaleSensor(_EauGrandLyonBase):
         return self._contract.get("limescale_g")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         return {
             "dureté_appliquée_fh": self._contract.get("hardness_fh"),
             "note": "Basé sur le volume total et la dureté configurée.",
@@ -158,7 +162,7 @@ class EauGrandLyonCoachingSensor(_EauGrandLyonBase):
 
     _attr_translation_key = "coaching"
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_coaching"
 
@@ -191,7 +195,7 @@ class EauGrandLyonSignalSensor(_EauGrandLyonBase):
     _attr_entity_registry_enabled_default = False
     _attr_translation_key = "signal"
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_signal_pct"
 

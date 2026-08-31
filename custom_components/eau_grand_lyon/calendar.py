@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -14,6 +14,9 @@ from homeassistant.util import dt as dt_util
 
 from .coordinator import EauGrandLyonCoordinator
 from .device import account_device_info
+
+if TYPE_CHECKING:
+    from . import EauGrandLyonConfigEntry
 
 PARALLEL_UPDATES = 0
 
@@ -25,7 +28,7 @@ def _as_date(value: date | datetime) -> date:
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: EauGrandLyonConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Configure les calendriers depuis une config entry."""
@@ -39,7 +42,7 @@ class EauGrandLyonCalendar(CoordinatorEntity[EauGrandLyonCoordinator], CalendarE
     _attr_has_entity_name = True
     _attr_translation_key = "billing_events"
 
-    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: ConfigEntry) -> None:
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
         super().__init__(coordinator)
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_calendar"
@@ -107,7 +110,7 @@ class EauGrandLyonCalendar(CoordinatorEntity[EauGrandLyonCoordinator], CalendarE
                 try:
                     dt = datetime.strptime(releve_date, "%Y-%m-%d").date()
                     mode = contract.get("pds_mode_releve", "")
-                    label = "Relevé AMM automatique" if "AMM" in (mode or "") else "Relevé compteur"
+                    label = "Relevé AMM automatique" if isinstance(mode, str) and "AMM" in mode else "Relevé compteur"
                     events.append(
                         CalendarEvent(
                             summary=f"{label} ({ref})",
@@ -125,7 +128,7 @@ class EauGrandLyonCalendar(CoordinatorEntity[EauGrandLyonCoordinator], CalendarE
             try:
                 debut_str = inter.get("date_debut")
                 fin_str = inter.get("date_fin") or debut_str
-                if not debut_str:
+                if not debut_str or not fin_str:
                     continue
                 debut_d = datetime.strptime(debut_str[:10], "%Y-%m-%d").date()
                 fin_d = datetime.strptime(fin_str[:10], "%Y-%m-%d").date()
@@ -154,7 +157,7 @@ class EauGrandLyonCalendar(CoordinatorEntity[EauGrandLyonCoordinator], CalendarE
             try:
                 debut_str = inter.get("date_debut")
                 fin_str = inter.get("date_fin") or debut_str
-                if not debut_str:
+                if not debut_str or not fin_str:
                     continue
                 debut_d = date.fromisoformat(debut_str[:10])
                 fin_d = date.fromisoformat(fin_str[:10])

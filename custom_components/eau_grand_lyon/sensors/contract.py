@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import TYPE_CHECKING
 
 from homeassistant.components.sensor import SensorDeviceClass
 
 from ..const import CONF_HOUSEHOLD_SIZE
 from .base import _EauGrandLyonBase
+
+if TYPE_CHECKING:
+    from .. import EauGrandLyonConfigEntry
+    from ..coordinator import EauGrandLyonCoordinator
 
 
 class EauGrandLyonStatutSensor(_EauGrandLyonBase):
@@ -16,7 +20,7 @@ class EauGrandLyonStatutSensor(_EauGrandLyonBase):
 
     _attr_translation_key = "statut"
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_statut"
 
@@ -25,7 +29,7 @@ class EauGrandLyonStatutSensor(_EauGrandLyonBase):
         return self._contract.get("statut")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
         nombre_habitants = c.get("nombre_habitants") or ""
         if not nombre_habitants:
@@ -53,7 +57,7 @@ class EauGrandLyonDateEcheanceSensor(_EauGrandLyonBase):
     _attr_device_class = SensorDeviceClass.DATE
     _attr_translation_key = "date_echeance"
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_date_echeance"
 
@@ -68,7 +72,7 @@ class EauGrandLyonDateEcheanceSensor(_EauGrandLyonBase):
         return None
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         return {"date_début": self._contract.get("date_effet")}
 
 
@@ -78,7 +82,7 @@ class EauGrandLyonProchaineFactureSensor(_EauGrandLyonBase):
     _attr_device_class = SensorDeviceClass.DATE
     _attr_translation_key = "prochaine_facture"
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_prochaine_facture"
 
@@ -93,7 +97,7 @@ class EauGrandLyonProchaineFactureSensor(_EauGrandLyonBase):
         return None
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         return {
             "source": "API /dateProchaineFacture" if self._contract.get("next_bill_date") else "indisponible",
             "date_estimée": self._contract.get("estimated_next_bill_date"),
@@ -106,7 +110,7 @@ class EauGrandLyonProchaineReleveSensor(_EauGrandLyonBase):
     _attr_device_class = SensorDeviceClass.DATE
     _attr_translation_key = "prochaine_releve"
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_prochaine_releve"
 
@@ -121,7 +125,7 @@ class EauGrandLyonProchaineReleveSensor(_EauGrandLyonBase):
         return None
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         return {
             "mode_releve": self._contract.get("pds_mode_releve"),
             "communicabilite_amm": self._contract.get("pds_communicabilite_amm"),

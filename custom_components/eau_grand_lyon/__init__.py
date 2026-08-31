@@ -6,7 +6,7 @@ import csv
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, TypeAlias
+from collections.abc import Iterator
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -30,10 +30,7 @@ from .coordinator import EauGrandLyonCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    EauGrandLyonConfigEntry: TypeAlias = ConfigEntry[EauGrandLyonCoordinator]
-else:
-    EauGrandLyonConfigEntry = ConfigEntry
+type EauGrandLyonConfigEntry = ConfigEntry[EauGrandLyonCoordinator]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -56,7 +53,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_migrate_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> bool:
     """Migrate a config entry to a newer version."""
     _LOGGER.debug("Migrating config entry from version %s", entry.version)
     if entry.version in (1, 2, 3):
@@ -175,7 +172,7 @@ def _async_cleanup_legacy_device(hass: HomeAssistant, entry: EauGrandLyonConfigE
     return True
 
 
-def _iter_coordinators(hass: HomeAssistant):
+def _iter_coordinators(hass: HomeAssistant) -> Iterator[EauGrandLyonCoordinator]:
     """Yield active coordinators across all config entries."""
     for entry in hass.config_entries.async_entries(DOMAIN):
         coord = getattr(entry, "runtime_data", None)
@@ -244,14 +241,14 @@ def _async_setup_services(hass: HomeAssistant) -> None:
                                     f"Année {c_entry.get('annee')}",
                                 ]
                             )
-                        for c_entry in contract.get("consommations_journalieres", []):
+                        for daily_entry in contract.get("consommations_journalieres", []):
                             writer.writerow(
                                 [
                                     ref,
                                     "JOURNALIER",
-                                    c_entry.get("date"),
-                                    c_entry.get("consommation_m3"),
-                                    f"Index {c_entry.get('index_m3')}",
+                                    daily_entry.get("date"),
+                                    daily_entry.get("consommation_m3"),
+                                    f"Index {daily_entry.get('index_m3')}",
                                 ]
                             )
 
@@ -355,7 +352,7 @@ def _async_setup_services(hass: HomeAssistant) -> None:
 async def async_remove_config_entry_device(
     hass: HomeAssistant,
     config_entry: EauGrandLyonConfigEntry,
-    device_entry,
+    device_entry: dr.DeviceEntry,
 ) -> bool:
     """Autorise la suppression d'un device qui ne correspond plus à un contrat actif.
 
@@ -383,6 +380,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry
     return unload_ok
 
 
-async def _async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def _async_update_options(hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> None:
     """Reload the integration when options change."""
     await hass.config_entries.async_reload(entry.entry_id)

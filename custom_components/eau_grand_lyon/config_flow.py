@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import aiohttp
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers import selector
+
+if TYPE_CHECKING:
+    from . import EauGrandLyonConfigEntry
+    from homeassistant.config_entries import ConfigFlowResult
 
 from .api import (
     ApiError,
@@ -102,25 +105,25 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 _INTERVAL_VALUES = ["6", "12", "24", "48"]
 
 
-class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
+class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Flux de configuration de l'intégration Eau du Grand Lyon."""
 
     VERSION = 4
 
     @staticmethod
     def async_get_options_flow(
-        config_entry: ConfigEntry,
+        config_entry: EauGrandLyonConfigEntry,
     ) -> EauGrandLyonOptionsFlowHandler:
         """Retourne le gestionnaire du flux d'options."""
         return EauGrandLyonOptionsFlowHandler()
 
     def _async_update_and_abort_compat(
         self,
-        config_entry: ConfigEntry,
+        config_entry: EauGrandLyonConfigEntry,
         *,
         data_updates: dict[str, Any],
         reason: str,
-    ) -> config_entries.FlowResult:
+    ) -> ConfigFlowResult:
         """Update credentials with the best ConfigFlow API available.
 
         ``async_update_and_abort`` is the primary path on recent Home Assistant
@@ -130,10 +133,9 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type:
         """
         modern_update = getattr(self, "async_update_and_abort", None)
         if callable(modern_update):
-            return modern_update(
-                config_entry,
-                data_updates=data_updates,
-                reason=reason,
+            return cast(
+                "ConfigFlowResult",
+                modern_update(config_entry, data_updates=data_updates, reason=reason),
             )
 
         data = dict(config_entry.data)
@@ -141,11 +143,11 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type:
         self.hass.config_entries.async_update_entry(config_entry, data=data)
         return self.async_abort(reason=reason)
 
-    async def async_step_reauth(self, user_input: dict[str, Any] | None = None) -> config_entries.FlowResult:
+    async def async_step_reauth(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Flux de réauthentification après une erreur d'authentification."""
         return await self.async_step_reauth_confirm()
 
-    async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None) -> config_entries.FlowResult:
+    async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Confirmation de réauthentification : saisie des identifiants."""
         config_entry = self._get_reauth_entry()
 
@@ -184,7 +186,7 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type:
             errors=errors,
         )
 
-    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> config_entries.FlowResult:
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Flux de reconfiguration : permet de changer les identifiants."""
         config_entry = self._get_reconfigure_entry()
 
@@ -223,7 +225,7 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type:
             errors=errors,
         )
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> config_entries.FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Étape principale : saisie des identifiants."""
         errors: dict[str, str] = {}
 
@@ -262,12 +264,12 @@ class EauGrandLyonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type:
 class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
     """Options : intervalle de mise à jour + tarif au m³."""
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> config_entries.FlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Étape unique : modification des options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        opts = self.config_entry.options or {}
+        opts: dict[str, Any] = dict(self.config_entry.options)
         current_interval = int(opts.get(CONF_UPDATE_INTERVAL_HOURS, DEFAULT_UPDATE_INTERVAL_HOURS))
         current_tarif = float(
             opts[CONF_TARIF_M3]

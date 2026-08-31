@@ -6,19 +6,24 @@ que soit la plateforme qui le déclare (sensor, binary_sensor, button, ...).
 
 from __future__ import annotations
 
-from homeassistant.config_entries import ConfigEntry
+from typing import TYPE_CHECKING
+
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
+from .models import EauGrandLyonData
+
+if TYPE_CHECKING:
+    from . import EauGrandLyonConfigEntry
 
 MANUFACTURER = "Eau du Grand Lyon"
 CONFIGURATION_URL = "https://agence.eaudugrandlyon.com"
 
 
 def contract_device_info(
-    coordinator: DataUpdateCoordinator,
-    entry: ConfigEntry,
+    coordinator: DataUpdateCoordinator[EauGrandLyonData],
+    entry: EauGrandLyonConfigEntry,
     contract_ref: str,
 ) -> DeviceInfo:
     """DeviceInfo du device par contrat (le compteur d'eau)."""
@@ -41,8 +46,8 @@ def contract_device_info(
 
 
 def account_device_info(
-    coordinator: DataUpdateCoordinator,
-    entry: ConfigEntry,
+    coordinator: DataUpdateCoordinator[EauGrandLyonData],
+    entry: EauGrandLyonConfigEntry,
 ) -> DeviceInfo:
     """DeviceInfo des entités globales — rattachées au device du premier contrat."""
     contracts = (coordinator.data or {}).get("contracts", {})

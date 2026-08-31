@@ -8,7 +8,7 @@ import logging
 import re
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, cast
 
 import aiohttp
 
@@ -30,6 +30,8 @@ from .endpoints import (
     MONTHS_FR,
     PRODUITS_BASE,
 )
+
+type JsonObject = dict[str, Any]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -57,7 +59,7 @@ def _is_litre_rate_unit(value: Any) -> bool:
     return normalized in {"l/h", "litre/h", "litres/h", "liter/h", "liters/h"}
 
 
-def _infer_unit_from_magnitude(entries: list[dict]) -> str:
+def _infer_unit_from_magnitude(entries: list[object]) -> str:
     values: list[float] = []
     for entry in entries[:50]:
         if not isinstance(entry, dict):
@@ -129,7 +131,9 @@ class EauGrandLyonApi:
             raise ApiError(f"Réponse non-JSON sur {method} {url}: {err}") from err
 
     @staticmethod
-    async def _read_response_body(resp, accepted_statuses: frozenset[int]) -> tuple[int, str, str]:
+    async def _read_response_body(
+        resp: aiohttp.ClientResponse, accepted_statuses: frozenset[int]
+    ) -> tuple[int, str, str]:
         """Return response metadata and text without imposing a payload format."""
         if resp.status not in accepted_statuses:
             resp.raise_for_status()
@@ -143,7 +147,7 @@ class EauGrandLyonApi:
         *,
         accepted_statuses: frozenset[int] = frozenset(),
         log_response_errors: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> tuple[int, str, str]:
         """Run an authenticated request and return its unparsed response body."""
         correlation_id = _new_correlation_id()
@@ -220,7 +224,7 @@ class EauGrandLyonApi:
             )
             raise NetworkError(f"Erreur reseau sur {method} {url}: {err}") from err
 
-    async def _request(self, method: str, url: str, *, log_response_errors: bool = True, **kwargs) -> Any:
+    async def _request(self, method: str, url: str, *, log_response_errors: bool = True, **kwargs: Any) -> Any:
         """Run a request whose response is required to contain valid JSON."""
         _status, _content_type, text = await self._request_body(
             method,
@@ -236,7 +240,7 @@ class EauGrandLyonApi:
         url: str,
         *,
         accepted_statuses: frozenset[int] = frozenset(),
-        **kwargs,
+        **kwargs: Any,
     ) -> tuple[int, str, str]:
         """Run a request whose optional payload may be JSON or plain text."""
         return await self._request_body(
@@ -246,22 +250,22 @@ class EauGrandLyonApi:
             **kwargs,
         )
 
-    async def _do_get(self, url: str, params: dict | None = None, *, log_response_errors: bool = True) -> Any:
+    async def _do_get(self, url: str, params: JsonObject | None = None, *, log_response_errors: bool = True) -> Any:
         return await self._request("GET", url, params=params, log_response_errors=log_response_errors)
 
-    async def _do_post(self, url: str, body: dict | None = None) -> Any:
+    async def _do_post(self, url: str, body: JsonObject | None = None) -> Any:
         return await self._request("POST", url, json=body or {})
 
-    async def _get(self, path: str, params: dict | None = None) -> Any:
+    async def _get(self, path: str, params: JsonObject | None = None) -> Any:
         return await self._do_get(f"{BASE_URL}{path}", params)
 
-    async def _post(self, path: str, body: dict | None = None) -> Any:
+    async def _post(self, path: str, body: JsonObject | None = None) -> Any:
         return await self._do_post(f"{BASE_URL}{path}", body)
 
     async def _get_produits(
         self,
         sub_path: str,
-        params: dict | None = None,
+        params: JsonObject | None = None,
         *,
         log_response_errors: bool = True,
     ) -> Any:
@@ -271,10 +275,10 @@ class EauGrandLyonApi:
             log_response_errors=log_response_errors,
         )
 
-    async def _get_interfaces(self, sub_path: str, params: dict | None = None) -> Any:
+    async def _get_interfaces(self, sub_path: str, params: JsonObject | None = None) -> Any:
         return await self._do_get(f"{INTERFACES_AEL_BASE}/{sub_path.lstrip('/')}", params)
 
-    async def get_contracts(self) -> list[dict]:
+    async def get_contracts(self) -> list[JsonObject]:
         data = await self._post(
             f"/application/rest/interfaces/ael/contrats/rechercher"
             f"?expand={CONTRACTS_EXPAND}&select={CONTRACTS_SELECT}"
@@ -285,7 +289,7 @@ class EauGrandLyonApi:
         contracts = data.get("content", data) if isinstance(data, dict) else data
         return list(contracts) if contracts else []
 
-    async def get_monthly_consumptions(self, contract_id: str, nb_jours: int = 1095) -> list[dict]:
+    async def get_monthly_consumptions(self, contract_id: str, nb_jours: int = 1095) -> list[JsonObject]:
         """Fetch monthly consumptions with optional history parameter (36 months default).
 
         Args:
@@ -297,7 +301,7 @@ class EauGrandLyonApi:
             f"/application/rest/interfaces/ael/contrats/{contract_id}/consommationsMensuelles",
             params=params if params else None,
         )
-        entries: list[dict] = []
+        entries: list[JsonObject] = []
         if not isinstance(data, dict):
             _LOGGER.warning(
                 "Reponse inattendue pour consommationsMensuelles (type=%s, nb_jours=%d)",
@@ -316,7 +320,7 @@ class EauGrandLyonApi:
         )
         return entries
 
-    async def get_daily_consumptions(self, contract_id: str, nb_jours: int = 90) -> dict[str, Any]:
+    async def get_daily_consumptions(self, contract_id: str, nb_jours: int = 90) -> JsonObject:
         result = await self._fetch_daily_raw(contract_id, nb_jours)
         if not result["entries"] and nb_jours > 30:
             _LOGGER.debug(
@@ -327,7 +331,7 @@ class EauGrandLyonApi:
             result = await self._fetch_daily_raw(contract_id, 30)
         return result
 
-    async def get_alerte_surconsommation(self, contract_id: str) -> dict[str, Any]:
+    async def get_alerte_surconsommation(self, contract_id: str) -> JsonObject:
         """Recupere les seuils d'alerte surconsommation configures cote serveur.
 
         Trois endpoints (espace client, compteur communicant) :
@@ -374,7 +378,7 @@ class EauGrandLyonApi:
             "abonne_alerte_fuite": abonne,
         }
 
-    async def _fetch_daily_raw(self, contract_id: str, nb_jours: int) -> dict[str, Any]:
+    async def _fetch_daily_raw(self, contract_id: str, nb_jours: int) -> JsonObject:
         entries = await self._get_daily_new(contract_id, nb_jours)
         source = "Produits (2026)" if entries else "Aucune"
         if not entries:
@@ -388,7 +392,7 @@ class EauGrandLyonApi:
             "last_date": last_date,
         }
 
-    async def _get_daily_new(self, contract_id: str, nb_jours: int) -> list[dict]:
+    async def _get_daily_new(self, contract_id: str, nb_jours: int) -> list[JsonObject]:
         try:
             date_fin = datetime.now(timezone.utc)
             date_debut = date_fin - timedelta(days=nb_jours)
@@ -415,7 +419,7 @@ class EauGrandLyonApi:
             )
             return []
 
-    async def _get_daily_legacy(self, contract_id: str, nb_jours: int) -> tuple[list[dict], str]:
+    async def _get_daily_legacy(self, contract_id: str, nb_jours: int) -> tuple[list[JsonObject], str]:
         endpoints = [
             (
                 f"/application/rest/interfaces/ael/contrats/{contract_id}"
@@ -452,7 +456,7 @@ class EauGrandLyonApi:
                 )
         return [], "Aucune"
 
-    async def get_alertes(self) -> list[dict]:
+    async def get_alertes(self) -> list[JsonObject]:
         data = await self._get(
             "/application/rest/interfaces/ael/contrats/alertes" "?expand=infosAlarme,modeleAction,objetMaitre"
         )
@@ -506,7 +510,7 @@ class EauGrandLyonApi:
         )
         return None
 
-    async def get_point_de_service_etendu(self, contract_id: str) -> dict:
+    async def get_point_de_service_etendu(self, contract_id: str) -> JsonObject:
         select = (
             "communicabiliteAMM,modeReleve,activite,"
             "dateProchaineReleveReelle,reference,referenceExterne,"
@@ -546,7 +550,7 @@ class EauGrandLyonApi:
             _LOGGER.debug("Erreur get_point_de_service_etendu (contrat %s) : %s", contract_id, err)
             return {}
 
-    async def get_interventions(self) -> list[dict]:
+    async def get_interventions(self) -> list[JsonObject]:
         select = (
             "reference,modePlanification,sousType,modeRealisation,"
             "presenceDuClientNecessaire,statut,dateDebutPrevue,dateFinPrevue,"
@@ -607,13 +611,14 @@ class EauGrandLyonApi:
             _LOGGER.debug("get_interventions failed: %s", err)
             return []
 
-    async def get_factures(self) -> list[dict]:
+    async def get_factures(self) -> list[JsonObject]:
         try:
             data = await self._get_produits("factures")
             if isinstance(data, list):
                 return data
             if isinstance(data, dict):
-                return data.get("content", [])
+                content = data.get("content", [])
+                return content if isinstance(content, list) else []
             return []
         except HttpError as err:
             if err.status != 404:
@@ -621,7 +626,7 @@ class EauGrandLyonApi:
             _LOGGER.debug("[EXPERIMENTAL] /rest/produits/factures -> 404")
             return []
 
-    async def get_courbe_de_charge(self, contract_id: str, nb_jours: int = 30) -> list[dict]:
+    async def get_courbe_de_charge(self, contract_id: str, nb_jours: int = 30) -> list[JsonObject]:
         try:
             date_fin = datetime.now(timezone.utc)
             date_debut = date_fin - timedelta(days=nb_jours)
@@ -648,7 +653,7 @@ class EauGrandLyonApi:
             )
             return []
 
-    async def get_derniere_releve_siamm(self, contract_id: str) -> dict | None:
+    async def get_derniere_releve_siamm(self, contract_id: str) -> JsonObject | None:
         try:
             data = await self._get_produits(
                 f"contrats/{contract_id}/derniereReleveSIAMM",
@@ -723,7 +728,7 @@ class EauGrandLyonApi:
             )
             raise NetworkError(f"Erreur reseau lors du telechargement PDF: {err}") from err
 
-    async def get_water_quality(self, commune: str | None = None) -> dict:
+    async def get_water_quality(self, commune: str | None = None) -> JsonObject:
         """Qualité de l'eau depuis l'Open Data Métropole de Lyon.
 
         Sans `commune`, retourne la première mesure du jeu de données (commune
@@ -735,7 +740,7 @@ class EauGrandLyonApi:
             f"/eau_eau.eauqualite/json/?maxfeatures={maxfeatures}&start=1"
             "&fields=commune,durete,nitrates,chloreresiduel,turbidite,dateanalyse"
         )
-        empty: dict = {
+        empty: JsonObject = {
             "durete_fh": None,
             "nitrates_mgl": None,
             "chlore_mgl": None,
@@ -797,7 +802,7 @@ class EauGrandLyonApi:
             return empty
 
     @staticmethod
-    def format_consumptions(raw_entries: list[dict]) -> list[dict]:
+    def format_consumptions(raw_entries: list[JsonObject]) -> list[JsonObject]:
         result = []
         for entry in raw_entries:
             try:
@@ -823,13 +828,13 @@ class EauGrandLyonApi:
         return result
 
     @staticmethod
-    def format_daily_consumptions(raw_entries: list[dict], contract_id: str = "inconnu") -> list[dict]:
+    def format_daily_consumptions(raw_entries: list[JsonObject], contract_id: str = "inconnu") -> list[JsonObject]:
         result = []
         nb_with_conso = 0
         for entry in raw_entries:
             try:
                 conso = EauGrandLyonApi._extract_conso(entry)
-                normalized: dict[str, Any] = {
+                normalized: JsonObject = {
                     "date": entry.get("date", ""),
                     "consommation_m3": conso if conso is not None else 0.0,
                 }
@@ -872,7 +877,7 @@ class EauGrandLyonApi:
         return result
 
     @staticmethod
-    def _extract_index(entry: dict) -> float | None:
+    def _extract_index(entry: JsonObject) -> float | None:
         for key in _INDEX_KEYS:
             if key in entry:
                 try:
@@ -892,7 +897,7 @@ class EauGrandLyonApi:
         return None
 
     @staticmethod
-    def _extract_conso(entry: dict) -> float | None:
+    def _extract_conso(entry: JsonObject) -> float | None:
         for key in ("consommation", "volume", "quantite", "valeur"):
             if key in entry:
                 try:
@@ -902,10 +907,10 @@ class EauGrandLyonApi:
         return None
 
     @staticmethod
-    def _parse_daily_response(data: Any) -> list[dict]:
-        entries: list[dict] = []
+    def _parse_daily_response(data: Any) -> list[JsonObject]:
+        entries: list[object] = []
         from_postes = False
-        unites: dict = {}
+        unites: JsonObject = {}
         if isinstance(data, dict):
             raw_unites = data.get("unites")
             unites = raw_unites if isinstance(raw_unites, dict) else {}
@@ -922,7 +927,7 @@ class EauGrandLyonApi:
         elif isinstance(data, list):
             entries = data
         if not from_postes:
-            return entries
+            return cast(list[JsonObject], entries)
 
         conso_unit = (unites.get("consommation") or "").upper()
         # The postes/annee/mois/jour format always uses 0-indexed months (0=January)
@@ -943,7 +948,7 @@ class EauGrandLyonApi:
         # sous l'étiquette m³ (ex. compteur à 20,990 m³ affiché "20990.000 m³").
         index_en_litres = _is_litre_unit(unites.get("index"))
 
-        normalized: list[dict] = []
+        normalized: list[JsonObject] = []
         for entry in entries:
             if not isinstance(entry, dict):
                 _LOGGER.debug("Entree journaliere ignoree (format inattendu) : %s", entry)
@@ -987,7 +992,7 @@ class EauGrandLyonApi:
         return normalized
 
     @staticmethod
-    def format_factures(raw_factures: list[dict]) -> list[dict]:
+    def format_factures(raw_factures: list[JsonObject]) -> list[JsonObject]:
         result = []
         for facture in raw_factures:
             try:
@@ -1014,7 +1019,7 @@ class EauGrandLyonApi:
         return result
 
     @staticmethod
-    def parse_contract_details(raw: dict) -> dict:
+    def parse_contract_details(raw: JsonObject) -> JsonObject:
         ref = raw.get("reference", "")
         statut = (raw.get("statutExtrait") or {}).get("libelle", "")
         date_effet_raw = raw.get("dateEffet") or ""
@@ -1067,7 +1072,7 @@ class EauGrandLyonApi:
         }
 
     @staticmethod
-    def parse_siamm_index(data: dict) -> float | None:
+    def parse_siamm_index(data: JsonObject) -> float | None:
         if not data or not isinstance(data, dict):
             return None
         for gp in data.get("grandeursPhysiques", []):

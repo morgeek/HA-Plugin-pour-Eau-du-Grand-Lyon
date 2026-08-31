@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -13,6 +12,9 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import EauGrandLyonCoordinator
+
+if TYPE_CHECKING:
+    from . import EauGrandLyonConfigEntry
 from .device import account_device_info
 
 PARALLEL_UPDATES = 0
@@ -20,7 +22,7 @@ PARALLEL_UPDATES = 0
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: EauGrandLyonConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Configure les switchs depuis une config entry."""
@@ -34,7 +36,7 @@ class EauGrandLyonVacationSwitch(CoordinatorEntity[EauGrandLyonCoordinator], Swi
     _attr_has_entity_name = True
     _attr_translation_key = "vacation_mode"
 
-    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: ConfigEntry) -> None:
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
         super().__init__(coordinator)
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_vacation_mode"

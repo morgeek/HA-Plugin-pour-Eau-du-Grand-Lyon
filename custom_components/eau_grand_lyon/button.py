@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from homeassistant.components.button import ButtonEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -13,6 +13,9 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import EauGrandLyonCoordinator
+
+if TYPE_CHECKING:
+    from . import EauGrandLyonConfigEntry
 from .device import account_device_info
 
 _LOGGER = logging.getLogger(__name__)
@@ -22,7 +25,7 @@ PARALLEL_UPDATES = 0
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: EauGrandLyonConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Crée les boutons de l'intégration."""
@@ -44,7 +47,7 @@ class EauGrandLyonRefreshButton(CoordinatorEntity[EauGrandLyonCoordinator], Butt
     def __init__(
         self,
         coordinator: EauGrandLyonCoordinator,
-        entry: ConfigEntry,
+        entry: EauGrandLyonConfigEntry,
     ) -> None:
         super().__init__(coordinator)
         self._entry = entry
@@ -69,7 +72,7 @@ class EauGrandLyonDownloadInvoiceButton(CoordinatorEntity[EauGrandLyonCoordinato
     def __init__(
         self,
         coordinator: EauGrandLyonCoordinator,
-        entry: ConfigEntry,
+        entry: EauGrandLyonConfigEntry,
     ) -> None:
         super().__init__(coordinator)
         self._entry = entry

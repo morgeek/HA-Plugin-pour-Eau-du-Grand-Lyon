@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
+if TYPE_CHECKING:
+    from . import EauGrandLyonConfigEntry
 
-async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
+
+async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> dict[str, Any]:
     """Retourne les diagnostics pour une config entry (redacté)."""
     from homeassistant.components.diagnostics import async_redact_data
 

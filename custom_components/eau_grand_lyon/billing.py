@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 import math
 import re
-from typing import Any
+from collections.abc import Mapping
+
+from .models import CostBreakdown
 
 # Grille générale TTC applicable au 01/01/2026.
 # Source : https://www.eaudugrandlyon.com/wp-content/uploads/2026/04/Tarif-general-2026.pdf
@@ -54,9 +56,16 @@ class BillingEstimate:
     effective_rate_eur_m3: float | None
     source: str
 
-    def as_dict(self) -> dict[str, Any]:
+    def as_dict(self) -> CostBreakdown:
         """Convert to a coordinator-safe plain mapping."""
-        return asdict(self)
+        return {
+            "variable_eur": self.variable_eur,
+            "fixed_eur": self.fixed_eur,
+            "total_eur": self.total_eur,
+            "volume_m3": self.volume_m3,
+            "effective_rate_eur_m3": self.effective_rate_eur_m3,
+            "source": self.source,
+        }
 
 
 def _safe_volume(volume_m3: float | int | None) -> float:
@@ -68,13 +77,17 @@ def _safe_volume(volume_m3: float | int | None) -> float:
     return value if math.isfinite(value) and value >= 0 else 0.0
 
 
-def effective_invoice_rate(invoice: dict[str, Any] | None) -> float | None:
+def effective_invoice_rate(invoice: Mapping[str, object] | None) -> float | None:
     """Return the all-in TTC rate observed on one real invoice."""
     if not invoice:
         return None
     try:
-        amount = float(invoice.get("montant_ttc") or 0.0)
-        volume = float(invoice.get("volume_m3") or 0.0)
+        raw_amount = invoice.get("montant_ttc")
+        raw_volume = invoice.get("volume_m3")
+        if not isinstance(raw_amount, (str, int, float)) or not isinstance(raw_volume, (str, int, float)):
+            return None
+        amount = float(raw_amount)
+        volume = float(raw_volume)
     except (TypeError, ValueError):
         return None
     if not math.isfinite(amount) or not math.isfinite(volume) or amount <= 0 or volume <= 0:

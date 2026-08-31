@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -13,6 +12,7 @@ from homeassistant.util import dt as dt_util
 
 from ..coordinator import EauGrandLyonCoordinator
 from ..device import account_device_info, contract_device_info
+from ..models import ContractData, WaterQualityData
 
 if TYPE_CHECKING:
     from .. import EauGrandLyonConfigEntry
@@ -42,7 +42,7 @@ class _EauGrandLyonBase(CoordinatorEntity[EauGrandLyonCoordinator], SensorEntity
         return f"{dt_util.now().year}-01-01"
 
     @property
-    def _contract(self) -> dict:
+    def _contract(self) -> ContractData:
         if not self.coordinator.data:
             return {}
         return self.coordinator.data.get("contracts", {}).get(self._contract_ref, {})
@@ -57,7 +57,7 @@ class _EauGrandLyonGlobalBase(CoordinatorEntity[EauGrandLyonCoordinator], Sensor
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: ConfigEntry) -> None:
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
         super().__init__(coordinator)
         self._entry = entry
 
@@ -95,11 +95,11 @@ class _EauGrandLyonWaterQualityBase(_EauGrandLyonGlobalBase):
         wq = (self.coordinator.data or {}).get("water_quality", {})
         return super().available and self._quality_value(wq) is not None
 
-    def _quality_value(self, wq: dict) -> Any:
+    def _quality_value(self, wq: WaterQualityData) -> float | None:
         raise NotImplementedError
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         wq = (self.coordinator.data or {}).get("water_quality", {})
         return {
             "commune": wq.get("commune"),
