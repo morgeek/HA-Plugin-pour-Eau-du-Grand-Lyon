@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import TYPE_CHECKING
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 
 from ..coordinator import EauGrandLyonCoordinator
 from .base import _EauGrandLyonGlobalBase
+
+if TYPE_CHECKING:
+    from .. import EauGrandLyonConfigEntry
 
 
 class EauGrandLyonAlertesSensor(_EauGrandLyonGlobalBase):
@@ -23,7 +25,7 @@ class EauGrandLyonAlertesSensor(_EauGrandLyonGlobalBase):
     _attr_translation_key = "alertes"
     _attr_native_unit_of_measurement = "alertes"
 
-    def __init__(self, coordinator, entry):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_alertes"
 
@@ -42,7 +44,7 @@ class EauGrandLyonLastUpdateSensor(_EauGrandLyonGlobalBase):
     _attr_entity_registry_enabled_default = False
     _attr_translation_key = "last_update"
 
-    def __init__(self, coordinator, entry):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_last_update"
 
@@ -53,7 +55,7 @@ class EauGrandLyonLastUpdateSensor(_EauGrandLyonGlobalBase):
         return self.coordinator.data.get("last_update_success_time")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         data = self.coordinator.data or {}
         return {
             "dernière_erreur": data.get("last_error"),
@@ -73,7 +75,7 @@ class EauGrandLyonHealthSensor(_EauGrandLyonGlobalBase):
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ["ok", "error", "offline", "unknown"]
 
-    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: ConfigEntry) -> None:
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_api_status"
 
@@ -89,9 +91,9 @@ class EauGrandLyonHealthSensor(_EauGrandLyonGlobalBase):
         return "unknown"
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         data = self.coordinator.data or {}
-        attrs: dict[str, Any] = {
+        attrs: dict[str, object] = {
             "last_update_success_time": data.get("last_update_success_time"),
             "last_error": data.get("last_error"),
             "last_error_type": data.get("last_error_type"),
@@ -135,7 +137,7 @@ class EauGrandLyonGlobalConsoSensor(_EauGrandLyonGlobalBase):
     _attr_translation_key = "global_conso"
     _attr_suggested_display_precision = 1
 
-    def __init__(self, coordinator, entry):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_global_conso"
 
@@ -153,7 +155,7 @@ class EauGrandLyonGlobalCostSensor(_EauGrandLyonGlobalBase):
     _attr_translation_key = "global_cost"
     _attr_suggested_display_precision = 2
 
-    def __init__(self, coordinator, entry):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_global_cost"
 
@@ -166,12 +168,13 @@ class EauGrandLyonGlobalPredictionCostSensor(_EauGrandLyonGlobalBase):
     """Somme des prédictions de coût pour tous les contrats."""
 
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.TOTAL
+    # Somme de prévisions ponctuelles, pas un compteur cumulatif.
+    _attr_state_class = None
     _attr_native_unit_of_measurement = "EUR"
     _attr_translation_key = "global_prediction"
     _attr_suggested_display_precision = 2
 
-    def __init__(self, coordinator, entry):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_global_prediction_cost"
 
@@ -187,7 +190,7 @@ class EauGrandLyonDroughtSensor(_EauGrandLyonGlobalBase):
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ["normal", "vigilance", "crise"]
 
-    def __init__(self, coordinator, entry):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_drought_69"
 
@@ -196,7 +199,7 @@ class EauGrandLyonDroughtSensor(_EauGrandLyonGlobalBase):
         return (self.coordinator.data or {}).get("drought_level", "normal")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         return {
             "source": "Heuristique saisonnière (juin à septembre = Vigilance)",
             "note": (
@@ -222,7 +225,7 @@ class EauGrandLyonNextOutageSensor(_EauGrandLyonGlobalBase):
     _attr_translation_key = "next_outage"
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, coordinator, entry):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_next_outage"
 
@@ -232,12 +235,13 @@ class EauGrandLyonNextOutageSensor(_EauGrandLyonGlobalBase):
         if not outage:
             return None
         try:
-            return date.fromisoformat(outage["date_debut"])
+            date_debut = outage.get("date_debut")
+            return date.fromisoformat(date_debut) if date_debut else None
         except (KeyError, ValueError, TypeError):
             return None
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         outage = (self.coordinator.data or {}).get("prochaine_coupure") or {}
         interruptions = (self.coordinator.data or {}).get("interruptions", [])
         return {

@@ -2,11 +2,37 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 
+from ..models import ContractData, CostBreakdown
 from .base import _EauGrandLyonBase
+
+if TYPE_CHECKING:
+    from .. import EauGrandLyonConfigEntry
+    from ..coordinator import EauGrandLyonCoordinator
+
+
+def _billing_attributes(contract: ContractData, period: str) -> dict[str, object]:
+    """Expose the origin and assumptions of an estimated cost."""
+    breakdown: CostBreakdown = (
+        contract.get("cost_breakdown_monthly") or {}
+        if period == "monthly"
+        else contract.get("cost_breakdown_annual") or {}
+    )
+    return {
+        "estimation": True,
+        "mode_tarifaire": contract.get("billing_mode"),
+        "source_tarif": contract.get("tariff_source"),
+        "volume_utilisé_m3": breakdown.get("volume_m3"),
+        "tarif_effectif_eur_m3": breakdown.get("effective_rate_eur_m3"),
+        "part_variable_eur": breakdown.get("variable_eur"),
+        "part_fixe_eur": breakdown.get("fixed_eur"),
+        "dernière_facture_ttc_eur": contract.get("latest_invoice_ttc"),
+        "volume_dernière_facture_m3": contract.get("latest_invoice_volume_m3"),
+        "tarif_effectif_dernière_facture_eur_m3": contract.get("latest_invoice_effective_rate_eur_m3"),
+    }
 
 
 class EauGrandLyonCoutMoisSensor(_EauGrandLyonBase):
@@ -18,7 +44,7 @@ class EauGrandLyonCoutMoisSensor(_EauGrandLyonBase):
     _attr_translation_key = "cout_mois"
     _attr_suggested_display_precision = 2
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_cout_mois"
 
@@ -27,13 +53,14 @@ class EauGrandLyonCoutMoisSensor(_EauGrandLyonBase):
         return self._contract.get("cout_mois_courant_eur")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
         return {
+            **_billing_attributes(c, "monthly"),
             "période": c.get("label_mois_courant", ""),
             "consommation_m3": c.get("consommation_mois_courant"),
             "tarif_appliqué_eur_m3": c.get("tarif_m3"),
-            "note": "Estimation basée sur le tarif configuré. Consultez votre facture.",
+            "note": "Estimation ; le montant facturé réel est exposé par le capteur Dernière facture.",
         }
 
 
@@ -46,7 +73,7 @@ class EauGrandLyonCoutAnnuelSensor(_EauGrandLyonBase):
     _attr_translation_key = "cout_annuel"
     _attr_suggested_display_precision = 2
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_cout_annuel"
 
@@ -55,7 +82,7 @@ class EauGrandLyonCoutAnnuelSensor(_EauGrandLyonBase):
         return self._contract.get("cout_annuel_eur")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
         consos = c.get("consommations", [])
         last_12 = consos[-12:] if len(consos) >= 12 else consos
@@ -69,10 +96,11 @@ class EauGrandLyonCoutAnnuelSensor(_EauGrandLyonBase):
             for e in last_12
         ]
         return {
+            **_billing_attributes(c, "annual"),
             "consommation_annuelle_m3": c.get("consommation_annuelle"),
             "tarif_appliqué_eur_m3": tarif,
             "monthly_chart_data": monthly_chart,
-            "note": "Estimation — modifiez le tarif dans les options de l'intégration.",
+            "note": "Estimation glissante sur 12 mois, distincte de la période de facturation réelle.",
         }
 
 
@@ -87,7 +115,7 @@ class EauGrandLyonCoutCumuleSensor(_EauGrandLyonBase):
     _attr_suggested_display_precision = 2
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_cout_cumule"
 
@@ -99,9 +127,12 @@ class EauGrandLyonCoutCumuleSensor(_EauGrandLyonBase):
         return round(conso_cumulee * tarif, 2) if tarif else None
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
         return {
+            "estimation": True,
+            "mode_tarifaire": c.get("billing_mode"),
+            "source_tarif": c.get("tariff_source"),
             "consommation_cumulee_m3": c.get("consommation_cumulee_annee"),
             "tarif_appliqué_eur_m3": c.get("tarif_m3"),
             "last_reset": self._current_year_str,
@@ -118,7 +149,7 @@ class EauGrandLyonEconomieSensor(_EauGrandLyonBase):
     _attr_suggested_display_precision = 2
     _attr_translation_key = "economie"
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_economie"
 
@@ -142,7 +173,7 @@ class EauGrandLyonEconomieSensor(_EauGrandLyonBase):
         return None
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
         has_annual = c.get("consommation_annuelle_n1") is not None
         return {
@@ -169,7 +200,7 @@ class EauGrandLyonSoldeSensor(_EauGrandLyonBase):
     _attr_translation_key = "solde"
     _attr_suggested_display_precision = 2
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_solde"
 
@@ -178,7 +209,7 @@ class EauGrandLyonSoldeSensor(_EauGrandLyonBase):
         return self._contract.get("solde_eur")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
         return {
             "mensualise": c.get("mensualise"),
@@ -188,7 +219,7 @@ class EauGrandLyonSoldeSensor(_EauGrandLyonBase):
 
 
 class EauGrandLyonCoutReelMoisSensor(_EauGrandLyonBase):
-    """Coût mensuel réel = part variable (conso × tarif) + part fixe (abonnement/12)."""
+    """Coût mensuel estimé avec part fixe."""
 
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.TOTAL
@@ -197,7 +228,7 @@ class EauGrandLyonCoutReelMoisSensor(_EauGrandLyonBase):
     _attr_suggested_display_precision = 2
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_cout_reel_mois"
 
@@ -206,20 +237,28 @@ class EauGrandLyonCoutReelMoisSensor(_EauGrandLyonBase):
         return self._contract.get("cout_reel_mois")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
+        breakdown: CostBreakdown = c.get("cost_breakdown_monthly") or {}
+        variable = breakdown.get("variable_eur", c.get("cout_mois_courant_eur"))
+        fixed = breakdown.get("fixed_eur")
+        if fixed is None and c.get("subscription_annual") is not None:
+            fixed = round(float(c["subscription_annual"]) / 12, 2)
         return {
-            "part_variable_eur": c.get("cout_mois_courant_eur"),
-            "part_fixe_eur": round(c.get("subscription_annual", 0) / 12, 2),
+            **_billing_attributes(c, "monthly"),
+            "part_variable_eur": variable,
+            "part_fixe_eur": fixed,
             "abonnement_annuel": c.get("subscription_annual"),
-            "inclut_abonnement": True,
+            "inclut_part_fixe": bool(fixed),
+            # Kept for dashboards and automations created before v3.5.0.
+            "inclut_abonnement": bool(fixed),
             "tarif_eur_m3": c.get("tarif_m3"),
-            "note": "Coût total = conso × tarif + abonnement mensuel proratisé",
+            "note": "Estimation mensuelle ; ce n'est pas le montant d'une facture fournisseur.",
         }
 
 
 class EauGrandLyonCoutReelAnnuelSensor(_EauGrandLyonBase):
-    """Coût annuel réel = part variable (conso 12 mois × tarif) + abonnement annuel."""
+    """Coût glissant estimé avec part fixe annuelle."""
 
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.TOTAL
@@ -228,7 +267,7 @@ class EauGrandLyonCoutReelAnnuelSensor(_EauGrandLyonBase):
     _attr_suggested_display_precision = 2
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_cout_reel_annuel"
 
@@ -237,14 +276,22 @@ class EauGrandLyonCoutReelAnnuelSensor(_EauGrandLyonBase):
         return self._contract.get("cout_reel_annuel")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
+        breakdown: CostBreakdown = c.get("cost_breakdown_annual") or {}
+        variable = breakdown.get("variable_eur", c.get("cout_annuel_eur"))
+        fixed = breakdown.get("fixed_eur", c.get("subscription_annual"))
         return {
-            "part_variable_eur": c.get("cout_annuel_eur"),
+            **_billing_attributes(c, "annual"),
+            "part_variable_eur": variable,
+            "part_fixe_eur": fixed,
             "abonnement_annuel": c.get("subscription_annual"),
-            "inclut_abonnement": True,
+            "inclut_part_fixe": bool(fixed),
+            # Kept for dashboards and automations created before v3.5.0.
+            "inclut_abonnement": bool(fixed),
             "consommation_m3": c.get("consommation_annuelle"),
             "tarif_eur_m3": c.get("tarif_m3"),
+            "note": "Estimation glissante sur 12 mois ; utilisez Dernière facture pour le réel TTC.",
         }
 
 
@@ -258,7 +305,7 @@ class EauGrandLyonEnergyWaterSensor(_EauGrandLyonBase):
     _attr_suggested_display_precision = 1
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_energy_water"
 
@@ -267,7 +314,7 @@ class EauGrandLyonEnergyWaterSensor(_EauGrandLyonBase):
         return self.coordinator.get_cumulative_index(self._contract_ref)
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
         return {
             "device_class": "water",
@@ -289,7 +336,7 @@ class EauGrandLyonEnergyCostSensor(_EauGrandLyonBase):
     _attr_suggested_display_precision = 2
     _attr_entity_registry_enabled_default = True
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_energy_cost"
 
@@ -304,9 +351,12 @@ class EauGrandLyonEnergyCostSensor(_EauGrandLyonBase):
         return None
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
         return {
+            "estimation": True,
+            "mode_tarifaire": c.get("billing_mode"),
+            "source_tarif": c.get("tariff_source"),
             "device_class": "monetary",
             "state_class": "total",
             "last_reset": c.get("date_reset_cout", self._current_year_str),

@@ -1,4 +1,5 @@
 """Tests for sensors/intelligence.py — eco_score, CO2, trend, coaching, limescale."""
+
 from unittest.mock import MagicMock
 
 from custom_components.eau_grand_lyon.sensors.intelligence import (
@@ -25,6 +26,7 @@ def _make_sensor(cls, contract_data):
 
 # ── EauGrandLyonTrendSensor ───────────────────────────────────────────────────
 
+
 class TestTrendSensor:
     def test_positive_trend(self):
         s = _make_sensor(EauGrandLyonTrendSensor, {"tendance_n1_pct": 12.5})
@@ -39,12 +41,15 @@ class TestTrendSensor:
         assert s.native_value is None
 
     def test_extra_attributes(self):
-        s = _make_sensor(EauGrandLyonTrendSensor, {
-            "tendance_n1_pct": 10.0,
-            "consommation_mois_courant": 8.0,
-            "consommation_n1": 7.2,
-            "label_n1": "avril 2025",
-        })
+        s = _make_sensor(
+            EauGrandLyonTrendSensor,
+            {
+                "tendance_n1_pct": 10.0,
+                "consommation_mois_courant": 8.0,
+                "consommation_n1": 7.2,
+                "label_n1": "avril 2025",
+            },
+        )
         attrs = s.extra_state_attributes
         assert attrs["conso_actuelle"] == 8.0
         assert attrs["conso_n1"] == 7.2
@@ -52,6 +57,7 @@ class TestTrendSensor:
 
 
 # ── EauGrandLyonEcoScoreSensor ────────────────────────────────────────────────
+
 
 class TestEcoScoreSensor:
     def test_grade_a(self):
@@ -67,15 +73,19 @@ class TestEcoScoreSensor:
         assert s.native_value == "unknown"
 
     def test_extra_attributes_m3_per_person(self):
-        s = _make_sensor(EauGrandLyonEcoScoreSensor, {
-            "eco_score_grade": "B",
-            "eco_score_m3_pers": 2.5,
-        })
+        s = _make_sensor(
+            EauGrandLyonEcoScoreSensor,
+            {
+                "eco_score_grade": "B",
+                "eco_score_m3_pers": 2.5,
+            },
+        )
         attrs = s.extra_state_attributes
         assert attrs["m3_par_personne"] == 2.5
 
 
 # ── EauGrandLyonCO2FootprintSensor ───────────────────────────────────────────
+
 
 class TestCO2FootprintSensor:
     def test_normal(self):
@@ -93,6 +103,7 @@ class TestCO2FootprintSensor:
 
 # ── EauGrandLyonLimescaleSensor ───────────────────────────────────────────────
 
+
 class TestLimescaleSensor:
     def test_normal(self):
         s = _make_sensor(EauGrandLyonLimescaleSensor, {"limescale_g": 85.5})
@@ -105,6 +116,7 @@ class TestLimescaleSensor:
 
 # ── EauGrandLyonCoachingSensor ────────────────────────────────────────────────
 
+
 class TestCoachingSensor:
     def test_grade_a_returns_excellent(self):
         s = _make_sensor(EauGrandLyonCoachingSensor, {"eco_score_grade": "A"})
@@ -115,18 +127,24 @@ class TestCoachingSensor:
         assert "Bonne" in s.native_value
 
     def test_high_trend_returns_warning(self):
-        s = _make_sensor(EauGrandLyonCoachingSensor, {
-            "eco_score_grade": "C",
-            "tendance_n1_pct": 25.0,
-        })
+        s = _make_sensor(
+            EauGrandLyonCoachingSensor,
+            {
+                "eco_score_grade": "C",
+                "tendance_n1_pct": 25.0,
+            },
+        )
         assert "bondi" in s.native_value
 
     def test_leak_pattern_returns_alert(self):
-        s = _make_sensor(EauGrandLyonCoachingSensor, {
-            "eco_score_grade": "C",
-            "tendance_n1_pct": 5.0,
-            "local_leak_pattern": True,
-        })
+        s = _make_sensor(
+            EauGrandLyonCoachingSensor,
+            {
+                "eco_score_grade": "C",
+                "tendance_n1_pct": 5.0,
+                "local_leak_pattern": True,
+            },
+        )
         assert "Alerte" in s.native_value
 
     def test_grade_fg_returns_high_consumption(self):
@@ -134,10 +152,13 @@ class TestCoachingSensor:
         assert "élevée" in s.native_value
 
     def test_default_returns_stable_message(self):
-        s = _make_sensor(EauGrandLyonCoachingSensor, {
-            "eco_score_grade": "C",
-            "tendance_n1_pct": 5.0,
-        })
+        s = _make_sensor(
+            EauGrandLyonCoachingSensor,
+            {
+                "eco_score_grade": "C",
+                "tendance_n1_pct": 5.0,
+            },
+        )
         assert isinstance(s.native_value, str)
         assert len(s.native_value) > 0
 
@@ -147,9 +168,12 @@ class TestCoachingSensor:
         `c.get("tendance_n1_pct", 0)` therefore returned None and `None > 20`
         raised TypeError on every state write for grades C-G without N-1 data.
         """
-        s = _make_sensor(EauGrandLyonCoachingSensor, {
-            "eco_score_grade": "C",
-            "tendance_n1_pct": None,
-        })
+        s = _make_sensor(
+            EauGrandLyonCoachingSensor,
+            {
+                "eco_score_grade": "C",
+                "tendance_n1_pct": None,
+            },
+        )
         assert isinstance(s.native_value, str)
         assert len(s.native_value) > 0

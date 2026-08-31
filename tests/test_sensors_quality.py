@@ -1,4 +1,5 @@
 """Tests for sensors/quality.py — water quality sensors."""
+
 from unittest.mock import MagicMock
 
 from custom_components.eau_grand_lyon.sensors.quality import (
@@ -22,10 +23,10 @@ def _make_quality_sensor(cls, water_quality_data):
 
 # ── EauGrandLyonWaterHardnessSensor ───────────────────────────────────────────
 
+
 class TestWaterHardnessSensor:
     def test_normal(self):
-        s = _make_quality_sensor(EauGrandLyonWaterHardnessSensor,
-                                 {"durete_fh": 28.5})
+        s = _make_quality_sensor(EauGrandLyonWaterHardnessSensor, {"durete_fh": 28.5})
         assert s.native_value == 28.5
 
     def test_missing_returns_none(self):
@@ -39,21 +40,21 @@ class TestWaterHardnessSensor:
 
     def test_enabled_by_default(self):
         from custom_components.eau_grand_lyon.sensors.base import _EauGrandLyonWaterQualityBase
+
         assert _EauGrandLyonWaterQualityBase._attr_entity_registry_enabled_default is True
 
     def test_extra_attributes_contains_turbidity(self):
-        s = _make_quality_sensor(EauGrandLyonWaterHardnessSensor,
-                                 {"durete_fh": 28.5, "turbidite_ntu": 0.3})
+        s = _make_quality_sensor(EauGrandLyonWaterHardnessSensor, {"durete_fh": 28.5, "turbidite_ntu": 0.3})
         attrs = s.extra_state_attributes
         assert attrs["turbidite_ntu"] == 0.3
 
 
 # ── EauGrandLyonNitratesSensor ────────────────────────────────────────────────
 
+
 class TestNitratesSensor:
     def test_normal(self):
-        s = _make_quality_sensor(EauGrandLyonNitratesSensor,
-                                 {"nitrates_mgl": 12.4})
+        s = _make_quality_sensor(EauGrandLyonNitratesSensor, {"nitrates_mgl": 12.4})
         assert s.native_value == 12.4
 
     def test_missing_returns_none(self):
@@ -88,10 +89,10 @@ class TestNitratesSensor:
 
 # ── EauGrandLyonChloreSensor ──────────────────────────────────────────────────
 
+
 class TestChloreSensor:
     def test_normal(self):
-        s = _make_quality_sensor(EauGrandLyonChloreSensor,
-                                 {"chlore_mgl": 0.15})
+        s = _make_quality_sensor(EauGrandLyonChloreSensor, {"chlore_mgl": 0.15})
         assert s.native_value == 0.15
 
     def test_zero(self):

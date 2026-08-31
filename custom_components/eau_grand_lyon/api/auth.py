@@ -11,6 +11,7 @@ import secrets
 import time
 import uuid
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import aiohttp
@@ -87,6 +88,14 @@ class WafBlockedError(Exception):
 
 class ApiError(Exception):
     """Erreur generique lors d'un appel API."""
+
+
+class HttpError(ApiError):
+    """Erreur HTTP avec statut exploitable par les fallbacks optionnels."""
+
+    def __init__(self, status: int, method: str, url: str, message: str = "") -> None:
+        self.status = status
+        super().__init__(f"HTTP {status} sur {method} {url}: {message}")
 
 
 class NetworkError(Exception):
@@ -289,7 +298,7 @@ class EauGrandLyonAuth:
                 if resp.status != 200:
                     body = await resp.text()
                     raise AuthenticationError(f"Echange de token echoue ({resp.status}): {body[:200]}")
-                result: dict = json.loads(await resp.text())
+                result: dict[str, Any] = json.loads(await resp.text())
             _log_http_event(
                 phase="auth_token",
                 correlation_id=correlation_id,

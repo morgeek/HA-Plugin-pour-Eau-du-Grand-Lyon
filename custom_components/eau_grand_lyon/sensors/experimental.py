@@ -2,29 +2,28 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 
 from .base import _EauGrandLyonBase, _EauGrandLyonHourlyBase
 
+if TYPE_CHECKING:
+    from .. import EauGrandLyonConfigEntry
+    from ..coordinator import EauGrandLyonCoordinator
+
 
 class EauGrandLyonDerniereFactureSensor(_EauGrandLyonBase):
-    """[EXPÉRIMENTAL] Montant TTC de la dernière facture.
-
-    Disponible uniquement si le mode expérimental est activé dans les options.
-    Source : GET /rest/produits/factures (bundle Angular 2026).
-    """
+    """Montant TTC réel de la dernière facture renvoyée par le fournisseur."""
 
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "EUR"
     _attr_translation_key = "derniere_facture"
     _attr_suggested_display_precision = 2
-    # Désactivé par défaut — l'utilisateur active manuellement après vérification
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_derniere_facture"
 
@@ -40,7 +39,7 @@ class EauGrandLyonDerniereFactureSensor(_EauGrandLyonBase):
         return facture.get("montant_ttc")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         facture = self._contract.get("derniere_facture") or {}
         factures = self._contract.get("factures", [])
         return {
@@ -52,6 +51,7 @@ class EauGrandLyonDerniereFactureSensor(_EauGrandLyonBase):
             "volume_m3": facture.get("volume_m3"),
             "statut_paiement": facture.get("statut_paiement", ""),
             "nb_factures_total": len(factures),
+            "estimation": False,
             "historique_factures": [
                 {
                     "référence": f.get("reference"),
@@ -61,7 +61,7 @@ class EauGrandLyonDerniereFactureSensor(_EauGrandLyonBase):
                 }
                 for f in factures[:12]  # 12 dernières factures max en attribut
             ],
-            "source": "expérimental — /rest/produits/factures",
+            "source": "API Eau du Grand Lyon — montant TTC facturé",
         }
 
 
@@ -84,7 +84,7 @@ class EauGrandLyonFuiteEstimeeSensor(_EauGrandLyonBase):
     _attr_suggested_display_precision = 3
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_fuite_estimee"
 
@@ -97,7 +97,7 @@ class EauGrandLyonFuiteEstimeeSensor(_EauGrandLyonBase):
         return self._contract.get("fuite_estime_30j_m3")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         daily = self._contract.get("consommations_journalieres", [])
         recent_30 = daily[-30:]
         all_fuite = [e for e in recent_30 if "volume_fuite_estime_m3" in e]
@@ -129,7 +129,7 @@ class EauGrandLyonHourlyConsoSensor(_EauGrandLyonHourlyBase):
     _attr_translation_key = "hourly_conso"
     _attr_suggested_display_precision = 4
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_hourly_conso"
 
@@ -143,7 +143,7 @@ class EauGrandLyonPeakHourSensor(_EauGrandLyonHourlyBase):
 
     _attr_translation_key = "peak_hour"
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_peak_hour"
 
@@ -152,7 +152,7 @@ class EauGrandLyonPeakHourSensor(_EauGrandLyonHourlyBase):
         return self._contract.get("heure_pic")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         return {"note": "Calculé sur les 7 derniers jours de courbe de charge"}
 
 
@@ -164,7 +164,7 @@ class EauGrandLyonAvgFlowSensor(_EauGrandLyonHourlyBase):
     _attr_translation_key = "avg_flow"
     _attr_suggested_display_precision = 4
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_avg_flow"
 

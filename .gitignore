@@ -53,6 +53,7 @@ env/
 .coverage
 .coverage.*
 coverage.xml
+coverage.json
 htmlcov/
 .mypy_cache/
 .ruff_cache/

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import EntityCategory
 
 from .base import _EauGrandLyonBase, _EauGrandLyonDailyBase
+
+if TYPE_CHECKING:
+    from .. import EauGrandLyonConfigEntry
+    from ..coordinator import EauGrandLyonCoordinator
 
 
 class EauGrandLyonIndexSensor(_EauGrandLyonBase):
@@ -19,7 +23,7 @@ class EauGrandLyonIndexSensor(_EauGrandLyonBase):
     _attr_translation_key = "water_index"
     _attr_suggested_display_precision = 1
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_index_cumulatif"
 
@@ -28,7 +32,7 @@ class EauGrandLyonIndexSensor(_EauGrandLyonBase):
         return self.coordinator.get_cumulative_index(self._contract_ref)
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         consos = self._contract.get("consommations", [])
         manquants = self._contract.get("mois_manquants", [])
         return {
@@ -56,7 +60,7 @@ class EauGrandLyonIndexJournalierSensor(_EauGrandLyonBase):
     _attr_translation_key = "index_journalier"
     _attr_suggested_display_precision = 3
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_index_journalier"
 
@@ -71,7 +75,7 @@ class EauGrandLyonIndexJournalierSensor(_EauGrandLyonBase):
         return self._contract.get("index_journalier_dernier")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
         return {
             "date_index": c.get("index_journalier_dernier_date"),
@@ -86,12 +90,18 @@ class EauGrandLyonIndexJournalierSensor(_EauGrandLyonBase):
 class EauGrandLyonConsommationSensor(_EauGrandLyonBase):
     """Consommation du mois courant ou précédent (m³)."""
 
-    _attr_device_class = SensorDeviceClass.WATER
+    _attr_device_class: SensorDeviceClass | None = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = "m³"
     _attr_suggested_display_precision = 1
 
-    def __init__(self, coordinator, entry, contract_ref, period: str):
+    def __init__(
+        self,
+        coordinator: EauGrandLyonCoordinator,
+        entry: EauGrandLyonConfigEntry,
+        contract_ref: str,
+        period: str,
+    ) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._period = period
         self._attr_translation_key = f"conso_{period}"
@@ -122,10 +132,10 @@ class EauGrandLyonConsommationSensor(_EauGrandLyonBase):
         return "mdi:water-percent"
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
         consos = c.get("consommations", [])
-        attrs: dict[str, Any] = {}
+        attrs: dict[str, object] = {}
 
         if self._period == "courant":
             attrs["période"] = c.get("label_mois_courant", "")
@@ -162,7 +172,7 @@ class EauGrandLyonConsommationAnnuelleSensor(_EauGrandLyonBase):
     _attr_translation_key = "conso_annuelle"
     _attr_suggested_display_precision = 1
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_conso_annuelle"
 
@@ -171,7 +181,7 @@ class EauGrandLyonConsommationAnnuelleSensor(_EauGrandLyonBase):
         return self._contract.get("consommation_annuelle")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         c = self._contract
         consos = c.get("consommations", [])
         last_12 = consos[-12:] if len(consos) >= 12 else consos
@@ -204,7 +214,7 @@ class EauGrandLyonYesterdaySensor(_EauGrandLyonDailyBase):
     _attr_suggested_display_precision = 0
     _attr_entity_registry_enabled_default = True
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_conso_hier"
 
@@ -219,7 +229,7 @@ class EauGrandLyonYesterdaySensor(_EauGrandLyonDailyBase):
         return round(last_val_m3 * 1000, 0)
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         daily = self._contract.get("consommations_journalieres", [])
         last_date = daily[-1].get("date") if daily else None
         return {
@@ -240,7 +250,7 @@ class EauGrandLyonConso7JSensor(_EauGrandLyonDailyBase):
     _attr_suggested_display_precision = 2
     _attr_entity_registry_enabled_default = True
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_conso_7j"
 
@@ -249,7 +259,7 @@ class EauGrandLyonConso7JSensor(_EauGrandLyonDailyBase):
         return self._contract.get("consommation_7j")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         daily = self._contract.get("consommations_journalieres", [])
         return {
             "source": self._contract.get("daily_source"),
@@ -270,7 +280,7 @@ class EauGrandLyonConso30JSensor(_EauGrandLyonDailyBase):
     _attr_suggested_display_precision = 2
     _attr_entity_registry_enabled_default = True
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_conso_30j"
 
@@ -279,7 +289,7 @@ class EauGrandLyonConso30JSensor(_EauGrandLyonDailyBase):
         return self._contract.get("consommation_30j")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         daily = self._contract.get("consommations_journalieres", [])
         return {
             "source": self._contract.get("daily_source"),
@@ -299,7 +309,7 @@ class EauGrandLyonConsoMoyenne7JSensor(_EauGrandLyonDailyBase):
     _attr_suggested_display_precision = 0
     _attr_entity_registry_enabled_default = True
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_conso_moyenne_7j"
 
@@ -308,7 +318,7 @@ class EauGrandLyonConsoMoyenne7JSensor(_EauGrandLyonDailyBase):
         return self._contract.get("conso_moyenne_7j_litres")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         return {
             "période": "7 derniers jours",
             "unité": "Litres par jour",
@@ -324,7 +334,7 @@ class EauGrandLyonCompatibilitySensor(_EauGrandLyonBase):
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ["teleo", "standard"]
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_compatibility"
 
@@ -333,7 +343,7 @@ class EauGrandLyonCompatibilitySensor(_EauGrandLyonBase):
         return "teleo" if self._contract.get("teleo_compatible") else "standard"
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, object]:
         return {
             "nb_entrées_journalières": self._contract.get("daily_nb_entries", 0),
             "signal_pct": self._contract.get("signal_pct"),
@@ -352,7 +362,7 @@ class EauGrandLyonConsoAnnuelleRefSensor(_EauGrandLyonBase):
     _attr_suggested_display_precision = 0
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, coordinator, entry, contract_ref):
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_conso_annuelle_ref"
 

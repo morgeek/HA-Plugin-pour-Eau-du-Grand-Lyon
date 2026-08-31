@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from custom_components.eau_grand_lyon.api import HttpError
 from custom_components.eau_grand_lyon.api.client import EauGrandLyonApi
 from custom_components.eau_grand_lyon.binary_sensor import (
     EauGrandLyonLeakSubscriptionSensor,
@@ -50,7 +51,7 @@ async def test_get_alerte_surconsommation_handles_missing_endpoints():
     api = _make_api()
 
     async def boom(sub_path, params=None, *, log_response_errors=True):
-        raise RuntimeError("404")
+        raise HttpError(404, "GET", "https://example.test/optional", "missing")
 
     api._get_produits = boom  # type: ignore[assignment]
     res = await api.get_alerte_surconsommation("CID")

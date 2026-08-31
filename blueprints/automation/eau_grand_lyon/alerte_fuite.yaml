@@ -2,19 +2,21 @@ blueprint:
   name: "💧 Eau Grand Lyon — Alerte Fuite"
   description: >
     Envoie une notification personnalisée dès qu'une alerte fuite est détectée
-    par l'intégration Eau du Grand Lyon (surconsommation, pattern constant ou
+    par l'intégration Eau du Grand Lyon (surconsommation, anomalie locale ou
     fuite Téléo estimée). Compatible Companion App, Telegram, Pushover et tout
     service de notification HA.
   domain: automation
-  source_url: https://github.com/Morgeek/eau_grand_lyon
+  source_url: https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/blob/main/blueprints/automation/eau_grand_lyon/alerte_fuite.yaml
+  homeassistant:
+    min_version: 2024.11.0
   input:
     sensor_fuite:
       name: Capteur d'alerte fuite
       description: >
         Choisissez le binary_sensor de fuite à surveiller.
-        - **Alerte fuite possible** : surconsommation mensuelle ×2
-        - **Détection fuite (Téléo)** : volume fuite estimé (mode expérimental)
-        - **Alerte fuite (Pattern local)** : consommation constante 24h+
+        - **Alerte surconsommation mensuelle (heuristique)** : compare deux mois
+        - **Alerte fuite fournisseur (estimation 30 j)** : donnée fournisseur
+        - **Alerte anomalie locale (heuristique)** : analyse horaire ou journalière
       selector:
         entity:
           integration: eau_grand_lyon
@@ -73,9 +75,6 @@ action:
           - action: URI
             title: "🌐 Espace client"
             uri: https://agence.eaudugrandlyon.com
-          - action: URI
-            title: "🏠 Dashboard HA"
-            uri: homeassistant://navigate/lovelace/eau
   - choose: []
     default: !input actions_supplementaires
 

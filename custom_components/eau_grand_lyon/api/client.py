@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, cast
 
 import aiohttp
 
@@ -15,6 +16,7 @@ from .auth import (
     ApiError,
     AuthenticationError,
     EauGrandLyonAuth,
+    HttpError,
     NetworkError,
     WafBlockedError,
     _log_http_event,
@@ -28,6 +30,8 @@ from .endpoints import (
     MONTHS_FR,
     PRODUITS_BASE,
 )
+
+type JsonObject = dict[str, Any]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -55,7 +59,7 @@ def _is_litre_rate_unit(value: Any) -> bool:
     return normalized in {"l/h", "litre/h", "litres/h", "liter/h", "liters/h"}
 
 
-def _infer_unit_from_magnitude(entries: list[dict]) -> str:
+def _infer_unit_from_magnitude(entries: list[object]) -> str:
     values: list[float] = []
     for entry in entries[:50]:
         if not isinstance(entry, dict):
@@ -126,7 +130,26 @@ class EauGrandLyonApi:
         except (json.JSONDecodeError, ValueError) as err:
             raise ApiError(f"Réponse non-JSON sur {method} {url}: {err}") from err
 
-    async def _request(self, method: str, url: str, *, log_response_errors: bool = True, **kwargs) -> Any:
+    @staticmethod
+    async def _read_response_body(
+        resp: aiohttp.ClientResponse, accepted_statuses: frozenset[int]
+    ) -> tuple[int, str, str]:
+        """Return response metadata and text without imposing a payload format."""
+        if resp.status not in accepted_statuses:
+            resp.raise_for_status()
+        content_type = str(getattr(resp, "content_type", "") or "")
+        return resp.status, content_type, await resp.text()
+
+    async def _request_body(
+        self,
+        method: str,
+        url: str,
+        *,
+        accepted_statuses: frozenset[int] = frozenset(),
+        log_response_errors: bool = True,
+        **kwargs: Any,
+    ) -> tuple[int, str, str]:
+        """Run an authenticated request and return its unparsed response body."""
         correlation_id = _new_correlation_id()
         await self._ensure_auth(correlation_id=correlation_id)
         headers = {"Authorization": f"Bearer {self._auth.access_token}"}
@@ -161,19 +184,19 @@ class EauGrandLyonApi:
                         )
                         if retry_resp.status == 403:
                             raise WafBlockedError(f"WAF 403 sur {method} {url} (apres re-auth).")
-                        retry_resp.raise_for_status()
-                        return self._parse_json(await retry_resp.text(), method, url)
+                        if retry_resp.status == 401:
+                            raise AuthenticationError(f"Identifiants refuses sur {method} {url}.")
+                        return await self._read_response_body(retry_resp, accepted_statuses)
                 if resp.status == 403:
                     raise WafBlockedError(f"WAF 403 sur {method} {url}.")
-                resp.raise_for_status()
-                return self._parse_json(await resp.text(), method, url)
+                return await self._read_response_body(resp, accepted_statuses)
         except (WafBlockedError, AuthenticationError, ApiError):
             raise
         except (TimeoutError, asyncio.TimeoutError) as err:
             # aiohttp.ClientTimeout lève asyncio.TimeoutError, qui n'est PAS un
             # aiohttp.ClientError — sans ce bloc il remonterait brut jusqu'au
             # except générique du coordinator et court-circuiterait retry + cache.
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "api_request_timeout cid=%s method=%s url=%s",
                 correlation_id,
                 method,
@@ -182,7 +205,7 @@ class EauGrandLyonApi:
             raise NetworkError(f"Timeout sur {method} {url}: {err}") from err
         except aiohttp.ClientResponseError as err:
             if log_response_errors:
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "api_request_failed cid=%s method=%s url=%s status=%s error=%s",
                     correlation_id,
                     method,
@@ -190,9 +213,9 @@ class EauGrandLyonApi:
                     err.status,
                     type(err).__name__,
                 )
-            raise ApiError(f"HTTP {err.status} sur {method} {url}: {err.message}") from err
+            raise HttpError(err.status, method, url, err.message) from err
         except aiohttp.ClientError as err:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "api_request_failed cid=%s method=%s url=%s error=%s",
                 correlation_id,
                 method,
@@ -201,22 +224,48 @@ class EauGrandLyonApi:
             )
             raise NetworkError(f"Erreur reseau sur {method} {url}: {err}") from err
 
-    async def _do_get(self, url: str, params: dict | None = None, *, log_response_errors: bool = True) -> Any:
+    async def _request(self, method: str, url: str, *, log_response_errors: bool = True, **kwargs: Any) -> Any:
+        """Run a request whose response is required to contain valid JSON."""
+        _status, _content_type, text = await self._request_body(
+            method,
+            url,
+            log_response_errors=log_response_errors,
+            **kwargs,
+        )
+        return self._parse_json(text, method, url)
+
+    async def _request_text(
+        self,
+        method: str,
+        url: str,
+        *,
+        accepted_statuses: frozenset[int] = frozenset(),
+        **kwargs: Any,
+    ) -> tuple[int, str, str]:
+        """Run a request whose optional payload may be JSON or plain text."""
+        return await self._request_body(
+            method,
+            url,
+            accepted_statuses=accepted_statuses,
+            **kwargs,
+        )
+
+    async def _do_get(self, url: str, params: JsonObject | None = None, *, log_response_errors: bool = True) -> Any:
         return await self._request("GET", url, params=params, log_response_errors=log_response_errors)
 
-    async def _do_post(self, url: str, body: dict | None = None) -> Any:
+    async def _do_post(self, url: str, body: JsonObject | None = None) -> Any:
         return await self._request("POST", url, json=body or {})
 
-    async def _get(self, path: str, params: dict | None = None) -> Any:
+    async def _get(self, path: str, params: JsonObject | None = None) -> Any:
         return await self._do_get(f"{BASE_URL}{path}", params)
 
-    async def _post(self, path: str, body: dict | None = None) -> Any:
+    async def _post(self, path: str, body: JsonObject | None = None) -> Any:
         return await self._do_post(f"{BASE_URL}{path}", body)
 
     async def _get_produits(
         self,
         sub_path: str,
-        params: dict | None = None,
+        params: JsonObject | None = None,
         *,
         log_response_errors: bool = True,
     ) -> Any:
@@ -226,10 +275,10 @@ class EauGrandLyonApi:
             log_response_errors=log_response_errors,
         )
 
-    async def _get_interfaces(self, sub_path: str, params: dict | None = None) -> Any:
+    async def _get_interfaces(self, sub_path: str, params: JsonObject | None = None) -> Any:
         return await self._do_get(f"{INTERFACES_AEL_BASE}/{sub_path.lstrip('/')}", params)
 
-    async def get_contracts(self) -> list[dict]:
+    async def get_contracts(self) -> list[JsonObject]:
         data = await self._post(
             f"/application/rest/interfaces/ael/contrats/rechercher"
             f"?expand={CONTRACTS_EXPAND}&select={CONTRACTS_SELECT}"
@@ -240,7 +289,7 @@ class EauGrandLyonApi:
         contracts = data.get("content", data) if isinstance(data, dict) else data
         return list(contracts) if contracts else []
 
-    async def get_monthly_consumptions(self, contract_id: str, nb_jours: int = 1095) -> list[dict]:
+    async def get_monthly_consumptions(self, contract_id: str, nb_jours: int = 1095) -> list[JsonObject]:
         """Fetch monthly consumptions with optional history parameter (36 months default).
 
         Args:
@@ -252,7 +301,7 @@ class EauGrandLyonApi:
             f"/application/rest/interfaces/ael/contrats/{contract_id}/consommationsMensuelles",
             params=params if params else None,
         )
-        entries: list[dict] = []
+        entries: list[JsonObject] = []
         if not isinstance(data, dict):
             _LOGGER.warning(
                 "Reponse inattendue pour consommationsMensuelles (type=%s, nb_jours=%d)",
@@ -271,7 +320,7 @@ class EauGrandLyonApi:
         )
         return entries
 
-    async def get_daily_consumptions(self, contract_id: str, nb_jours: int = 90) -> dict[str, Any]:
+    async def get_daily_consumptions(self, contract_id: str, nb_jours: int = 90) -> JsonObject:
         result = await self._fetch_daily_raw(contract_id, nb_jours)
         if not result["entries"] and nb_jours > 30:
             _LOGGER.debug(
@@ -282,7 +331,7 @@ class EauGrandLyonApi:
             result = await self._fetch_daily_raw(contract_id, 30)
         return result
 
-    async def get_alerte_surconsommation(self, contract_id: str) -> dict[str, Any]:
+    async def get_alerte_surconsommation(self, contract_id: str) -> JsonObject:
         """Recupere les seuils d'alerte surconsommation configures cote serveur.
 
         Trois endpoints (espace client, compteur communicant) :
@@ -297,7 +346,9 @@ class EauGrandLyonApi:
         async def _safe(sub_path: str, label: str) -> Any:
             try:
                 return await self._get_produits(f"contrats/{contract_id}/{sub_path}", log_response_errors=False)
-            except Exception as err:  # noqa: BLE001 - endpoint optionnel selon le contrat
+            except HttpError as err:
+                if err.status != 404:
+                    raise
                 _LOGGER.debug("Endpoint %s indisponible (contrat %s) : %s", label, contract_id, err)
                 return None
 
@@ -327,7 +378,7 @@ class EauGrandLyonApi:
             "abonne_alerte_fuite": abonne,
         }
 
-    async def _fetch_daily_raw(self, contract_id: str, nb_jours: int) -> dict[str, Any]:
+    async def _fetch_daily_raw(self, contract_id: str, nb_jours: int) -> JsonObject:
         entries = await self._get_daily_new(contract_id, nb_jours)
         source = "Produits (2026)" if entries else "Aucune"
         if not entries:
@@ -341,7 +392,7 @@ class EauGrandLyonApi:
             "last_date": last_date,
         }
 
-    async def _get_daily_new(self, contract_id: str, nb_jours: int) -> list[dict]:
+    async def _get_daily_new(self, contract_id: str, nb_jours: int) -> list[JsonObject]:
         try:
             date_fin = datetime.now(timezone.utc)
             date_debut = date_fin - timedelta(days=nb_jours)
@@ -359,28 +410,16 @@ class EauGrandLyonApi:
                     len(entries),
                 )
             return entries
-        except ApiError as err:
-            if "404" in str(err):
-                _LOGGER.debug(
-                    "Endpoint /rest/produits/.../consommationsJournalieres -> 404 (contrat %s)",
-                    contract_id,
-                )
-            else:
-                _LOGGER.debug(
-                    "Erreur endpoint journalier /rest/produits/ (contrat %s) : %s",
-                    contract_id,
-                    err,
-                )
-            return []
-        except Exception as err:
+        except HttpError as err:
+            if err.status != 404:
+                raise
             _LOGGER.debug(
-                "Erreur inattendue endpoint journalier /rest/produits/ (contrat %s) : %s",
+                "Endpoint /rest/produits/.../consommationsJournalieres -> 404 (contrat %s)",
                 contract_id,
-                err,
             )
             return []
 
-    async def _get_daily_legacy(self, contract_id: str, nb_jours: int) -> tuple[list[dict], str]:
+    async def _get_daily_legacy(self, contract_id: str, nb_jours: int) -> tuple[list[JsonObject], str]:
         endpoints = [
             (
                 f"/application/rest/interfaces/ael/contrats/{contract_id}"
@@ -406,43 +445,72 @@ class EauGrandLyonApi:
                         len(entries),
                     )
                     return entries, source_name
-            except ApiError as err:
+            except HttpError as err:
+                if err.status != 404:
+                    raise
                 _LOGGER.debug(
                     "Endpoint journalier %s non disponible pour %s : %s",
                     source_name,
                     contract_id,
                     err,
                 )
-            except Exception as err:
-                _LOGGER.debug("Error on %s (contract %s): %s", source_name, contract_id, err)
         return [], "Aucune"
 
-    async def get_alertes(self) -> list[dict]:
-        try:
-            data = await self._get(
-                "/application/rest/interfaces/ael/contrats/alertes" "?expand=infosAlarme,modeleAction,objetMaitre"
-            )
-            return data if isinstance(data, list) else []
-        except Exception as err:
-            _LOGGER.debug("Failed to fetch alerts: %s", err)
-            return []
+    async def get_alertes(self) -> list[JsonObject]:
+        data = await self._get(
+            "/application/rest/interfaces/ael/contrats/alertes" "?expand=infosAlarme,modeleAction,objetMaitre"
+        )
+        return data if isinstance(data, list) else []
 
     async def get_date_prochaine_facture(self, contract_id: str) -> str | None:
-        try:
-            data = await self._do_get(
-                f"{BASE_URL}/application/rest/produits/contrats/{contract_id}/dateProchaineFacture"
-            )
-            if isinstance(data, str):
-                return data[:10] if len(data) >= 10 else None
-            if isinstance(data, dict):
-                raw = data.get("date") or data.get("value") or data.get("dateProchaineFacture")
-                return str(raw)[:10] if raw else None
-            return None
-        except Exception as err:
-            _LOGGER.debug("get_date_prochaine_facture failed (contract %s): %s", contract_id, err)
+        """Return the optional next invoice date from JSON or plain text."""
+        url = f"{BASE_URL}/application/rest/produits/contrats/{contract_id}/dateProchaineFacture"
+        status, content_type, text = await self._request_text(
+            "GET",
+            url,
+            accepted_statuses=frozenset({204, 404}),
+        )
+        if status in (204, 404) or not text.strip():
             return None
 
-    async def get_point_de_service_etendu(self, contract_id: str) -> dict:
+        stripped = text.strip()
+        payload: Any = stripped
+        try:
+            payload = json.loads(stripped)
+        except (json.JSONDecodeError, ValueError):
+            # Plain ISO text is a documented provider variant for this endpoint.
+            pass
+
+        if isinstance(payload, dict):
+            raw = (
+                payload.get("dateProchaineFacture")
+                or payload.get("date")
+                or payload.get("value")
+                or payload.get("valeur")
+            )
+        elif isinstance(payload, str):
+            raw = payload
+        else:
+            raw = None
+
+        candidate = str(raw or "").strip()
+        match = re.fullmatch(r"(\d{4}-\d{2}-\d{2})(?:[Tt ].*)?", candidate)
+        if match:
+            try:
+                datetime.strptime(match.group(1), "%Y-%m-%d")
+                return match.group(1)
+            except ValueError:
+                pass
+
+        _LOGGER.debug(
+            "Optional next invoice date is unusable for contract %s (status=%s, content_type=%s)",
+            contract_id,
+            status,
+            content_type or "unknown",
+        )
+        return None
+
+    async def get_point_de_service_etendu(self, contract_id: str) -> JsonObject:
         select = (
             "communicabiliteAMM,modeReleve,activite,"
             "dateProchaineReleveReelle,reference,referenceExterne,"
@@ -476,11 +544,13 @@ class EauGrandLyonApi:
                 "conso_annuelle_ref_m3": conso_ref,
                 "reference_pds": data.get("reference"),
             }
-        except Exception as err:
+        except HttpError as err:
+            if err.status != 404:
+                raise
             _LOGGER.debug("Erreur get_point_de_service_etendu (contrat %s) : %s", contract_id, err)
             return {}
 
-    async def get_interventions(self) -> list[dict]:
+    async def get_interventions(self) -> list[JsonObject]:
         select = (
             "reference,modePlanification,sousType,modeRealisation,"
             "presenceDuClientNecessaire,statut,dateDebutPrevue,dateFinPrevue,"
@@ -535,29 +605,28 @@ class EauGrandLyonApi:
                     continue
             _LOGGER.debug("Interventions planifiees : %d trouvees", len(result))
             return result
-        except Exception as err:
+        except HttpError as err:
+            if err.status != 404:
+                raise
             _LOGGER.debug("get_interventions failed: %s", err)
             return []
 
-    async def get_factures(self) -> list[dict]:
+    async def get_factures(self) -> list[JsonObject]:
         try:
             data = await self._get_produits("factures")
             if isinstance(data, list):
                 return data
             if isinstance(data, dict):
-                return data.get("content", [])
+                content = data.get("content", [])
+                return content if isinstance(content, list) else []
             return []
-        except ApiError as err:
-            if "404" in str(err):
-                _LOGGER.debug("[EXPERIMENTAL] /rest/produits/factures -> 404")
-            else:
-                _LOGGER.debug("[EXPERIMENTAL] get_factures failed: %s", err)
-            return []
-        except Exception as err:
-            _LOGGER.debug("[EXPERIMENTAL] Unexpected error in get_factures: %s", err)
+        except HttpError as err:
+            if err.status != 404:
+                raise
+            _LOGGER.debug("[EXPERIMENTAL] /rest/produits/factures -> 404")
             return []
 
-    async def get_courbe_de_charge(self, contract_id: str, nb_jours: int = 30) -> list[dict]:
+    async def get_courbe_de_charge(self, contract_id: str, nb_jours: int = 30) -> list[JsonObject]:
         try:
             date_fin = datetime.now(timezone.utc)
             date_debut = date_fin - timedelta(days=nb_jours)
@@ -575,29 +644,16 @@ class EauGrandLyonApi:
                     len(entries),
                 )
             return entries
-        except ApiError as err:
-            if "404" in str(err):
-                _LOGGER.debug(
-                    "[EXPERIMENTAL] Courbe de charge non dispo contrat %s "
-                    "(compteur non communicant ou endpoint absent)",
-                    contract_id,
-                )
-            else:
-                _LOGGER.debug(
-                    "[EXPERIMENTAL] Erreur get_courbe_de_charge (contrat %s) : %s",
-                    contract_id,
-                    err,
-                )
-            return []
-        except Exception as err:
+        except HttpError as err:
+            if err.status != 404:
+                raise
             _LOGGER.debug(
-                "[EXPERIMENTAL] Erreur inattendue get_courbe_de_charge (contrat %s) : %s",
+                "[EXPERIMENTAL] Courbe de charge non dispo contrat %s " "(compteur non communicant ou endpoint absent)",
                 contract_id,
-                err,
             )
             return []
 
-    async def get_derniere_releve_siamm(self, contract_id: str) -> dict | None:
+    async def get_derniere_releve_siamm(self, contract_id: str) -> JsonObject | None:
         try:
             data = await self._get_produits(
                 f"contrats/{contract_id}/derniereReleveSIAMM",
@@ -605,35 +661,31 @@ class EauGrandLyonApi:
                 log_response_errors=False,
             )
             return data if isinstance(data, dict) else None
-        except ApiError as err:
-            if "404" in str(err) or "500" in str(err):
+        except HttpError as err:
+            if err.status in (404, 500):
                 _LOGGER.debug(
                     "[EXPERIMENTAL] Derniere releve SIAMM non dispo (contrat %s)",
                     contract_id,
                 )
-            else:
-                _LOGGER.debug(
-                    "[EXPERIMENTAL] Erreur get_derniere_releve_siamm (contrat %s) : %s",
-                    contract_id,
-                    err,
-                )
-            return None
-        except Exception as err:
-            _LOGGER.debug(
-                "[EXPERIMENTAL] Erreur inattendue get_derniere_releve_siamm " "(contrat %s) : %s",
-                contract_id,
-                err,
-            )
-            return None
+                return None
+            raise
 
-    async def get_invoice_pdf(self, invoice_ref: str) -> bytes:
+    async def get_invoice_pdf(self, invoice_id: str) -> bytes:
+        """Télécharge le duplicata PDF d'une facture à partir de son identifiant API.
+
+        Le portail officiel utilise ``/factures/{id}/duplicata``. La référence
+        lisible de la facture n'est pas acceptée par cette route.
+        """
         correlation_id = _new_correlation_id()
         await self._ensure_auth(correlation_id=correlation_id)
-        url = f"{PRODUITS_BASE}/factures/{invoice_ref}/document"
+        url = f"{PRODUITS_BASE}/factures/{invoice_id}/duplicata"
         start = time.perf_counter()
 
         async def _download() -> tuple[int, bytes]:
-            headers = {"Authorization": f"Bearer {self._auth.access_token}"}
+            headers = {
+                "Authorization": f"Bearer {self._auth.access_token}",
+                "Accept": "application/pdf,application/octet-stream",
+            }
             async with self._session.get(url, headers=headers) as resp:
                 status = resp.status
                 body = await resp.read() if status == 200 else b""
@@ -643,7 +695,7 @@ class EauGrandLyonApi:
             status, body = await _download()
             if status == 401:
                 # Token expiré : ré-authentifier puis réessayer (comme _request).
-                _LOGGER.debug("invoice_pdf_reauth cid=%s ref=%s", correlation_id, invoice_ref)
+                _LOGGER.debug("invoice_pdf_reauth cid=%s id=%s", correlation_id, invoice_id)
                 await self._auth.authenticate(correlation_id=correlation_id)
                 status, body = await _download()
             _log_http_event(
@@ -655,9 +707,11 @@ class EauGrandLyonApi:
                 status=status,
             )
             if status == 403:
-                raise WafBlockedError(f"WAF 403 sur telechargement PDF {invoice_ref}.")
+                raise WafBlockedError(f"WAF 403 sur telechargement PDF {invoice_id}.")
             if status != 200:
                 raise NetworkError(f"Erreur telechargement PDF ({status})")
+            if not body.startswith(b"%PDF-"):
+                raise NetworkError("La réponse du portail n'est pas un document PDF valide")
             return body
         except (WafBlockedError, AuthenticationError):
             raise
@@ -674,7 +728,7 @@ class EauGrandLyonApi:
             )
             raise NetworkError(f"Erreur reseau lors du telechargement PDF: {err}") from err
 
-    async def get_water_quality(self, commune: str | None = None) -> dict:
+    async def get_water_quality(self, commune: str | None = None) -> JsonObject:
         """Qualité de l'eau depuis l'Open Data Métropole de Lyon.
 
         Sans `commune`, retourne la première mesure du jeu de données (commune
@@ -686,7 +740,7 @@ class EauGrandLyonApi:
             f"/eau_eau.eauqualite/json/?maxfeatures={maxfeatures}&start=1"
             "&fields=commune,durete,nitrates,chloreresiduel,turbidite,dateanalyse"
         )
-        empty: dict = {
+        empty: JsonObject = {
             "durete_fh": None,
             "nitrates_mgl": None,
             "chlore_mgl": None,
@@ -725,7 +779,7 @@ class EauGrandLyonApi:
                         commune,
                     )
 
-            def _safe_float(val: object) -> float | None:
+            def _safe_float(val: Any) -> float | None:
                 try:
                     return float(val) if val is not None else None
                 except (ValueError, TypeError):
@@ -740,15 +794,15 @@ class EauGrandLyonApi:
                 "date_analyse": (row.get("dateanalyse") or "")[:10] or None,
                 "source": "Open Data Metropole de Lyon",
             }
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError, asyncio.TimeoutError) as err:
             _LOGGER.debug("[OPEN DATA] Network error fetching water quality: %s", err)
             return empty
-        except Exception as err:
-            _LOGGER.debug("[OPEN DATA] Unexpected error fetching water quality: %s", err)
+        except (json.JSONDecodeError, ValueError, TypeError, KeyError) as err:
+            _LOGGER.debug("[OPEN DATA] Invalid water quality response: %s", err)
             return empty
 
     @staticmethod
-    def format_consumptions(raw_entries: list[dict]) -> list[dict]:
+    def format_consumptions(raw_entries: list[JsonObject]) -> list[JsonObject]:
         result = []
         for entry in raw_entries:
             try:
@@ -774,13 +828,13 @@ class EauGrandLyonApi:
         return result
 
     @staticmethod
-    def format_daily_consumptions(raw_entries: list[dict], contract_id: str = "inconnu") -> list[dict]:
+    def format_daily_consumptions(raw_entries: list[JsonObject], contract_id: str = "inconnu") -> list[JsonObject]:
         result = []
         nb_with_conso = 0
         for entry in raw_entries:
             try:
                 conso = EauGrandLyonApi._extract_conso(entry)
-                normalized: dict[str, Any] = {
+                normalized: JsonObject = {
                     "date": entry.get("date", ""),
                     "consommation_m3": conso if conso is not None else 0.0,
                 }
@@ -823,7 +877,7 @@ class EauGrandLyonApi:
         return result
 
     @staticmethod
-    def _extract_index(entry: dict) -> float | None:
+    def _extract_index(entry: JsonObject) -> float | None:
         for key in _INDEX_KEYS:
             if key in entry:
                 try:
@@ -843,7 +897,7 @@ class EauGrandLyonApi:
         return None
 
     @staticmethod
-    def _extract_conso(entry: dict) -> float | None:
+    def _extract_conso(entry: JsonObject) -> float | None:
         for key in ("consommation", "volume", "quantite", "valeur"):
             if key in entry:
                 try:
@@ -853,10 +907,10 @@ class EauGrandLyonApi:
         return None
 
     @staticmethod
-    def _parse_daily_response(data: Any) -> list[dict]:
-        entries: list[dict] = []
+    def _parse_daily_response(data: Any) -> list[JsonObject]:
+        entries: list[object] = []
         from_postes = False
-        unites: dict = {}
+        unites: JsonObject = {}
         if isinstance(data, dict):
             raw_unites = data.get("unites")
             unites = raw_unites if isinstance(raw_unites, dict) else {}
@@ -873,7 +927,7 @@ class EauGrandLyonApi:
         elif isinstance(data, list):
             entries = data
         if not from_postes:
-            return entries
+            return cast(list[JsonObject], entries)
 
         conso_unit = (unites.get("consommation") or "").upper()
         # The postes/annee/mois/jour format always uses 0-indexed months (0=January)
@@ -894,7 +948,7 @@ class EauGrandLyonApi:
         # sous l'étiquette m³ (ex. compteur à 20,990 m³ affiché "20990.000 m³").
         index_en_litres = _is_litre_unit(unites.get("index"))
 
-        normalized: list[dict] = []
+        normalized: list[JsonObject] = []
         for entry in entries:
             if not isinstance(entry, dict):
                 _LOGGER.debug("Entree journaliere ignoree (format inattendu) : %s", entry)
@@ -938,7 +992,7 @@ class EauGrandLyonApi:
         return normalized
 
     @staticmethod
-    def format_factures(raw_factures: list[dict]) -> list[dict]:
+    def format_factures(raw_factures: list[JsonObject]) -> list[JsonObject]:
         result = []
         for facture in raw_factures:
             try:
@@ -947,6 +1001,7 @@ class EauGrandLyonApi:
                 date_ex = (facture.get("dateExigibilite") or "")[:10] or None
                 result.append(
                     {
+                        "id": facture.get("id", ""),
                         "reference": facture.get("reference", ""),
                         "date_edition": date_ed,
                         "date_exigibilite": date_ex,
@@ -955,15 +1010,16 @@ class EauGrandLyonApi:
                         "volume_m3": float(facture.get("volume", 0) or 0),
                         "statut_paiement": statut_raw.get("libelle", ""),
                         "contrat_id": (facture.get("contrat") or {}).get("id", ""),
+                        "telechargeable": facture.get("telechargeable") is not False,
                     }
                 )
-            except (KeyError, ValueError, TypeError):
+            except (AttributeError, KeyError, ValueError, TypeError):
                 _LOGGER.debug("Skipping invoice (unexpected format): %s", facture)
         result.sort(key=lambda item: item.get("date_edition") or "", reverse=True)
         return result
 
     @staticmethod
-    def parse_contract_details(raw: dict) -> dict:
+    def parse_contract_details(raw: JsonObject) -> JsonObject:
         ref = raw.get("reference", "")
         statut = (raw.get("statutExtrait") or {}).get("libelle", "")
         date_effet_raw = raw.get("dateEffet") or ""
@@ -1016,7 +1072,7 @@ class EauGrandLyonApi:
         }
 
     @staticmethod
-    def parse_siamm_index(data: dict) -> float | None:
+    def parse_siamm_index(data: JsonObject) -> float | None:
         if not data or not isinstance(data, dict):
             return None
         for gp in data.get("grandeursPhysiques", []):

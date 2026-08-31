@@ -1,4 +1,5 @@
 """Tests for pure coordinator helper functions."""
+
 import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -54,7 +55,7 @@ class TestFindMissingMonths:
     def test_year_boundary_gap(self):
         consos = [
             {"annee": 2023, "mois_index": 11, "label": "Dec", "consommation_m3": 10},
-            {"annee": 2024, "mois_index":  1, "label": "Feb", "consommation_m3": 12},
+            {"annee": 2024, "mois_index": 1, "label": "Feb", "consommation_m3": 12},
         ]
         missing = _find_missing_months(consos)
         assert len(missing) == 1
@@ -114,16 +115,20 @@ class TestParseOutageAlertes:
         assert result[1]["reference"] == "b"
 
     def test_malformed_entry_skipped(self):
-        alerts = [{"bad": "data"}, {
-            "id": "ok",
-            "infosAlarme": {"type": {"libelle": "COUPURE"}, "dateDebut": "2024-01-01"},
-            "modeleAction": {"libelle": ""},
-        }]
+        alerts = [
+            {"bad": "data"},
+            {
+                "id": "ok",
+                "infosAlarme": {"type": {"libelle": "COUPURE"}, "dateDebut": "2024-01-01"},
+                "modeleAction": {"libelle": ""},
+            },
+        ]
         result = _parse_outage_alertes(alerts)
         assert len(result) == 1
 
 
 # ── format_consumptions (bug base-0 mois) ─────────────────────────────────────
+
 
 class TestFormatConsumptions:
     """Couvre le bug de décalage des labels mensuels (API Téléo base-0)."""
@@ -170,6 +175,7 @@ class TestFormatConsumptions:
 
 
 # ── _detect_local_leak (algorithme statistique) ───────────────────────────────
+
 
 class TestDetectLocalLeak:
     """Couvre le fix du faux positif permanent sur le capteur fuite locale."""

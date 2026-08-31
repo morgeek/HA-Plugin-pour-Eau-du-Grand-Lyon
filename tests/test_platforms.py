@@ -1,5 +1,7 @@
 """Tests for button, switch, and calendar platforms."""
+
 from datetime import date, timedelta
+from types import SimpleNamespace
 from unittest.mock import MagicMock, AsyncMock
 
 from custom_components.eau_grand_lyon import sensor as sensor_platform
@@ -7,8 +9,13 @@ from custom_components.eau_grand_lyon.button import (
     EauGrandLyonRefreshButton,
     EauGrandLyonDownloadInvoiceButton,
 )
+from custom_components.eau_grand_lyon import button as button_platform
+from custom_components.eau_grand_lyon import switch as switch_platform
 from custom_components.eau_grand_lyon.switch import EauGrandLyonVacationSwitch
+from custom_components.eau_grand_lyon import calendar as calendar_platform
 from custom_components.eau_grand_lyon.calendar import EauGrandLyonCalendar
+from custom_components.eau_grand_lyon.device import account_device_info, contract_device_info
+from custom_components.eau_grand_lyon import device as device_module
 
 
 def _make_button(cls, coordinator_data=None, entry=None):
@@ -89,7 +96,23 @@ def _make_calendar(coordinator_data=None, entry=None, hass=None):
 
 # ── EauGrandLyonRefreshButton ───────────────────────────────────────────────
 
+
 class TestRefreshButton:
+    async def test_setup_builds_both_buttons_with_device_info(self):
+        entry = MagicMock()
+        entry.entry_id = "entry-1"
+        entry.runtime_data = MagicMock(data={"contracts": {}})
+        added = MagicMock()
+
+        await button_platform.async_setup_entry(MagicMock(), entry, added)
+
+        entities = added.call_args.args[0]
+        assert [entity._attr_unique_id for entity in entities] == [
+            "entry-1_refresh",
+            "entry-1_download_invoice",
+        ]
+        assert all(entity.device_info is not None for entity in entities)
+
     def test_unique_id_generation(self):
         b = _make_button(EauGrandLyonRefreshButton)
         assert b._attr_unique_id == "test_entry_refresh"
@@ -101,6 +124,7 @@ class TestRefreshButton:
 
 
 # ── EauGrandLyonDownloadInvoiceButton ────────────────────────────────────────
+
 
 class TestDownloadInvoiceButton:
     def test_unique_id_generation(self):
@@ -115,10 +139,55 @@ class TestDownloadInvoiceButton:
         await b.async_press()
         hass.services.async_call.assert_called_once()
 
+    def test_unavailable_without_downloadable_invoice(self):
+        b = _make_button(EauGrandLyonDownloadInvoiceButton)
+        assert b.available is False
+
+    def test_available_with_downloadable_invoice(self):
+        b = _make_button(
+            EauGrandLyonDownloadInvoiceButton,
+            {"contracts": {"REF1": {"factures": [{"id": "API-ID-1"}]}}},
+        )
+        assert b.available is True
+
 
 # ── EauGrandLyonVacationSwitch ──────────────────────────────────────────────
 
+
 class TestVacationSwitch:
+    async def test_setup_builds_switch_and_restores_on_state(self, monkeypatch):
+        entry = MagicMock()
+        entry.entry_id = "entry-1"
+        entry.runtime_data = MagicMock()
+        added = MagicMock()
+
+        await switch_platform.async_setup_entry(MagicMock(), entry, added)
+
+        switch = added.call_args.args[0][0]
+        switch.async_get_last_state = AsyncMock(return_value=SimpleNamespace(state="on"))
+        monkeypatch.setattr(
+            "custom_components.eau_grand_lyon.switch.CoordinatorEntity.async_added_to_hass",
+            AsyncMock(),
+            raising=False,
+        )
+        await switch.async_added_to_hass()
+        assert switch._attr_is_on is True
+        assert switch.coordinator.vacation_mode is True
+        assert switch.device_info is not None
+
+    async def test_restore_without_previous_state_keeps_default(self, monkeypatch):
+        entry = MagicMock()
+        entry.entry_id = "entry-1"
+        switch = EauGrandLyonVacationSwitch(MagicMock(), entry)
+        switch.async_get_last_state = AsyncMock(return_value=None)
+        monkeypatch.setattr(
+            "custom_components.eau_grand_lyon.switch.CoordinatorEntity.async_added_to_hass",
+            AsyncMock(),
+            raising=False,
+        )
+        await switch.async_added_to_hass()
+        assert switch._attr_is_on is False
+
     def test_unique_id_generation(self):
         s = _make_switch()
         assert s._attr_unique_id == "test_entry_vacation_mode"
@@ -148,7 +217,20 @@ class TestVacationSwitch:
 
 # ── EauGrandLyonCalendar ───────────────────────────────────────────────────
 
+
 class TestCalendar:
+    async def test_setup_adds_single_account_calendar(self):
+        entry = MagicMock()
+        entry.entry_id = "entry-1"
+        entry.runtime_data = MagicMock()
+        added = MagicMock()
+
+        await calendar_platform.async_setup_entry(MagicMock(), entry, added)
+
+        entities = added.call_args.args[0]
+        assert len(entities) == 1
+        assert entities[0]._attr_unique_id == "entry-1_calendar"
+
     def test_unique_id_generation(self):
         c = _make_calendar()
         assert c._attr_unique_id == "test_entry_calendar"
@@ -208,6 +290,91 @@ class TestCalendar:
         assert c.event is not None
         assert "Maintenance" in c.event.summary
 
+    def test_builds_contract_dates_and_planned_intervention(self):
+        coordinator_data = {
+            "contracts": {
+                "REF1": {
+                    "next_payment_date": "2026-09-01",
+                    "next_bill_date": "2026-09-02",
+                    "date_prochaine_releve": "2026-09-03",
+                    "pds_mode_releve": "AMM automatique",
+                }
+            },
+            "interventions_planifiees": [
+                {
+                    "reference": "I1",
+                    "date_debut": "2026-09-04",
+                    "date_fin": "2026-09-04",
+                    "type": "Remplacement compteur",
+                    "contrat_ref": "REF1",
+                    "presence_requise": True,
+                }
+            ],
+            "interruptions": [],
+        }
+        events = _make_calendar(coordinator_data=coordinator_data)._build_events()
+        summaries = {event.summary for event in events}
+        assert summaries == {
+            "Paiement Eau (REF1)",
+            "Prochaine facture (REF1)",
+            "Relevé AMM automatique (REF1)",
+            "Remplacement compteur (présence requise) (REF1)",
+        }
+
+    def test_invalid_dates_are_ignored_without_losing_valid_events(self):
+        coordinator_data = {
+            "contracts": {
+                "REF1": {
+                    "next_payment_date": "invalid",
+                    "next_bill_date": None,
+                    "date_prochaine_releve": 123,
+                }
+            },
+            "interventions_planifiees": [{"date_debut": "invalid"}, {}],
+            "interruptions": [{"date_debut": "invalid"}, {}],
+        }
+        assert _make_calendar(coordinator_data=coordinator_data)._build_events() == []
+
+
+class TestDeviceInfo:
+    def test_contract_device_metadata_and_stable_identifier(self, monkeypatch):
+        monkeypatch.setattr(device_module, "DeviceInfo", lambda **kwargs: SimpleNamespace(**kwargs))
+        coordinator = MagicMock()
+        coordinator.data = {
+            "contracts": {
+                "REF1": {
+                    "calibre_compteur": "15",
+                    "usage": "Domestique",
+                    "reference_pds": "PDS-1",
+                },
+                "REF2": {},
+            }
+        }
+        entry = MagicMock(entry_id="entry-1")
+
+        info = contract_device_info(coordinator, entry, "REF1")
+
+        assert info.identifiers == {("eau_grand_lyon", "entry-1_REF1")}
+        assert info.name == "Eau du Grand Lyon REF1"
+        assert info.model == "DN15, Domestique"
+        assert info.serial_number == "PDS-1"
+
+    def test_account_device_reuses_first_contract_identifier(self, monkeypatch):
+        monkeypatch.setattr(device_module, "DeviceInfo", lambda **kwargs: SimpleNamespace(**kwargs))
+        coordinator = MagicMock()
+        coordinator.data = {"contracts": {"REF1": {}}}
+        entry = MagicMock(entry_id="entry-1")
+        assert account_device_info(coordinator, entry).identifiers == {("eau_grand_lyon", "entry-1_REF1")}
+
+    def test_account_device_without_contract_has_account_identifier(self, monkeypatch):
+        monkeypatch.setattr(device_module, "DeviceInfo", lambda **kwargs: SimpleNamespace(**kwargs))
+        coordinator = MagicMock()
+        coordinator.data = {"contracts": {}}
+        entry = MagicMock(entry_id="entry-1")
+        info = account_device_info(coordinator, entry)
+        assert info.identifiers == {("eau_grand_lyon", "entry-1")}
+        assert info.name == "Eau du Grand Lyon"
+
 
 class TestSensorAutoDiscovery:
     def _patch_sensor_factories(self, monkeypatch):
@@ -222,6 +389,7 @@ class TestSensorAutoDiscovery:
                 entity._attr_unique_id = f"{entry.entry_id}_{ref}_{suffix}"
                 created.append(entity._attr_unique_id)
                 return entity
+
             return _make
 
         def _global_factory(name):
@@ -230,6 +398,7 @@ class TestSensorAutoDiscovery:
                 entity._attr_unique_id = f"{entry.entry_id}_{name}"
                 created.append(entity._attr_unique_id)
                 return entity
+
             return _make
 
         patches = {
@@ -317,6 +486,28 @@ class TestSensorAutoDiscovery:
         assert f"{entry.entry_id}_REF1_peak_hour" not in unique_ids
         assert f"{entry.entry_id}_REF1_avg_flow" not in unique_ids
         assert f"{entry.entry_id}_REF1_compatibility" in unique_ids
+
+    async def test_real_invoice_sensor_does_not_require_experimental_mode(self, monkeypatch):
+        created = self._patch_sensor_factories(monkeypatch)
+        coordinator = MagicMock()
+        coordinator.data = {
+            "contracts": {
+                "REF1": {
+                    "teleo_compatible": False,
+                    "derniere_facture": {"montant_ttc": 328.42},
+                }
+            },
+            "experimental_mode": False,
+            "global": {},
+        }
+        entry = MagicMock()
+        entry.runtime_data = coordinator
+        entry.entry_id = "test_entry"
+
+        await sensor_platform.async_setup_entry(MagicMock(), entry, lambda entities, update_before_add=False: None)
+
+        assert f"{entry.entry_id}_REF1_derniere_facture" in set(created)
+        assert f"{entry.entry_id}_REF1_fuite_estimee" not in set(created)
 
     async def test_teleo_meter_keeps_daily_and_hourly_sensors(self, monkeypatch):
         created = self._patch_sensor_factories(monkeypatch)

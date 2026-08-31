@@ -2,8 +2,96 @@
 
 Tous les changements notables apportés à cette intégration seront documentés dans ce fichier.
 
-Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-et cette intégration adhère au [Versionnage Sémantique](https://semver.org/spec/v2.0.0.html).
+
+## [3.5.3] - 2026-08-30
+
+### Robustesse runtime
+
+- **Prochaine facture facultative** : ajout d'un transport texte dédié qui conserve les protections réseau, authentification, WAF et HTTP sans affaiblir le parsing JSON des autres endpoints. Les chaînes JSON, objets JSON, dates ou datetimes ISO en texte brut sont acceptés ; les réponses vides, 204, 404, HTML ou dates inexploitables donnent désormais `None` sans faire tomber le contrat.
+- **Contrat préservé** : une réponse 200 non JSON sur `dateProchaineFacture` ne déclenche plus le backoff global, le mode hors-ligne ou la perte des consommations, index, appareils et statistiques. Les erreurs réseau, authentification, WAF et serveur continuent de remonter.
+- **Journalisation hors-ligne** : les retries restent en `DEBUG`, le passage en mode hors-ligne produit un seul avertissement, les cycles suivants restent silencieux et le retour du service produit un seul message d'information.
+
+### Entités et statistiques
+
+- **Prévision de coût** : les capteurs de prédiction mensuelle conservent leur valeur en EUR et leurs `unique_id`, mais n'utilisent plus la combinaison invalide `MONETARY + MEASUREMENT`. Une prévision ponctuelle porte désormais `state_class = None`.
+- **Audit automatisé** : tests de non-régression sur les combinaisons `MONETARY`, `WATER`, `MEASUREMENT` et `TOTAL_INCREASING`, sans modification des `statistic_id` publics.
+- **Contrats dynamiques** : `sensor` et `binary_sensor` ajoutent les entités d'un contrat découvert après le setup, une seule fois et sans suppression destructive lors d'une disparition temporaire.
+
+### Qualité et documentation
+
+- **Typage strict** : ajout de modèles `TypedDict` normalisés pour les contrats, consommations, factures, alertes, données de facturation et agrégats globaux ; adaptation du client API, du coordinator et des plateformes d'entités afin que l'intégration passe désormais la vérification mypy en mode strict.
+- Couverture globale relevée à plus de 95 %, avec un contrôle CI supplémentaire exigeant strictement plus de 95 % pour chaque module Python non vide de l'intégration.
+- Documentation du warning normal des custom integrations, de la date de facture réellement fournie, des transitions hors-ligne, des contrats dynamiques et de l'état non conforme des assets Brands locaux.
+- Validation manuelle réussie de la 3.5.3 par l'utilisateur sur une installation Home Assistant bare metal réelle ; il s'agit d'un smoke test utilisateur, pas d'une certification ni d'un job CI automatisé.
+- La règle `brands` reste `todo` et aucun niveau Gold n'est déclaré tant que la contribution officielle n'est pas acceptée.
+
+
+## [3.5.2] - 2026-08-30
+
+### Compatibilité Home Assistant
+
+- **Reauth/Reconfigure HA 2024.11+** : `async_update_and_abort()` reste le chemin principal sur les versions récentes. Une détection de capacité utilise `async_update_entry()` puis `async_abort()` sur HA 2024.11, qui ne fournit pas encore cette méthode.
+- **Un seul reload** : aucun flow ne recharge directement l'intégration ; le listener de `ConfigEntry` reste l'unique responsable du reload, sur les deux chemins.
+- **CI réelle** : ajout de smoke tests exécutés avec HA 2024.11/Python 3.12 et HA 2025.12/Python 3.13, en plus de la matrice de tests existante. Les pushes sur `DEV` déclenchent désormais la CI complète.
+
+### Factures
+
+- **Lien navigateur sûr** : un lien `/local/...` est créé uniquement lorsque le PDF résolu est réellement sous le dossier `www` de Home Assistant. Les chemins frères, faux préfixes et traversals `..` ne peuvent plus produire `/local/../...`.
+- **Fichiers hors `www`** : le téléchargement par Home Assistant et l'écriture locale restent inchangés, mais la notification indique le chemin filesystem sans publier de faux lien navigateur.
+
+### Migration des appareils
+
+- **Device legacy « Morgeek »** : l'ancien identifiant `(eau_grand_lyon, entry_id)` devient stale dès qu'au moins un device contrat actif existe. Le setup le supprime automatiquement uniquement s'il correspond exactement à l'ancien format et qu'aucune entité, autre ConfigEntry ou device enfant n'en dépend.
+- **Migration sûre et idempotente** : tous les devices contrats sont vérifiés avant suppression. Aucun registre d'entités, `entity_id`, `unique_id`, `statistic_id` ni historique Recorder n'est modifié.
+
+### Tests et formatage
+
+- Ajout de tests multi-contrats, protection des entités legacy, idempotence, liens sous/hors `www`, faux sous-répertoire et traversal.
+- Le formatage Black couvre désormais aussi `tests/` et le smoke test, sans modification de leur logique.
+
+## [3.5.1] - 2026-08-30
+
+### Corrections
+
+- **Téléchargement de facture** : utilisation de la route actuelle du portail (`/factures/{id}/duplicata`) avec l'identifiant API de la facture, au lieu de l'ancienne route non valide fondée sur sa référence. Les réponses HTTP 200 qui ne sont pas des PDF sont désormais rejetées.
+- **Disponibilité du bouton facture** : le bouton ne dépend plus du mode expérimental et indique `indisponible` tant qu'aucune facture munie d'un identifiant téléchargeable n'est fournie.
+- **Alertes de fuite ambiguës** : clarification des trois sources (surconsommation mensuelle locale, anomalie locale, estimation fournisseur sur 30 jours) sans changer leurs `unique_id`. Les heuristiques locales passent indisponibles lorsqu'elles ne disposent pas d'assez de données.
+
+### Documentation
+
+- Remplacement des promesses imprécises par une matrice indiquant ce qui est fonctionnel, conditionnel, expérimental, indicatif ou incomplet.
+- Documentation des limites du mode vacances, de la qualité de l'eau, du calendrier, des estimations environnementales et du téléchargement PDF.
+
+## [3.5.0] - 2026-08-30
+
+### Facturation
+
+- **Montant réel distinct des estimations** : le capteur `derniere_facture` expose le montant TTC renvoyé par le fournisseur, indépendamment du mode expérimental. Les capteurs historiques conservent leurs `unique_id`, mais leurs noms et attributs indiquent désormais clairement qu'ils sont estimés.
+- **Mode dernière facture** : nouveau mode recommandé qui calcule un taux TTC tout compris à partir de `montant TTC ÷ volume facturé`. Le cas de régression anonymisé de 88 m³ reproduit ainsi 328,42 € au lieu de 367,40 €.
+- **Grille officielle 2026** : ajout des tranches annuelles d'eau potable, des composantes variables TTC et des parts fixes par calibre de compteur publiées par Eau du Grand Lyon. Ce mode sert aussi de repli si la dernière facture n'a pas de montant ou de volume exploitable.
+- **Modes manuel et dynamique** : ils restent disponibles pour les configurations personnalisées. Les entrées existantes sont migrées vers leur comportement antérieur (manuel ou dynamique) et peuvent sélectionner le nouveau mode depuis les options.
+- **Transparence** : ajout du mode, de la source, du volume, du taux effectif et de la ventilation variable/fixe dans les attributs des capteurs de coût.
+
+### Tests
+
+- Ajout de tests unitaires pour les paliers 2026, les diamètres de compteur, les valeurs non finies, le repli automatique et la facture anonymisée de référence.
+
+## [3.4.6] - 2026-08-30
+
+### Corrections
+
+- **Reconfigure** : le tarif au m³ n'est plus affiché ni ignoré silencieusement ; il est désormais stocké uniquement dans les options, avec migration sans perte des entrées v1/v2.
+- **Reauth/Reconfigure Home Assistant 2026.12** : adoption de `_get_reauth_entry()`, `_get_reconfigure_entry()`, `_abort_if_unique_id_mismatch()` et `async_update_and_abort()` ; suppression des reloads explicites et des risques de double reload/race condition.
+- **Identité de compte** : l'email normalisé reste l'`unique_id` ; un flow ne peut plus convertir une entrée en un autre compte, notamment un compte déjà configuré.
+- **Erreurs API** : ajout d'erreurs HTTP typées ; les erreurs réseau, authentification, WAF, timeout, serveur et JSON invalide remontent désormais au coordinator. Seuls les endpoints explicitement optionnels utilisent un repli borné aux statuts attendus.
+- **Sessions HTTP** : remplacement de `CookieJar(unsafe=True)` par le jar sécurisé par défaut et création des sessions dédiées via le helper Home Assistant, sans modification du flux OAuth/PKCE.
+- **mypy/CI** : résolution du doublon de modules, analyse effective des 26 fichiers Python et suppression du `continue-on-error` trompeur.
+
+### Tests et qualité
+
+- Couverture portée d'environ 64 % à 77 %, avec renforcement ciblé des flows, du transport API, du coordinator, du cycle setup/unload, des services, du calendrier, des devices, du cache et du mode hors-ligne.
+- La déclaration Gold a été retirée : aucun niveau officiel n'est revendiqué tant que `brands` (Bronze), `test-coverage` (Silver) et `dynamic-devices` (Gold) restent en `todo`.
+- Aucun `unique_id`, `statistic_id`, nom d'entité ou format de Store persistant existant n'a été modifié.
 
 ## [3.4.5] - 2026-08-21
 

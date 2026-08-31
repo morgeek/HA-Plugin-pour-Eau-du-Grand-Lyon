@@ -1,4 +1,5 @@
 """Tests for repairs, diagnostics, and service handlers."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -80,9 +81,7 @@ class TestDiagnosticsModule:
             captured["data"] = data
             return data
 
-        sys.modules["homeassistant.components.diagnostics"] = types.SimpleNamespace(
-            async_redact_data=_redact
-        )
+        sys.modules["homeassistant.components.diagnostics"] = types.SimpleNamespace(async_redact_data=_redact)
         from custom_components.eau_grand_lyon.diagnostics import (
             async_get_config_entry_diagnostics,
         )
@@ -101,6 +100,19 @@ class TestDiagnosticsModule:
         contracts = result["coordinator_data"]["contracts"]
         assert "SECRET-REF-123" not in contracts
         assert contracts == {"contract_1": {"solde_eur": 1.0}}
+
+    @pytest.mark.asyncio
+    async def test_diagnostics_reports_empty_coordinator_data(self) -> None:
+        from custom_components.eau_grand_lyon.diagnostics import async_get_config_entry_diagnostics
+
+        entry = MagicMock()
+        entry.version = 2
+        entry.options = {}
+        entry.runtime_data = MagicMock(data=None)
+
+        result = await async_get_config_entry_diagnostics(MagicMock(), entry)
+
+        assert result["coordinator_data"] == {"status": "no_data_available"}
 
 
 class TestServiceHandlersExist:

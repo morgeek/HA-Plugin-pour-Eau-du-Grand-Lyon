@@ -2,7 +2,7 @@ name: Tests & Validation
 
 on:
   push:
-    branches: [main]
+    branches: [main, DEV]
   pull_request:
     branches: [main]
   workflow_dispatch: {}
@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         # Home Assistant 2024.11+ only runs on Python 3.12+
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
@@ -36,14 +36,53 @@ jobs:
 
       - name: Format check with black
         run: |
-          black --check custom_components/eau_grand_lyon/ --line-length=120
+          black --check custom_components/eau_grand_lyon/ tests/ scripts/ --line-length=120
 
       - name: Run tests with coverage
         run: |
           pytest tests/ -v --tb=short \
             --cov=custom_components/eau_grand_lyon \
             --cov-report=term-missing \
-            --cov-fail-under=60
+            --cov-report=json \
+            --cov-fail-under=95
+          python scripts/check_module_coverage.py coverage.json
+
+  ha-config-flow-compat:
+    name: ConfigFlow HA ${{ matrix.homeassistant }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - python-version: "3.12"
+            homeassistant: "2024.11.0"
+            expect-modern: "no"
+          - python-version: "3.14"
+            homeassistant: "2026.8.1"
+            expect-modern: "yes"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: .github/workflows/tests.yaml
+
+      - name: Install real Home Assistant
+        run: |
+          if [[ "${{ matrix.homeassistant }}" == "2024.11.0" ]]; then
+            # The old hass-nabucasa/acme metadata allows josepy 2.x, whose
+            # ComparableX509 removal now breaks imports. Restore the compatible
+            # dependency range used by this historical HA release.
+            pip install "homeassistant==${{ matrix.homeassistant }}" "josepy<2"
+          else
+            pip install "homeassistant==${{ matrix.homeassistant }}"
+          fi
+
+      - name: Exercise inherited ConfigFlow compatibility path
+        run: python scripts/ha_config_flow_smoke.py --expect-modern "${{ matrix.expect-modern }}"
 
   typing:
     name: Typage (mypy)
@@ -55,15 +94,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Install dependencies
-        run: pip install mypy voluptuous
+        run: pip install mypy==2.3.1 homeassistant==2026.8.1
 
-      # Non bloquant : le typage strict (Platinum strict-typing) est amélioré
-      # progressivement. Le job donne un retour sans faire échouer le build.
       - name: Run mypy
-        continue-on-error: true
         run: mypy custom_components/eau_grand_lyon/
 
   validate:

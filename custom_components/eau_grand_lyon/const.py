@@ -20,15 +20,31 @@ CONF_MAX_RETRIES = "max_retries"
 DEFAULT_MAX_RETRIES = 3
 
 CONF_TARIF_M3 = "tarif_m3"
-# Tarif indicatif Eau du Grand Lyon — TTC, tout inclus (eau + assainissement + taxes)
-# Valeur 2024 : 5,20 €/m³ — à vérifier et mettre à jour selon votre facture annuelle
-# Modifiable directement depuis les options de l'intégration dans HA
+# Repli historique conservé pour les entrées en mode manuel. Les nouvelles
+# entrées utilisent par défaut la dernière facture TTC, ou la grille 2026 si
+# aucun couple montant/volume exploitable n'est disponible.
 DEFAULT_TARIF_M3 = 5.20
 
-# Mode expérimental — nouveaux endpoints découverts dans le bundle Angular 2026
-# Active : /rest/produits/factures, /rest/produits/contrats/{id}/consommationsJournalieres
-#          (avec dateDebut/dateFin), /rest/interfaces/ael/contrats/{id}/courbeDeCharge,
-#          et la tentative des nouvelles URLs d'authentification (sans /application/).
+# Source des estimations de coût. Les entrées existantes sont migrées vers le
+# mode manuel/dynamique pour préserver leur comportement ; les nouvelles
+# entrées utilisent le montant TTC de la dernière facture quand il est fourni.
+CONF_TARIFF_MODE = "tariff_mode"
+TARIFF_MODE_LATEST_INVOICE = "latest_invoice"
+TARIFF_MODE_OFFICIAL_2026 = "official_2026"
+TARIFF_MODE_MANUAL = "manual"
+TARIFF_MODE_DYNAMIC = "dynamic"
+TARIFF_MODES = [
+    TARIFF_MODE_LATEST_INVOICE,
+    TARIFF_MODE_OFFICIAL_2026,
+    TARIFF_MODE_MANUAL,
+    TARIFF_MODE_DYNAMIC,
+]
+DEFAULT_TARIFF_MODE = TARIFF_MODE_LATEST_INVOICE
+
+# Mode expérimental — données Téléo étendues découvertes dans le bundle Angular 2026.
+# Les factures sont désormais récupérées dans tous les modes.
+# Active : consommationsJournalieres étendues, courbeDeCharge et tentative des
+# nouvelles URLs d'authentification (sans /application/).
 # Les anciens endpoints restent en fallback automatique — rien ne casse.
 CONF_EXPERIMENTAL = "experimental_api"
 DEFAULT_EXPERIMENTAL = False
@@ -58,8 +74,7 @@ CONF_LEAK_MULTIPLIER = "leak_multiplier"
 DEFAULT_LEAK_MULTIPLIER = 2.0
 CACHE_MAX_AGE_DAYS = 30
 
-# Abonnement annuel fixe (hors consommation) pour calcul du coût réel
-# Comprend : part fixe abonnement eau + assainissement (hors consommation)
-# Valeur indicative Grand Lyon 2024 : ~180€/an — à ajuster selon votre facture
+# Part fixe annuelle utilisée uniquement en modes manuel et dynamique.
+# Le mode officiel sélectionne automatiquement le tarif selon le calibre.
 CONF_SUBSCRIPTION_ANNUAL = "subscription_annual"
 DEFAULT_SUBSCRIPTION_ANNUAL = 0.0  # 0 = fonctionnement identique à avant

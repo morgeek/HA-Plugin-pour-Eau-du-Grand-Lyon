@@ -3,17 +3,22 @@ rules:
   action-setup: done
   appropriate-polling: done
   brands:
-    status: exempt
+    status: todo
     comment: >-
-      Intégration en dépôt personnalisé (HACS custom) : les icônes sont
-      fournies via le dossier brand/ local. La soumission à home-assistant/brands
-      n'est requise que pour le store par défaut, pas pour un install custom
-      (validation HACS lancée avec ignore: brands).
+      Les fichiers locaux icon.png et logo.png mesurent 220x68 et ne satisfont
+      pas les dimensions officielles. Aucun asset carré autorisé ni publication
+      vérifiée dans home-assistant/brands n'est disponible.
   common-modules: done
   config-flow: done
   config-flow-test-coverage: done
   dependency-transparency: done
   docs-actions: done
+  docs-triggers:
+    status: done
+    comment: L'intégration ne fournit aucun déclencheur personnalisé à documenter.
+  docs-conditions:
+    status: done
+    comment: L'intégration ne fournit aucune condition personnalisée à documenter.
   docs-high-level-description: done
   docs-installation-instructions: done
   docs-removal-instructions: done
@@ -32,10 +37,19 @@ rules:
   docs-installation-parameters: done
   entity-unavailable: done
   integration-owner: done
-  log-when-unavailable: done
+  log-when-unavailable:
+    status: done
+    comment: >-
+      Les retries attendus restent en DEBUG. Le coordinator journalise une seule
+      transition healthy -> offline et une seule reprise offline -> healthy ;
+      les cycles toujours hors ligne ne répètent pas le WARNING.
   parallel-updates: done
   reauthentication-flow: done
-  test-coverage: done
+  test-coverage:
+    status: done
+    comment: >-
+      La CI exige une couverture globale d'au moins 95 % et vérifie en plus que
+      chaque module Python non vide de l'intégration dépasse strictement 95 %.
 
   # Gold
   devices: done
@@ -47,15 +61,25 @@ rules:
     status: exempt
     comment: Cloud-polling integration; no local discovery.
   docs-data-update: done
-  docs-examples: done
+  docs-examples:
+    status: todo
+    comment: >-
+      Le dépôt fournit quatre Blueprints et des exemples YAML dans le README,
+      mais la règle officielle demande la publication d'un ensemble limité dans
+      home-assistant.io ou sur Blueprint Exchange, puis un lien depuis la page
+      officielle de l'intégration. Ce travail upstream reste à effectuer.
   docs-known-limitations: done
   docs-supported-devices: done
   docs-supported-functions: done
   docs-troubleshooting: done
   docs-use-cases: done
   dynamic-devices:
-    status: exempt
-    comment: Devices = water meters under one account; cardinality fixed by API.
+    status: done
+    comment: >-
+      Sensor et binary_sensor écoutent le coordinator et ajoutent uniquement les
+      unique_id encore inconnus lorsqu'un contrat apparaît après le setup. Une
+      disparition ne supprime aucune entité ni aucun historique ; une réapparition
+      ne crée pas de doublon.
   entity-category: done
   entity-device-class: done
   entity-disabled-by-default: done
@@ -80,10 +104,13 @@ rules:
   # Platinum
   async-dependency: done
   inject-websession:
-    status: exempt
-    comment: Provider requires CookieJar(unsafe=True) for OAuth cookie; a dedicated session is created and closed with the entry.
-  strict-typing:
-    status: todo
+    status: done
     comment: >-
-      Un job CI mypy (non bloquant) est en place ; le durcissement complet vers
-      le typage strict reste à faire.
+      Les cookies OAuth sont isolés dans une session dédiée créée avec
+      async_create_clientsession et un CookieJar sécurisé par défaut.
+  strict-typing:
+    status: done
+    comment: >-
+      Les données normalisées utilisent des TypedDict dédiés, ConfigEntry et
+      DataUpdateCoordinator sont paramétrés, et la CI exécute mypy strict avec
+      Home Assistant 2026.8.1 réellement installé sous Python 3.14.
