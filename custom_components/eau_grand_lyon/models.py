@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
+
+from .pfas import PfasData
+from .vigieau import VigieauData
+
+if TYPE_CHECKING:
+    from .warsmann import WarsmannAssessment
 
 
 class MonthlyConsumption(TypedDict, total=False):
@@ -175,6 +181,7 @@ class ContractData(BillingData, total=False):
     teleo_compatible: bool
     tendance_n1_pct: float | None
     usage: str
+    warsmann_assessment: WarsmannAssessment | None
 
 
 class GlobalData(TypedDict, total=False):
@@ -207,8 +214,12 @@ EauGrandLyonData = TypedDict(
         "nb_alertes": int,
         "offline_mode": bool,
         "offline_since": datetime | None,
+        "pfas": PfasData,
+        "pfas_enabled": bool,
         "prochaine_coupure": OutageData | None,
         "vacation_alert": bool,
+        "vigieau": VigieauData,
+        "vigieau_enabled": bool,
         "water_quality": WaterQualityData,
     },
     total=False,

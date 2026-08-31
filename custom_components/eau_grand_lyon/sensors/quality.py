@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components.sensor import SensorStateClass
 
-from .base import _EauGrandLyonWaterQualityBase
+from .base import _EauGrandLyonGlobalBase, _EauGrandLyonWaterQualityBase
 
 if TYPE_CHECKING:
     from .. import EauGrandLyonConfigEntry
@@ -109,3 +109,58 @@ class EauGrandLyonChloreSensor(_EauGrandLyonWaterQualityBase):
         base = super().extra_state_attributes
         base["note"] = "Chlore résiduel libre — garantit la potabilité jusqu'au robinet"
         return base
+
+
+class _EauGrandLyonPfasBase(_EauGrandLyonGlobalBase):
+    """Base des mesures PFAS publiques opt-in."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "µg/L"
+    _attr_entity_registry_enabled_default = False
+    _data_key = ""
+
+    @property
+    def available(self) -> bool:
+        data = self.coordinator.data or {}
+        return bool(
+            super().available and data.get("pfas_enabled") and data.get("pfas", {}).get(self._data_key) is not None
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        value = (self.coordinator.data or {}).get("pfas", {}).get(self._data_key)
+        return float(value) if isinstance(value, (int, float)) else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        data = (self.coordinator.data or {}).get("pfas", {})
+        return {
+            "commune": data.get("commune"),
+            "nombre_prelevements_12_mois": data.get("samples_12_months"),
+            "seuil_reglementaire_ug_l": data.get("threshold_ug_l", 0.1),
+            "source": data.get("source", "Site public Eau du Grand Lyon"),
+        }
+
+
+class EauGrandLyonPfasMeanSensor(_EauGrandLyonPfasBase):
+    """Valeur moyenne publique de la somme des 20 PFAS."""
+
+    _attr_translation_key = "pfas_mean"
+    _attr_suggested_display_precision = 3
+    _data_key = "mean_ug_l"
+
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_pfas_mean"
+
+
+class EauGrandLyonPfasMaximumSensor(_EauGrandLyonPfasBase):
+    """Valeur maximale publique de la somme des 20 PFAS."""
+
+    _attr_translation_key = "pfas_maximum"
+    _attr_suggested_display_precision = 3
+    _data_key = "maximum_ug_l"
+
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_pfas_maximum"

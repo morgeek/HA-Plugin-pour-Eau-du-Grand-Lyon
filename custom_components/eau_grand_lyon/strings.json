@@ -109,6 +109,8 @@
           "household_size": "Nombre d'habitants du foyer",
           "water_hardness": "Dureté de l'eau (°fH)",
           "water_quality_commune": "Commune (qualité de l'eau Open Data)",
+          "pfas_enabled": "Activer les données PFAS publiques (expérimental)",
+          "vigieau_enabled": "Activer le niveau officiel VigiEau (expérimental)",
           "subscription_annual": "💶 Part fixe manuelle (€/an)"
         },
         "data_description": {
@@ -121,6 +123,8 @@
           "household_size": "Utilisé pour calculer l'Eco-Score et les conseils personnalisés de l'Eco-Coach.",
           "water_hardness": "Dureté en degrés Français (°fH). Moyenne Lyon : {hardness_lyon_avg} °fH. Si vous avez un adoucisseur, réglez sur la dureté de sortie (ex. 10-15 °fH).",
           "water_quality_commune": "Optionnel : nom de votre commune pour filtrer les mesures Open Data de qualité de l'eau (ex. LYON, VILLEURBANNE). Vide = première mesure disponible du réseau (commune arbitraire).",
+          "pfas_enabled": "Interroge au maximum une fois par jour le widget public Eau du Grand Lyon pour la commune configurée.",
+          "vigieau_enabled": "Interroge au maximum une fois par jour l'API publique officielle VigiEau pour la commune configurée.",
           "subscription_annual": "Utilisée uniquement en modes manuel et dynamique. Le mode Grille officielle choisit automatiquement la part fixe selon le calibre. À titre indicatif, un DN15 vaut {subscription_example} € TTC/an dans la grille 2026."
         }
       }
@@ -338,6 +342,15 @@
       },
       "seuil_surconso_mois": {
         "name": "Seuil surconsommation (mois)"
+      },
+      "pfas_mean": {
+        "name": "PFAS — valeur moyenne"
+      },
+      "pfas_maximum": {
+        "name": "PFAS — valeur maximale"
+      },
+      "vigieau": {
+        "name": "Niveau officiel VigiEau"
       }
     },
     "button": {
@@ -385,6 +398,12 @@
       },
       "surconso_mois": {
         "name": "Surconsommation mensuelle"
+      },
+      "warsmann_eligibility": {
+        "name": "Éligibilité dégrèvement fuite (loi Warsmann)"
+      },
+      "pfas_conform": {
+        "name": "Eau conforme PFAS"
       }
     }
   }

@@ -109,6 +109,8 @@
           "household_size": "Number of household occupants",
           "water_hardness": "Water hardness (°fH)",
           "water_quality_commune": "Municipality (Open Data water quality)",
+          "pfas_enabled": "Enable public PFAS data (experimental)",
+          "vigieau_enabled": "Enable official VigiEau level (experimental)",
           "subscription_annual": "💶 Manual fixed part (€/yr)"
         },
         "data_description": {
@@ -119,6 +121,8 @@
           "household_size": "Used to calculate the Eco-Score and personalised Eco-Coach tips.",
           "water_hardness": "Water hardness in French degrees (°fH). Lyon average: {hardness_lyon_avg} °fH. If you have a softener, set to the output hardness (e.g. 10-15 °fH).",
           "water_quality_commune": "Optional: name of your municipality to filter the Open Data water quality measurements (e.g. LYON, VILLEURBANNE). Empty = first available measurement on the network (arbitrary municipality).",
+          "pfas_enabled": "Queries the public Eau du Grand Lyon widget at most once per day for the configured municipality.",
+          "vigieau_enabled": "Queries the official public VigiEau API at most once per day for the configured municipality.",
           "subscription_annual": "Used only in manual and dynamic modes. Official grid mode selects the fixed part from the meter diameter. For reference, DN15 is €{subscription_example} incl. VAT/year in the 2026 grid.",
           "update_interval_hours": "How often the integration polls the Eau du Grand Lyon servers. Since data is updated monthly, 24h is recommended to avoid WAF blocking.",
           "tarif_m3": "Used only in manual fixed-rate mode, or as the fallback for a dynamic entity."
@@ -302,6 +306,15 @@
       },
       "seuil_surconso_mois": {
         "name": "Over-consumption threshold (monthly)"
+      },
+      "pfas_mean": {
+        "name": "PFAS — mean value"
+      },
+      "pfas_maximum": {
+        "name": "PFAS — maximum value"
+      },
+      "vigieau": {
+        "name": "Official VigiEau level"
       }
     },
     "button": {
@@ -349,6 +362,12 @@
       },
       "surconso_mois": {
         "name": "Monthly over-consumption"
+      },
+      "warsmann_eligibility": {
+        "name": "Leak bill relief eligibility (Warsmann law)"
+      },
+      "pfas_conform": {
+        "name": "PFAS-compliant water"
       }
     }
   },

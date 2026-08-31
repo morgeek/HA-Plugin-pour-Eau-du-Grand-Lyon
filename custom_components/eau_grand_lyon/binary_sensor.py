@@ -46,6 +46,8 @@ async def async_setup_entry(
 
         # [FEAT 3] Coupure/Travaux planifiés — capteur global
         candidates.append(EauGrandLyonOutageSensor(coordinator, entry))
+        if (coordinator.data or {}).get("pfas_enabled"):
+            candidates.append(EauGrandLyonPfasConformSensor(coordinator, entry))
 
         new_entities = []
         for entity in candidates:
@@ -74,6 +76,7 @@ def _contract_binary_sensor_candidates(
     entities.append(EauGrandLyonLocalLeakSensor(coordinator, entry, ref))
     entities.append(EauGrandLyonBatterySensor(coordinator, entry, ref))
     entities.append(EauGrandLyonLimescaleAlertSensor(coordinator, entry, ref))
+    entities.append(EauGrandLyonWarsmannSensor(coordinator, entry, ref))
     # ── Alertes serveur (seuils configurés dans l'espace Eau du Grand Lyon) ──
     if contract.get("abonne_alerte_fuite") is not None:
         entities.append(EauGrandLyonLeakSubscriptionSensor(coordinator, entry, ref))
@@ -116,7 +119,12 @@ class EauGrandLyonLeakAlertSensor(_EauGrandLyonBinaryBase):
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _attr_translation_key = "leak_alert"
 
-    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
+    def __init__(
+        self,
+        coordinator: EauGrandLyonCoordinator,
+        entry: EauGrandLyonConfigEntry,
+        contract_ref: str,
+    ) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_leak_alert"
 
@@ -146,6 +154,8 @@ class EauGrandLyonLeakAlertSensor(_EauGrandLyonBinaryBase):
         return {
             "consommation_courant_m3": c.get("consommation_mois_courant"),
             "consommation_precedent_m3": c.get("consommation_mois_precedent"),
+            "seuil_serveur_journalier_m3": c.get("seuil_surconso_jour_m3"),
+            "seuil_serveur_mensuel_m3": c.get("seuil_surconso_mois_m3"),
             "seuil_alerte": f"Consommation actuelle > {multiplier}x precedente (configurable)",
             "source": "Calcul local sur deux consommations mensuelles",
         }
@@ -158,7 +168,12 @@ class EauGrandLyonRealTimeLeakSensor(_EauGrandLyonBinaryBase):
     _attr_translation_key = "real_time_leak"
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
+    def __init__(
+        self,
+        coordinator: EauGrandLyonCoordinator,
+        entry: EauGrandLyonConfigEntry,
+        contract_ref: str,
+    ) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_real_time_leak"
 
@@ -196,7 +211,12 @@ class EauGrandLyonLocalLeakSensor(_EauGrandLyonBinaryBase):
     _attr_translation_key = "local_leak"
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
+    def __init__(
+        self,
+        coordinator: EauGrandLyonCoordinator,
+        entry: EauGrandLyonConfigEntry,
+        contract_ref: str,
+    ) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_local_leak_pattern"
 
@@ -220,6 +240,51 @@ class EauGrandLyonLocalLeakSensor(_EauGrandLyonBinaryBase):
         }
 
 
+class EauGrandLyonWarsmannSensor(_EauGrandLyonBinaryBase):
+    """Aide indicative fondée sur le seuil légal de consommation anormale."""
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_translation_key = "warsmann_eligibility"
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self,
+        coordinator: EauGrandLyonCoordinator,
+        entry: EauGrandLyonConfigEntry,
+        contract_ref: str,
+    ) -> None:
+        super().__init__(coordinator, entry, contract_ref)
+        self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_warsmann_eligibility"
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._contract.get("warsmann_assessment") is not None
+
+    @property
+    def is_on(self) -> bool:
+        assessment = self._contract.get("warsmann_assessment")
+        return bool(assessment and assessment["eligible"])
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        assessment = self._contract.get("warsmann_assessment")
+        if assessment is None:
+            return {
+                "historique_requis": "Trois périodes homologues exactes",
+                "note": "Aide indicative uniquement; ne garantit aucun dégrèvement.",
+            }
+        return {
+            "base_calcul": assessment["basis"],
+            "periode_comparee": assessment["period"],
+            "consommation_observee_m3": assessment["observed_m3"],
+            "periodes_historiques": assessment["historical_periods"],
+            "consommations_historiques_m3": assessment["historical_values_m3"],
+            "moyenne_3_ans_m3": assessment["average_m3"],
+            "seuil_double_m3": assessment["threshold_m3"],
+            "note": "Aide indicative uniquement; les autres conditions légales ne sont pas vérifiées.",
+        }
+
+
 class EauGrandLyonBatterySensor(_EauGrandLyonBinaryBase):
     """État de la pile du module Téléo."""
 
@@ -227,7 +292,12 @@ class EauGrandLyonBatterySensor(_EauGrandLyonBinaryBase):
     _attr_translation_key = "battery"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
+    def __init__(
+        self,
+        coordinator: EauGrandLyonCoordinator,
+        entry: EauGrandLyonConfigEntry,
+        contract_ref: str,
+    ) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_battery_low"
 
@@ -253,7 +323,12 @@ class EauGrandLyonLimescaleAlertSensor(_EauGrandLyonBinaryBase):
     _attr_translation_key = "limescale_alert"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
+    def __init__(
+        self,
+        coordinator: EauGrandLyonCoordinator,
+        entry: EauGrandLyonConfigEntry,
+        contract_ref: str,
+    ) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_limescale_alert"
 
@@ -275,8 +350,14 @@ class EauGrandLyonLeakSubscriptionSensor(_EauGrandLyonBinaryBase):
 
     _attr_translation_key = "leak_subscription"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
 
-    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
+    def __init__(
+        self,
+        coordinator: EauGrandLyonCoordinator,
+        entry: EauGrandLyonConfigEntry,
+        contract_ref: str,
+    ) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_leak_subscription"
 
@@ -301,8 +382,14 @@ class EauGrandLyonSurconsoJourSensor(_EauGrandLyonBinaryBase):
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _attr_translation_key = "surconso_jour"
+    _attr_entity_registry_enabled_default = False
 
-    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
+    def __init__(
+        self,
+        coordinator: EauGrandLyonCoordinator,
+        entry: EauGrandLyonConfigEntry,
+        contract_ref: str,
+    ) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_surconso_jour"
 
@@ -329,8 +416,14 @@ class EauGrandLyonSurconsoMoisSensor(_EauGrandLyonBinaryBase):
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _attr_translation_key = "surconso_mois"
+    _attr_entity_registry_enabled_default = False
 
-    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry, contract_ref: str) -> None:
+    def __init__(
+        self,
+        coordinator: EauGrandLyonCoordinator,
+        entry: EauGrandLyonConfigEntry,
+        contract_ref: str,
+    ) -> None:
         super().__init__(coordinator, entry, contract_ref)
         self._attr_unique_id = f"{entry.entry_id}_{contract_ref}_surconso_mois"
 
@@ -412,6 +505,42 @@ class EauGrandLyonOutageSensor(CoordinatorEntity[EauGrandLyonCoordinator], Binar
                 }
                 for i in interruptions[:10]
             ],
+        }
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return account_device_info(self.coordinator, self._entry)
+
+
+class EauGrandLyonPfasConformSensor(CoordinatorEntity[EauGrandLyonCoordinator], BinarySensorEntity):
+    """Conformité indicative des PFAS d'après la valeur maximale publique."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "pfas_conform"
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_pfas_conform"
+
+    @property
+    def available(self) -> bool:
+        data = self.coordinator.data or {}
+        return bool(super().available and data.get("pfas_enabled") and data.get("pfas", {}).get("conform") is not None)
+
+    @property
+    def is_on(self) -> bool:
+        return (self.coordinator.data or {}).get("pfas", {}).get("conform") is True
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        data = (self.coordinator.data or {}).get("pfas", {})
+        return {
+            "valeur_maximale_ug_l": data.get("maximum_ug_l"),
+            "seuil_reglementaire_ug_l": data.get("threshold_ug_l", 0.1),
+            "commune": data.get("commune"),
+            "source": data.get("source", "Site public Eau du Grand Lyon"),
         }
 
     @property

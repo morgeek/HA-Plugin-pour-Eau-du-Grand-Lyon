@@ -218,6 +218,41 @@ class EauGrandLyonDroughtSensor(_EauGrandLyonGlobalBase):
         return "mdi:water-remove"
 
 
+class EauGrandLyonVigieauSensor(_EauGrandLyonGlobalBase):
+    """Niveau officiel VigiEau applicable à l'eau potable de la commune."""
+
+    _attr_translation_key = "vigieau"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["normal", "vigilance", "alerte", "alerte_renforcee", "crise"]
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_vigieau_aep"
+
+    @property
+    def available(self) -> bool:
+        data = self.coordinator.data or {}
+        return bool(super().available and data.get("vigieau_enabled") and data.get("vigieau", {}).get("level"))
+
+    @property
+    def native_value(self) -> str | None:
+        return (self.coordinator.data or {}).get("vigieau", {}).get("level")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        data = (self.coordinator.data or {}).get("vigieau", {})
+        return {
+            "commune": data.get("commune"),
+            "code_insee": data.get("commune_code"),
+            "zone": data.get("zone_name"),
+            "arrete_debut": data.get("decree_start_date"),
+            "arrete_fin": data.get("decree_end_date"),
+            "arrete_url": data.get("decree_url"),
+            "source": "VigiEau — eau potable (AEP), profil particulier",
+        }
+
+
 class EauGrandLyonNextOutageSensor(_EauGrandLyonGlobalBase):
     """Date de la prochaine interruption de service planifiée."""
 
@@ -251,7 +286,11 @@ class EauGrandLyonNextOutageSensor(_EauGrandLyonGlobalBase):
             "description": outage.get("description"),
             "nb_interruptions": len(interruptions),
             "toutes_interruptions": [
-                {"titre": i.get("titre"), "date_debut": i.get("date_debut"), "type": i.get("type")}
+                {
+                    "titre": i.get("titre"),
+                    "date_debut": i.get("date_debut"),
+                    "type": i.get("type"),
+                }
                 for i in interruptions[:5]
             ],
         }

@@ -64,6 +64,12 @@ DEFAULT_WATER_HARDNESS = 30.0  # °fH (Moyenne Lyon)
 CONF_WATER_QUALITY_COMMUNE = "water_quality_commune"
 DEFAULT_WATER_QUALITY_COMMUNE = ""
 
+# Sources publiques optionnelles, explicitement désactivées par défaut.
+CONF_PFAS_ENABLED = "pfas_enabled"
+DEFAULT_PFAS_ENABLED = False
+CONF_VIGIEAU_ENABLED = "vigieau_enabled"
+DEFAULT_VIGIEAU_ENABLED = False
+
 # Tuning runtime comportement
 RATE_LIMIT_DELAY_S = 30.0
 WAF_RETRY_BASE_DELAY_S = 60.0

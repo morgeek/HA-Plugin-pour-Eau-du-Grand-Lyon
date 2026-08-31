@@ -58,6 +58,7 @@ from .sensors.global_sensors import (
     EauGrandLyonHealthSensor,
     EauGrandLyonLastUpdateSensor,
     EauGrandLyonNextOutageSensor,
+    EauGrandLyonVigieauSensor,
 )
 from .sensors.intelligence import (
     EauGrandLyonCO2FootprintSensor,
@@ -72,6 +73,8 @@ from .sensors.intelligence import (
 from .sensors.quality import (
     EauGrandLyonChloreSensor,
     EauGrandLyonNitratesSensor,
+    EauGrandLyonPfasMaximumSensor,
+    EauGrandLyonPfasMeanSensor,
     EauGrandLyonWaterHardnessSensor,
 )
 from .coordinator import EauGrandLyonCoordinator
@@ -232,11 +235,16 @@ def _global_sensor_candidates(
     entities.append(EauGrandLyonHealthSensor(coordinator, entry))
     entities.append(EauGrandLyonDroughtSensor(coordinator, entry))
     entities.append(EauGrandLyonNextOutageSensor(coordinator, entry))
+    if (coordinator.data or {}).get("vigieau_enabled"):
+        entities.append(EauGrandLyonVigieauSensor(coordinator, entry))
 
     # ── Qualité de l'eau (Open Data) ──────────────────────────────────
     entities.append(EauGrandLyonWaterHardnessSensor(coordinator, entry))
     entities.append(EauGrandLyonNitratesSensor(coordinator, entry))
     entities.append(EauGrandLyonChloreSensor(coordinator, entry))
+    if (coordinator.data or {}).get("pfas_enabled"):
+        entities.append(EauGrandLyonPfasMeanSensor(coordinator, entry))
+        entities.append(EauGrandLyonPfasMaximumSensor(coordinator, entry))
 
     # ── Agrégats si plusieurs contrats ────────────────────────────────
     if (coordinator.data or {}).get("global", {}).get("nb_contracts", 0) > 1:

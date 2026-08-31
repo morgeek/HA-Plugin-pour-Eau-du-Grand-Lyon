@@ -50,6 +50,9 @@
       "solde": { "default": "mdi:bank-check" },
       "conso_hier": { "default": "mdi:calendar-today" },
       "last_update": { "default": "mdi:clock-check-outline" },
+      "pfas_mean": { "default": "mdi:molecule" },
+      "pfas_maximum": { "default": "mdi:molecule" },
+      "vigieau": { "default": "mdi:water-alert" },
       "seuil_surconso_jour": { "default": "mdi:water-alert-outline" },
       "seuil_surconso_mois": { "default": "mdi:water-alert-outline" }
     },
@@ -62,7 +65,9 @@
       "outage_alert": { "default": "mdi:pipe-wrench" },
       "leak_subscription": { "default": "mdi:bell-ring" },
       "surconso_jour": { "default": "mdi:water-alert" },
-      "surconso_mois": { "default": "mdi:water-alert" }
+      "surconso_mois": { "default": "mdi:water-alert" },
+      "warsmann_eligibility": { "default": "mdi:scale-balance" },
+      "pfas_conform": { "default": "mdi:water-check" }
     },
     "button": {
       "download_invoice": { "default": "mdi:file-download" }
