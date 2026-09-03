@@ -1,4 +1,4 @@
-"""Sensors de qualité de l'eau — Open Data Métropole de Lyon."""
+"""Sensors de qualité de l'eau — contrôle sanitaire via Hub'Eau."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 class EauGrandLyonWaterHardnessSensor(_EauGrandLyonWaterQualityBase):
-    """Dureté réelle de l'eau distribuée (°fH) — Open Data Métropole Lyon."""
+    """Dureté réelle de l'eau distribuée (°fH) — Hub'Eau."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "°fH"
@@ -40,11 +40,12 @@ class EauGrandLyonWaterHardnessSensor(_EauGrandLyonWaterQualityBase):
         base = super().extra_state_attributes
         base["note"] = "Valeur mesurée sur le réseau — peut différer de votre robinet si adoucisseur"
         base["turbidite_ntu"] = wq.get("turbidite_ntu")
+        base["unite_turbidite"] = wq.get("unite_turbidite")
         return base
 
 
 class EauGrandLyonNitratesSensor(_EauGrandLyonWaterQualityBase):
-    """Concentration en nitrates dans l'eau distribuée (mg/L) — Open Data."""
+    """Concentration en nitrates dans l'eau distribuée (mg/L) — Hub'Eau."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "mg/L"
@@ -85,7 +86,7 @@ class EauGrandLyonNitratesSensor(_EauGrandLyonWaterQualityBase):
 
 
 class EauGrandLyonChloreSensor(_EauGrandLyonWaterQualityBase):
-    """Chlore résiduel dans l'eau distribuée (mg/L) — Open Data."""
+    """Chlore libre dans l'eau distribuée (mg/L) — Hub'Eau."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "mg/L"

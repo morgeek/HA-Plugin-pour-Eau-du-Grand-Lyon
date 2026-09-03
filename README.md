@@ -40,7 +40,7 @@ Ce tableau distingue les données fournies par Eau du Grand Lyon des calculs eff
 | Montant de la dernière facture | Fonctionnel si fourni | Montant TTC réel du portail, distinct des capteurs de coût estimé |
 | Téléchargement du PDF | Conditionnel | Utilise l'identifiant interne et la route `duplicata` du portail ; nécessite une facture marquée téléchargeable et un dossier autorisé dans Home Assistant |
 | Prédictions, Eco-Score, coaching, CO₂e et calcaire | Indicatif | Formules locales déterministes, pas de modèle d'IA ni de barème officiel garanti |
-| Qualité de l'eau | Conditionnel | Configurez la commune ; sinon la première mesure Open Data disponible peut concerner une autre commune |
+| Qualité de l'eau | Conditionnel | Analyses réglementaires nationales via Hub'Eau ; une commune exacte est nécessaire |
 | PFAS | Expérimental/opt-in | Valeurs publiques du widget Eau du Grand Lyon, au plus une lecture par jour ; entités désactivées par défaut |
 | Calendrier | Fonctionnel selon les dates fournies | La prochaine facture n'est publiée comme état que si l'API renvoie une date exploitable ; l'estimation locale à échéance + 180 jours reste séparée dans l'attribut `date_estimée` |
 | Mode vacances | Incomplet | Le seuil est calculé et journalisé, mais aucune entité d'alerte ni notification dédiée n'est actuellement exposée |
@@ -220,7 +220,7 @@ L'intégration fonctionne avec deux types de compteurs :
 - **Mode hors-ligne** : En cas d'indisponibilité prolongée (>7 jours), une alerte apparaît dans les réparations HA.
 - **Alertes locales** : elles détectent une surconsommation ou une anomalie statistique, pas une fuite certaine. Le capteur local est indisponible sans au moins 24 points horaires ou 7 jours de données.
 - **Mode vacances** : son résultat n'est pas encore exposé sous forme de capteur ou de notification ; le switch seul ne constitue donc pas une alarme opérationnelle.
-- **Qualité de l'eau** : renseignez la commune dans les options pour éviter qu'une mesure Open Data d'une autre commune soit affichée.
+- **Qualité de l'eau** : renseignez une commune exacte dans les options. Hub'Eau publie mensuellement les analyses du contrôle sanitaire national ; les valeurs dépendent des paramètres réellement analysés et ne sont pas des données temps réel. Une mesure absente reste indisponible et n'est jamais remplacée par zéro.
 - **PFAS et VigiEau** : ces sources publiques optionnelles peuvent changer ou être indisponibles ; leur échec n'affecte jamais le rafraîchissement principal. PFAS dépend du rendu HTML public, VigiEau d'une résolution fiable de la commune.
 - **Indicateurs environnementaux** : Eco-Score, coaching, CO₂e, calcaire et sécheresse sont des calculs locaux indicatifs.
 
@@ -352,7 +352,7 @@ L'intégration récupérera automatiquement les données toutes les **24 heures*
 | Part fixe annuelle | Utilisée en modes manuel et dynamique | Montant TTC personnalisé, ou `0` |
 | Nombre d'habitants | Éco-Score et conseils personnalisés | Nombre réel du foyer |
 | Dureté de l'eau | Estimation du calcaire | Valeur de votre commune ou de votre facture |
-| Commune qualité de l'eau | Filtre les données Open Data | Facultatif |
+| Commune qualité de l'eau | Résout la commune et ses réseaux dans Hub'Eau | Nécessaire aux capteurs qualité |
 | Nombre de tentatives API | Nombre d'essais avant le mode hors-ligne | Valeur par défaut |
 | Mode expérimental | Courbe horaire et données Téléo étendues | Désactivé au départ |
 

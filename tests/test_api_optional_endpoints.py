@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -15,7 +13,6 @@ from custom_components.eau_grand_lyon.api import (
     WafBlockedError,
 )
 from custom_components.eau_grand_lyon.api.client import EauGrandLyonApi
-from custom_components.eau_grand_lyon.api import client as client_module
 
 
 def _api() -> EauGrandLyonApi:
@@ -271,69 +268,3 @@ class TestOptionalEndpointFailurePolicy:
         api._request_text = AsyncMock(side_effect=error)
         with pytest.raises(type(error)):
             await api.get_date_prochaine_facture("C1")
-
-
-class _ResponseContext:
-    def __init__(self, payload: dict, status: int = 200) -> None:
-        self.status = status
-        self._payload = payload
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-    async def text(self) -> str:
-        return json.dumps(self._payload)
-
-
-class TestWaterQualityOptionalSource:
-    @pytest.mark.asyncio
-    async def test_water_quality_selects_requested_commune(self, monkeypatch):
-        session = MagicMock()
-        session.get.return_value = _ResponseContext(
-            {
-                "values": [
-                    {"commune": "Lyon", "durete": "28"},
-                    {
-                        "commune": "Villeurbanne",
-                        "durete": "31.5",
-                        "nitrates": "4.2",
-                        "chloreresiduel": "0.1",
-                        "turbidite": "0.3",
-                        "dateanalyse": "2026-08-20T12:00:00Z",
-                    },
-                ]
-            }
-        )
-        monkeypatch.setattr(
-            client_module.aiohttp,
-            "ClientTimeout",
-            lambda total: SimpleNamespace(total=total),
-            raising=False,
-        )
-        api = EauGrandLyonApi(session, "user@example.com", "secret")
-
-        result = await api.get_water_quality("villeurbanne")
-
-        assert result["commune"] == "Villeurbanne"
-        assert result["durete_fh"] == 31.5
-        assert result["date_analyse"] == "2026-08-20"
-
-    @pytest.mark.asyncio
-    async def test_water_quality_http_failure_is_acceptable_empty_value(self, monkeypatch):
-        session = MagicMock()
-        session.get.return_value = _ResponseContext({}, status=503)
-        monkeypatch.setattr(
-            client_module.aiohttp,
-            "ClientTimeout",
-            lambda total: SimpleNamespace(total=total),
-            raising=False,
-        )
-        api = EauGrandLyonApi(session, "user@example.com", "secret")
-
-        result = await api.get_water_quality()
-
-        assert result["commune"] is None
-        assert result["source"] == "Open Data Metropole de Lyon"

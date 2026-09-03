@@ -129,9 +129,12 @@ class TestHttpSessionSecurity:
         cookie_jar_factory = MagicMock(return_value=jar)
         timeout_factory = MagicMock(return_value=timeout)
         session_factory = MagicMock(return_value=session)
+        public_session = MagicMock()
+        public_session_factory = MagicMock(return_value=public_session)
         monkeypatch.setattr(coordinator_module.aiohttp, "CookieJar", cookie_jar_factory, raising=False)
         monkeypatch.setattr(coordinator_module.aiohttp, "ClientTimeout", timeout_factory, raising=False)
         monkeypatch.setattr(coordinator_module, "async_create_clientsession", session_factory)
+        monkeypatch.setattr(coordinator_module, "async_get_clientsession", public_session_factory)
         monkeypatch.setattr(coordinator_module, "_RebuildableStore", MagicMock())
 
         hass = MagicMock()
@@ -140,6 +143,7 @@ class TestHttpSessionSecurity:
         cookie_jar_factory.assert_called_once_with()
         timeout_factory.assert_called_once_with(total=30)
         session_factory.assert_called_once_with(hass, cookie_jar=jar, timeout=timeout)
+        public_session_factory.assert_called_once_with(hass)
 
     def test_pkce_challenge_matches_rfc_7636_vector(self):
         verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"

@@ -47,12 +47,16 @@ class WaterQualityData(TypedDict, total=False):
     """Normalized public water-quality sample."""
 
     chlore_mgl: float | None
+    code_commune: str | None
+    code_reseau: str | None
     commune: str | None
     date_analyse: str | None
     durete_fh: float | None
     nitrates_mgl: float | None
+    nom_reseau: str | None
     source: str
     turbidite_ntu: float | None
+    unite_turbidite: str | None
 
 
 class OutageData(TypedDict, total=False):

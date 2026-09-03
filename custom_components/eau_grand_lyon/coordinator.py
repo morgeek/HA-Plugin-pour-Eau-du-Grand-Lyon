@@ -19,7 +19,7 @@ import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.storage import Store
-from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.aiohttp_client import async_create_clientsession, async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 try:
@@ -83,6 +83,7 @@ from .billing import (
     official_2026_estimate,
     official_2026_subscription,
 )
+from .hubeau import HubeauWaterQualityClient, empty_water_quality
 from .models import (
     BillingData,
     ContractData,
@@ -92,7 +93,6 @@ from .models import (
     InvoiceData,
     MonthlyConsumption,
     OutageData,
-    WaterQualityData,
 )
 from .warsmann import assess_warsmann
 from .pfas import PfasClient, empty_pfas_data
@@ -220,6 +220,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
             entry.data[CONF_PASSWORD],
             experimental=experimental,
         )
+        # Hub'Eau is anonymous public data and must never receive the private
+        # OAuth session, its cookies, or Eau du Grand Lyon account identifiers.
+        self._hubeau_client = HubeauWaterQualityClient(async_get_clientsession(hass))
         self._pfas_client = PfasClient(self._own_session)
         self._vigieau_client = VigieauClient(self._own_session)
         self._last_request_mono: float | None = None
@@ -652,7 +655,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         prochaine_coupure = interruptions[0] if interruptions else None
 
         commune = self._entry.options.get(CONF_WATER_QUALITY_COMMUNE) or None
-        water_quality_task = asyncio.create_task(cycle_api.get_water_quality(commune))
+        water_quality_task = asyncio.create_task(self._hubeau_client.async_get_water_quality(commune))
         interventions_task = asyncio.create_task(cycle_api.get_interventions())
         pfas_enabled = bool(self._entry.options.get(CONF_PFAS_ENABLED, DEFAULT_PFAS_ENABLED))
         vigieau_enabled = bool(self._entry.options.get(CONF_VIGIEAU_ENABLED, DEFAULT_VIGIEAU_ENABLED))
@@ -725,7 +728,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
             if valid_contracts and not contracts_data and first_contract_error is not None:
                 raise first_contract_error
 
-            water_quality = await water_quality_task
+            try:
+                water_quality = await water_quality_task
+            except Exception as err:  # noqa: BLE001 - public source must never break private account refresh
+                _LOGGER.debug("Hub'Eau water-quality fetch failed unexpectedly: %s", err)
+                water_quality = empty_water_quality()
             pfas = await pfas_task if pfas_task is not None else empty_pfas_data()
             vigieau = await vigieau_task if vigieau_task is not None else empty_vigieau_data()
             try:
@@ -1671,9 +1678,6 @@ class _CycleCachedApi:
 
     async def get_alertes(self) -> list[dict[str, Any]]:
         return cast(list[dict[str, Any]], await self._cached("get_alertes"))
-
-    async def get_water_quality(self, commune: str | None = None) -> WaterQualityData:
-        return cast(WaterQualityData, await self._cached("get_water_quality", commune))
 
     async def get_interventions(self) -> list[OutageData]:
         return cast(list[OutageData], await self._cached("get_interventions"))

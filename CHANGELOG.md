@@ -2,7 +2,13 @@
 
 Tous les changements notables apportés à cette intégration seront documentés dans ce fichier.
 
-## [Unreleased]
+## [3.5.4] - 2026-09-03
+
+### Qualité de l'eau
+
+- Remplacement ciblé de l'ancien jeu Open Data Métropole de Lyon par l'API nationale Hub'Eau `qualite_eau_potable` pour la dureté, les nitrates, le chlore libre et la turbidité.
+- La commune est désormais résolue exactement en code INSEE et UDI du Rhône ; une commune absente, inconnue ou ambiguë laisse les mesures indisponibles au lieu d'utiliser une autre commune.
+- Les analyses réglementaires sont validées par code SANDRE, unité et date, puis la mesure valide la plus récente est retenue. Les pannes Hub'Eau sont mises en cache brièvement et n'affectent jamais les contrats, consommations, factures, PFAS ou VigiEau.
 
 ### Corrections API
 

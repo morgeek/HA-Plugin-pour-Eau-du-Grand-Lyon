@@ -595,7 +595,8 @@ class TestCoordinatorFetchOrchestration:
         coord.api.get_contracts = AsyncMock(return_value=[])
         coord.api.get_alertes = AsyncMock(return_value=[])
         coord.api.get_factures = AsyncMock(return_value=[])
-        coord.api.get_water_quality = AsyncMock(return_value={"commune": "Lyon"})
+        coord._hubeau_client = MagicMock()
+        coord._hubeau_client.async_get_water_quality = AsyncMock(return_value={"commune": "Lyon"})
         coord.api.get_interventions = AsyncMock(return_value=[])
         coord._calculate_tarif_m3 = MagicMock(return_value=4.0)
         coord._get_drought_level = MagicMock(return_value="normal")
@@ -613,6 +614,32 @@ class TestCoordinatorFetchOrchestration:
         assert result["api_mode"] == "Legacy"
         coord._inject_statistics.assert_awaited_once_with({})
         coord._handle_alert_notifications.assert_called_once_with(0)
+
+    @pytest.mark.asyncio
+    async def test_hubeau_failure_does_not_put_private_api_offline(self):
+        coord = _make_coordinator()
+        coord._entry.options = {}
+        coord.api = MagicMock(experimental=False)
+        coord.api.get_contracts = AsyncMock(return_value=[])
+        coord.api.get_alertes = AsyncMock(return_value=[])
+        coord.api.get_factures = AsyncMock(return_value=[])
+        coord.api.get_interventions = AsyncMock(return_value=[])
+        coord._hubeau_client = MagicMock()
+        coord._hubeau_client.async_get_water_quality = AsyncMock(side_effect=RuntimeError("Hub'Eau down"))
+        coord._calculate_tarif_m3 = MagicMock(return_value=4.0)
+        coord._get_drought_level = MagicMock(return_value="normal")
+        coord._check_vacation_alert = MagicMock(return_value=False)
+        coord._inject_statistics = AsyncMock()
+        coord._handle_alert_notifications = MagicMock()
+        coord._save_monthly_history = AsyncMock()
+        coord._save_daily_history = AsyncMock()
+
+        result = await coord._fetch_all_data()
+
+        assert result["contracts"] == {}
+        assert result["last_error"] is None
+        assert result["water_quality"]["durete_fh"] is None
+        assert result["water_quality"]["source"].startswith("Hub'Eau")
 
     @pytest.mark.asyncio
     async def test_process_contract_combines_consumption_billing_and_alerts(self):
@@ -712,7 +739,8 @@ class TestCoordinatorFetchOrchestration:
         )
         api.get_alertes = AsyncMock(return_value=[])
         api.get_factures = AsyncMock(return_value=[])
-        api.get_water_quality = AsyncMock(return_value={"commune": "Lyon"})
+        coord._hubeau_client = MagicMock()
+        coord._hubeau_client.async_get_water_quality = AsyncMock(return_value={"commune": "Lyon"})
         api.get_interventions = AsyncMock(return_value=[])
         api.get_monthly_consumptions = AsyncMock(return_value=[{"mois": 7, "annee": 2026, "consommation": 10.0}])
         api.get_daily_consumptions = AsyncMock(

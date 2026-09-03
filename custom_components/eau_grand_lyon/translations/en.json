@@ -108,7 +108,7 @@
           "max_retries": "Max API retry attempts",
           "household_size": "Number of household occupants",
           "water_hardness": "Water hardness (°fH)",
-          "water_quality_commune": "Municipality (Open Data water quality)",
+          "water_quality_commune": "Municipality (Hub'Eau water quality)",
           "pfas_enabled": "Enable public PFAS data (experimental)",
           "vigieau_enabled": "Enable official VigiEau level (experimental)",
           "subscription_annual": "💶 Manual fixed part (€/yr)"
@@ -120,7 +120,7 @@
           "max_retries": "Maximum number of attempts before switching to offline mode. Retry timing uses exponential backoff with jitter to reduce load on the API.",
           "household_size": "Used to calculate the Eco-Score and personalised Eco-Coach tips.",
           "water_hardness": "Water hardness in French degrees (°fH). Lyon average: {hardness_lyon_avg} °fH. If you have a softener, set to the output hardness (e.g. 10-15 °fH).",
-          "water_quality_commune": "Optional: name of your municipality to filter the Open Data water quality measurements (e.g. LYON, VILLEURBANNE). Empty = first available measurement on the network (arbitrary municipality).",
+          "water_quality_commune": "Exact municipality name for Hub'Eau regulatory analyses (e.g. LYON, VILLEURBANNE). Without a municipality, water-quality data remains unavailable.",
           "pfas_enabled": "Queries the public Eau du Grand Lyon widget at most once per day for the configured municipality.",
           "vigieau_enabled": "Queries the official public VigiEau API at most once per day for the configured municipality.",
           "subscription_annual": "Used only in manual and dynamic modes. Official grid mode selects the fixed part from the meter diameter. For reference, DN15 is €{subscription_example} incl. VAT/year in the 2026 grid.",
@@ -281,13 +281,13 @@
         "name": "Average hourly flow"
       },
       "water_hardness_live": {
-        "name": "Water hardness (Open Data)"
+        "name": "Water hardness (Hub'Eau)"
       },
       "nitrates": {
-        "name": "Nitrates (Open Data)"
+        "name": "Nitrates (Hub'Eau)"
       },
       "chlore": {
-        "name": "Residual chlorine (Open Data)"
+        "name": "Free chlorine (Hub'Eau)"
       },
       "next_outage": {
         "name": "Next service interruption"

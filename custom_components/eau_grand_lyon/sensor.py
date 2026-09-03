@@ -238,7 +238,7 @@ def _global_sensor_candidates(
     if (coordinator.data or {}).get("vigieau_enabled"):
         entities.append(EauGrandLyonVigieauSensor(coordinator, entry))
 
-    # ── Qualité de l'eau (Open Data) ──────────────────────────────────
+    # ── Qualité de l'eau (Hub'Eau) ────────────────────────────────────
     entities.append(EauGrandLyonWaterHardnessSensor(coordinator, entry))
     entities.append(EauGrandLyonNitratesSensor(coordinator, entry))
     entities.append(EauGrandLyonChloreSensor(coordinator, entry))

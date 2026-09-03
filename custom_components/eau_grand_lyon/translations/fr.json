@@ -108,7 +108,7 @@
           "max_retries": "Nombre max de tentatives API",
           "household_size": "Nombre d'habitants du foyer",
           "water_hardness": "Dureté de l'eau (°fH)",
-          "water_quality_commune": "Commune (qualité de l'eau Open Data)",
+          "water_quality_commune": "Commune (qualité de l'eau Hub'Eau)",
           "pfas_enabled": "Activer les données PFAS publiques (expérimental)",
           "vigieau_enabled": "Activer le niveau officiel VigiEau (expérimental)",
           "subscription_annual": "💶 Part fixe manuelle (€/an)"
@@ -120,7 +120,7 @@
           "max_retries": "Nombre maximal de tentatives avant bascule en mode hors-ligne. Le délai de retry utilise un backoff exponentiel avec jitter pour ménager l'API.",
           "household_size": "Utilisé pour calculer l'Eco-Score et les conseils personnalisés de l'Eco-Coach.",
           "water_hardness": "Dureté en degrés Français (°fH). Moyenne Lyon : {hardness_lyon_avg} °fH. Si vous avez un adoucisseur, réglez sur la dureté de sortie (ex. 10-15 °fH).",
-          "water_quality_commune": "Optionnel : nom de votre commune pour filtrer les mesures Open Data de qualité de l'eau (ex. LYON, VILLEURBANNE). Vide = première mesure disponible du réseau (commune arbitraire).",
+          "water_quality_commune": "Nom exact de la commune pour les analyses réglementaires Hub'Eau (ex. LYON, VILLEURBANNE). Sans commune, les données de qualité restent indisponibles.",
           "pfas_enabled": "Interroge au maximum une fois par jour le widget public Eau du Grand Lyon pour la commune configurée.",
           "vigieau_enabled": "Interroge au maximum une fois par jour l'API publique officielle VigiEau pour la commune configurée.",
           "subscription_annual": "Utilisée uniquement en modes manuel et dynamique. Le mode Grille officielle choisit automatiquement la part fixe selon le calibre. À titre indicatif, un DN15 vaut {subscription_example} € TTC/an dans la grille 2026.",
@@ -271,13 +271,13 @@
         "name": "Débit moyen horaire"
       },
       "water_hardness_live": {
-        "name": "Dureté de l'eau (Open Data)"
+        "name": "Dureté de l'eau (Hub'Eau)"
       },
       "nitrates": {
-        "name": "Nitrates (Open Data)"
+        "name": "Nitrates (Hub'Eau)"
       },
       "chlore": {
-        "name": "Chlore résiduel (Open Data)"
+        "name": "Chlore libre (Hub'Eau)"
       },
       "next_outage": {
         "name": "Prochaine interruption de service"
