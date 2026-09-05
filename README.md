@@ -82,13 +82,15 @@ Les seuils journalier et mensuel configurés dans l'espace fournisseur sont expo
 - **Réparations Home Assistant** : signalement d'une panne API prolongée de plus de sept jours.
 - **Santé Téléo** : signal et pile uniquement lorsque le portail fournit réellement ces données.
 
-Le répertoire de destination des exports et factures doit être autorisé dans `configuration.yaml` :
+Le bouton de téléchargement enregistre automatiquement les factures dans le
+dossier `www/eau_grand_lyon` propre à l'installation Home Assistant. Pour un
+autre répertoire de destination, celui-ci doit être autorisé dans
+`configuration.yaml` :
 
 ```yaml
 homeassistant:
   allowlist_external_dirs:
     - /config/exports
-    - /config/www/eau_grand_lyon
 ```
 
 Redémarrez Home Assistant après avoir modifié cette liste.
@@ -281,14 +283,13 @@ Après la mise à jour, Home Assistant peut conserver l'ancien nom personnalisé
 
 ### Le téléchargement de facture ne fonctionne pas
 
-La version 3.5.3 utilise la route actuelle du portail (`/factures/{id}/duplicata`) et l'identifiant interne de la facture, au lieu de sa référence lisible. Le bouton est indisponible si aucun document n'est annoncé comme téléchargeable. Un lien `/local/...` est ajouté uniquement lorsque le fichier se trouve réellement sous `/config/www` ; ailleurs, la notification indique seulement le chemin de sauvegarde local.
+La route actuelle du portail (`/factures/{id}/duplicata`) utilise l'identifiant interne de la facture, au lieu de sa référence lisible. Le bouton est indisponible si aucun document n'est annoncé comme téléchargeable. Sans chemin explicite, le fichier est enregistré sous le dossier `www/eau_grand_lyon` réel de l'instance, y compris sur une installation bare metal. Un lien `/local/...` est ajouté uniquement lorsque le fichier se trouve réellement sous ce dossier `www` ; ailleurs, la notification indique seulement le chemin de sauvegarde local.
 
 Vérifiez ensuite :
 
 1. qu'une facture apparaît bien dans les données du contrat ;
-2. que `/config/www/eau_grand_lyon` figure dans `allowlist_external_dirs` ;
-3. que Home Assistant a été redémarré après cette modification ;
-4. que le PDF est encore téléchargeable directement depuis votre espace client.
+2. que le PDF est encore téléchargeable directement depuis votre espace client ;
+3. si vous imposez un autre chemin, que son dossier figure dans `allowlist_external_dirs` et que Home Assistant a été redémarré après cette modification.
 
 La route est alignée sur l'application web officielle actuelle, mais sa disponibilité reste dépendante du compte et peut changer côté fournisseur.
 
@@ -377,7 +378,7 @@ Une fois configuré, les capteurs apparaîtront dans votre tableau de bord Home 
 | `eau_grand_lyon.export_data` | Exporte les consommations en CSV |
 | `eau_grand_lyon.download_latest_invoice` | Télécharge le dernier duplicata PDF que le portail marque comme disponible |
 
-Les services d'export et de téléchargement nécessitent que leur dossier de destination figure dans `allowlist_external_dirs`. N'utilisez que des chemins locaux explicitement autorisés dans votre configuration Home Assistant.
+Le dossier `www` réel de l'instance est autorisé automatiquement par Home Assistant pour le téléchargement. L'export et les chemins de facture personnalisés situés ailleurs doivent figurer dans `allowlist_external_dirs`.
 
 Checklist de réparation :
 

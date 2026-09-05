@@ -161,7 +161,7 @@
       "fields": {
         "path": {
           "name": "Chemin de destination",
-          "description": "Chemin complet du fichier PDF (ex. /config/www/facture.pdf)"
+          "description": "Chemin complet du fichier PDF. Si omis, utilise automatiquement le dossier www de cette installation Home Assistant."
         }
       }
     }

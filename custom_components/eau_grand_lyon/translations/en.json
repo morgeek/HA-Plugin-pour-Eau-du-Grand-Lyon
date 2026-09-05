@@ -396,7 +396,7 @@
       "fields": {
         "path": {
           "name": "Destination path",
-          "description": "Full path of the PDF file (e.g. /config/www/invoice.pdf)"
+          "description": "Full path of the PDF file. When omitted, the Home Assistant installation's www directory is used automatically."
         }
       }
     }

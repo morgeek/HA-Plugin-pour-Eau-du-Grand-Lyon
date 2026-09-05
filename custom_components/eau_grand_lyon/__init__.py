@@ -262,7 +262,11 @@ def _async_setup_services(hass: HomeAssistant) -> None:
             ) from err
 
     async def async_handle_download_invoice(call: ServiceCall) -> None:
-        target_path = call.data.get("path", "/config/www/eau_grand_lyon/latest_invoice.pdf")
+        target_path = call.data.get("path") or os.path.join(
+            hass.config.path("www"),
+            DOMAIN,
+            "latest_invoice.pdf",
+        )
         contract_ref_filter = call.data.get("contract_reference")
         _validate_write_path(hass, target_path)
         found_invoice = False

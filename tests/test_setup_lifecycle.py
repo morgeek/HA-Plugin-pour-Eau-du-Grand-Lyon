@@ -243,6 +243,23 @@ class TestServiceHandlers:
         assert ".." not in notification["message"]
 
     @pytest.mark.asyncio
+    async def test_download_invoice_default_path_uses_instance_config_directory(self, tmp_path):
+        coordinator = self._invoice_coordinator()
+        hass, handlers = _service_hass(coordinator)
+        www_root = tmp_path / "bare-metal-config" / "www"
+        hass.config.path.return_value = str(www_root)
+        hass.config.is_allowed_path.return_value = True
+        hass.services.async_call = AsyncMock()
+
+        await handlers["download_latest_invoice"](MagicMock(data={}))
+
+        target = www_root / "eau_grand_lyon" / "latest_invoice.pdf"
+        assert target.read_bytes() == b"%PDF-test"
+        hass.config.is_allowed_path.assert_called_once_with(str(target))
+        notification = hass.services.async_call.await_args.args[2]
+        assert "/local/eau_grand_lyon/latest_invoice.pdf" in notification["message"]
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("directory", ["exports", "www_fake"])
     async def test_download_invoice_outside_www_saves_without_local_url(self, tmp_path, directory):
         coordinator = self._invoice_coordinator()
