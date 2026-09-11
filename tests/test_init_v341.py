@@ -9,10 +9,12 @@ import pytest
 
 from custom_components.eau_grand_lyon import (
     _async_cleanup_legacy_device,
+    _async_reenable_formerly_disabled_defaults,
     async_migrate_entry,
     async_remove_config_entry_device,
     _validate_write_path,
 )
+from homeassistant.helpers import entity_registry as er
 from custom_components.eau_grand_lyon.const import (
     CONF_PRICE_ENTITY,
     CONF_TARIF_M3,
@@ -282,6 +284,75 @@ class TestLegacyDeviceCleanup:
         entity_registry.entries["device-REF1"] = []
         assert _async_cleanup_legacy_device(MagicMock(), entry) is False
         assert device_registry.removed == []
+
+
+class TestReenableFormerlyDisabledDefaults:
+    @staticmethod
+    def _entity(unique_id, *, disabled_by="integration", entity_id="sensor.x"):
+        return SimpleNamespace(
+            entity_id=entity_id,
+            unique_id=unique_id,
+            disabled_by=disabled_by,
+        )
+
+    def _setup_registry(self, monkeypatch, entities):
+        entity_registry = SimpleNamespace(
+            entries=list(entities),
+            async_update_entity=MagicMock(),
+        )
+        monkeypatch.setattr("custom_components.eau_grand_lyon.er.async_get", lambda hass: entity_registry)
+        monkeypatch.setattr(
+            "custom_components.eau_grand_lyon.er.async_entries_for_config_entry",
+            lambda registry, entry_id: registry.entries,
+        )
+        entry = MagicMock()
+        entry.entry_id = "e1"
+        return entity_registry, entry
+
+    def test_reenables_hubeau_water_quality_sensors_disabled_by_old_default(self, monkeypatch):
+        entities = [
+            self._entity("e1_water_hardness_live"),
+            self._entity("e1_nitrates"),
+            self._entity("e1_chlore"),
+        ]
+        entity_registry, entry = self._setup_registry(monkeypatch, entities)
+
+        assert _async_reenable_formerly_disabled_defaults(MagicMock(), entry) == 3
+
+        assert entity_registry.async_update_entity.call_count == 3
+        for entity in entities:
+            entity_registry.async_update_entity.assert_any_call(entity.entity_id, disabled_by=None)
+
+    def test_leaves_user_disabled_entities_untouched(self, monkeypatch):
+        entities = [self._entity("e1_nitrates", disabled_by=er.RegistryEntryDisabler.USER)]
+        entity_registry, entry = self._setup_registry(monkeypatch, entities)
+
+        assert _async_reenable_formerly_disabled_defaults(MagicMock(), entry) == 0
+        entity_registry.async_update_entity.assert_not_called()
+
+    def test_leaves_unrelated_entities_untouched(self, monkeypatch):
+        entities = [self._entity("e1_REF1_pfas_mean")]
+        entity_registry, entry = self._setup_registry(monkeypatch, entities)
+
+        assert _async_reenable_formerly_disabled_defaults(MagicMock(), entry) == 0
+        entity_registry.async_update_entity.assert_not_called()
+
+    def test_ignores_entities_without_unique_id(self, monkeypatch):
+        entities = [self._entity(None)]
+        entity_registry, entry = self._setup_registry(monkeypatch, entities)
+
+        assert _async_reenable_formerly_disabled_defaults(MagicMock(), entry) == 0
+        entity_registry.async_update_entity.assert_not_called()
+
+    def test_reenables_per_contract_suffixes(self, monkeypatch):
+        entities = [
+            self._entity("e1_REF1_conso_7j"),
+            self._entity("e1_REF1_conso_30j"),
+            self._entity("e1_REF1_energy_cost"),
+        ]
+        entity_registry, entry = self._setup_registry(monkeypatch, entities)
+
+        assert _async_reenable_formerly_disabled_defaults(MagicMock(), entry) == 3
 
 
 class TestServiceExceptionTranslations:
