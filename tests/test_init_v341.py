@@ -337,13 +337,6 @@ class TestReenableFormerlyDisabledDefaults:
         assert _async_reenable_formerly_disabled_defaults(MagicMock(), entry) == 0
         entity_registry.async_update_entity.assert_not_called()
 
-    def test_ignores_entities_without_unique_id(self, monkeypatch):
-        entities = [self._entity(None)]
-        entity_registry, entry = self._setup_registry(monkeypatch, entities)
-
-        assert _async_reenable_formerly_disabled_defaults(MagicMock(), entry) == 0
-        entity_registry.async_update_entity.assert_not_called()
-
     def test_reenables_per_contract_suffixes(self, monkeypatch):
         entities = [
             self._entity("e1_REF1_conso_7j"),

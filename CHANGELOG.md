@@ -6,7 +6,7 @@ Tous les changements notables apportés à cette intégration seront documentés
 
 ### Correction
 
-- Les capteurs dureté/nitrates/chlore (Hub'Eau), conso 7j/30j et coût énergie restaient désactivés dans l'entity registry pour les installations existant avant leur passage en activé par défaut (3.4.2) : Home Assistant n'applique `entity_registry_enabled_default` qu'à la création de l'entité et ne réactive jamais une entité déjà enregistrée. L'intégration réactive désormais automatiquement, au démarrage, celles que HA avait elle-même désactivées à l'époque — les entités désactivées manuellement par l'utilisateur restent inchangées.
+- Les capteurs dureté/nitrates/chlore (Hub'Eau), conso 7j/30j et coût énergie restaient désactivés dans l'entity registry pour les installations existant avant leur passage en activé par défaut (2.9.0) : Home Assistant n'applique `entity_registry_enabled_default` qu'à la création de l'entité et ne réactive jamais une entité déjà enregistrée. L'intégration réactive désormais automatiquement, au démarrage, celles que HA avait elle-même désactivées à l'époque — les entités désactivées manuellement par l'utilisateur restent inchangées.
 
 ## [3.5.4] - 2026-09-03
 

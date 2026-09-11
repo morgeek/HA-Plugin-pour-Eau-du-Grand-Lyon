@@ -84,6 +84,23 @@ class TestSetupLifecycle:
         entry.add_update_listener.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_setup_keeps_running_when_reenable_defaults_best_effort_fails(self):
+        hass = MagicMock()
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+        entry = _entry()
+        coordinator = MagicMock()
+        coordinator.async_initialize = AsyncMock()
+        coordinator.async_config_entry_first_refresh = AsyncMock()
+
+        with patch("custom_components.eau_grand_lyon.EauGrandLyonCoordinator", return_value=coordinator), patch(
+            "custom_components.eau_grand_lyon._async_reenable_formerly_disabled_defaults",
+            side_effect=RuntimeError("registry unavailable"),
+        ):
+            assert await async_setup_entry(hass, entry) is True
+
+        entry.add_update_listener.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_failed_setup_always_closes_owned_session(self):
         hass = MagicMock()
         entry = _entry()

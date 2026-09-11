@@ -109,6 +109,7 @@ def _stub_homeassistant() -> None:
         DeviceInfo=MagicMock,
         async_get=MagicMock(),
     )
+
     class _RegistryEntryDisabler:
         INTEGRATION = "integration"
         USER = "user"

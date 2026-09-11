@@ -105,7 +105,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry)
 
 # Unique-id suffixes of entities whose entity_registry_enabled_default switched
 # from False to True after some users had already set up the integration
-# (dureté/nitrates/chlore Hub'Eau, conso 7j/30j, coût énergie — voir CHANGELOG 3.4.2).
+# (dureté/nitrates/chlore Hub'Eau, conso 7j/30j, coût énergie — voir CHANGELOG 2.9.0).
 _REENABLED_BY_DEFAULT_UNIQUE_ID_SUFFIXES = (
     "_water_hardness_live",
     "_nitrates",
@@ -131,8 +131,6 @@ def _async_reenable_formerly_disabled_defaults(hass: HomeAssistant, entry: EauGr
     reenabled = 0
     for entity_entry in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
         if entity_entry.disabled_by != er.RegistryEntryDisabler.INTEGRATION:
-            continue
-        if entity_entry.unique_id is None:
             continue
         if not entity_entry.unique_id.endswith(_REENABLED_BY_DEFAULT_UNIQUE_ID_SUFFIXES):
             continue
