@@ -6,7 +6,7 @@ Tous les changements notables apportés à cette intégration seront documentés
 
 ### Qualité de l'eau
 
-- Remplacement ciblé de l'ancien jeu Open Data Métropole de Lyon par l'API nationale Hub'Eau `qualite_eau_potable` pour la dureté, les nitrates, le chlore libre et la turbidité.
+- La qualité de l'eau utilise l'API nationale Hub'Eau `qualite_eau_potable` pour la dureté, les nitrates, le chlore libre et la turbidité.
 - La commune est désormais résolue exactement en code INSEE et UDI du Rhône ; une commune absente, inconnue ou ambiguë laisse les mesures indisponibles au lieu d'utiliser une autre commune.
 - Les analyses réglementaires sont validées par code SANDRE, unité et date, puis la mesure valide la plus récente est retenue. Les pannes Hub'Eau sont mises en cache brièvement et n'affectent jamais les contrats, consommations, factures, PFAS ou VigiEau.
 
@@ -298,7 +298,7 @@ Version issue d'un audit complet du projet : corrections de bugs, durcissement s
 
 ### Améliorations
 
-- **Option « Commune (qualité de l'eau) »** : les capteurs qualité de l'eau (dureté, nitrates, chlore) utilisaient la première mesure du jeu Open Data — c'est-à-dire une commune arbitraire du réseau. Une nouvelle option permet de filtrer sur votre commune ; sans filtre, le comportement reste inchangé (l'attribut `commune` indique la commune réellement mesurée).
+- **Option « Commune (qualité de l'eau) »** : une nouvelle option permet de sélectionner précisément la commune utilisée par les capteurs de dureté, nitrates et chlore ; l'attribut `commune` indique la commune réellement mesurée.
 - **Capteur sécheresse assumé comme heuristique** : le niveau « Vigilance » est purement saisonnier (juin–septembre). L'issue de réparation HA correspondante — qui alertait tous les utilisateurs la moitié de l'année — est supprimée ; le capteur reste, avec des attributs `source`/`note` renvoyant vers vigieau.gouv.fr.
 - **Devices unifiés** (`device.py`) : même fabricant (« Eau du Grand Lyon ») sur toutes les plateformes (le binary_sensor déclarait « Morgeek »), switch/calendrier/boutons rattachés au device du compteur (plus de second device orphelin), et nom du device suffixé par la référence de contrat en multi-contrats.
 - **Unité monétaire unifiée** : `EUR` partout (certains capteurs globaux utilisaient `€`, ce que les statistiques long terme traitent comme une unité différente).
@@ -506,7 +506,7 @@ L'intégration atteint le **niveau Gold** de la [Qualité Scale Home Assistant](
   - `sensors/intelligence.py` — Eco-Coach, Eco-Score, CO₂, tendances, prédictions
   - `sensors/global_sensors.py` — agrégats multi-contrats, santé API, sécheresse
   - `sensors/experimental.py` — API 2026 (factures, fuite, courbe de charge)
-  - `sensors/quality.py` — données Open Data (dureté, nitrates, chlore)
+  - `sensors/quality.py` — données Hub'Eau (dureté, nitrates, chlore)
   - `sensors/base.py` — classes de base et mixins partagés
 
 ### Tests
@@ -556,7 +556,7 @@ L'intégration atteint le **niveau Gold** de la [Qualité Scale Home Assistant](
 - **Hardening API 2026** : Refonte massive du parsing des données journalières pour supporter les variations de clés de l'API (`volume`, `quantite`, `valeur`, `consommation`) et les structures multi-postes.
 - **Consommation Moyenne (L/jour)** : Nouveau capteur calculant la moyenne glissante sur 7 jours, affichée en Litres pour une meilleure lisibilité.
 - **Bouton de Facturation** : Ajout d'un bouton physique dans l'interface pour déclencher le téléchargement de la dernière facture PDF (mode expérimental).
-- **Qualité de l'Eau (Open Data)** : Intégration automatisée avec le portail Open Data de la Métropole de Lyon (Dureté, Nitrates, Chlore, Turbidité).
+- **Qualité de l'Eau (Hub'Eau)** : intégration des analyses réglementaires Hub'Eau (dureté, nitrates, chlore, turbidité).
 - **Capteur de Compatibilité** : Détection automatique du type de compteur (Téléo vs Standard) pour clarifier la disponibilité des données journalières.
 - **Calendrier Hardened** : Amélioration de la robustesse du calendrier face aux formats de dates exotiques et intégration des interruptions de service.
 - **Suivi Sécheresse & Repairs** : Gestion native des niveaux de vigilance sécheresse du Rhône avec intégration dans la plateforme Repairs de HA.

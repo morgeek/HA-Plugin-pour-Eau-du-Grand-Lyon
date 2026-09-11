@@ -204,19 +204,19 @@ views:
             icon: mdi:pipe-wrench
 
       # ──────────────────────────────────────────────────────────────────────
-      # Section : Qualité de l'eau (Open Data)
+      # Section : Qualité de l'eau (Hub'Eau)
       # ──────────────────────────────────────────────────────────────────────
       - type: entities
-        title: 💧 Qualité de l'eau (Open Data)
+        title: 💧 Qualité de l'eau (Hub'Eau)
         show_header_toggle: false
         entities:
-          - entity: sensor.eau_du_grand_lyon_durete_de_l_eau_open_data
+          - entity: sensor.eau_du_grand_lyon_durete_de_l_eau_hub_eau
             name: Dureté (°fH)
             icon: mdi:water-opacity
-          - entity: sensor.eau_du_grand_lyon_nitrates_open_data
+          - entity: sensor.eau_du_grand_lyon_nitrates_hub_eau
             name: Nitrates (mg/L)
             icon: mdi:flask
-          - entity: sensor.eau_du_grand_lyon_chlore_residuel_open_data
+          - entity: sensor.eau_du_grand_lyon_chlore_libre_hub_eau
             name: Chlore résiduel (mg/L)
             icon: mdi:water-plus
 

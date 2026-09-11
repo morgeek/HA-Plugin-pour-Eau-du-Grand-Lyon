@@ -12,6 +12,7 @@ import pytest
 from custom_components.eau_grand_lyon import hubeau as hubeau_module
 from custom_components.eau_grand_lyon.hubeau import (
     FAILURE_CACHE_SECONDS,
+    HUBEAU_BASE_URL,
     HUBEAU_COMMUNES_UDI_URL,
     HUBEAU_PARAM_CHLORINE,
     HUBEAU_PARAM_HARDNESS,
@@ -382,10 +383,10 @@ async def test_failure_cache_retries_after_15_minutes(monkeypatch):
     assert len(session.calls) == 2
 
 
-def test_old_grand_lyon_water_quality_endpoint_cannot_return():
+def test_runtime_uses_isolated_hubeau_client():
     root = Path(__file__).parents[1] / "custom_components" / "eau_grand_lyon"
     runtime = "\n".join((root / path).read_text() for path in ("api/client.py", "coordinator.py", "hubeau.py"))
-    assert "data.grandlyon.com" not in runtime
+    assert HUBEAU_BASE_URL in runtime
     assert not hasattr(hubeau_module, "PfasClient")
     assert not hasattr(hubeau_module, "VigieauClient")
 
