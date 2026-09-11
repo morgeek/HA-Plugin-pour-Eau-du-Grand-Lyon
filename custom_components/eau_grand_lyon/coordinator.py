@@ -19,7 +19,7 @@ import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.storage import Store
-from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.aiohttp_client import async_create_clientsession, async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 try:
@@ -46,13 +46,17 @@ else:
         StatisticMeanType = None
 
 # Lecture de la dernière somme connue du recorder pour ancrer le cumul et éviter
-# les deltas négatifs quand la fenêtre glissante de 36 mois perd son plus vieux
+# les deltas négatifs quand la fenêtre glissante perd son plus vieux
 # mois. Optionnel : toute absence/erreur retombe sur un cumul à partir de 0.
 try:
     if TYPE_CHECKING:
-        from homeassistant.helpers.recorder import get_instance as _get_recorder_instance
+        from homeassistant.helpers.recorder import (
+            get_instance as _get_recorder_instance,
+        )
     else:
-        from homeassistant.components.recorder import get_instance as _get_recorder_instance
+        from homeassistant.components.recorder import (
+            get_instance as _get_recorder_instance,
+        )
     from homeassistant.components.recorder.statistics import (
         get_last_statistics as _get_last_statistics,
     )
@@ -79,6 +83,7 @@ from .billing import (
     official_2026_estimate,
     official_2026_subscription,
 )
+from .hubeau import HubeauWaterQualityClient, empty_water_quality
 from .models import (
     BillingData,
     ContractData,
@@ -88,8 +93,10 @@ from .models import (
     InvoiceData,
     MonthlyConsumption,
     OutageData,
-    WaterQualityData,
 )
+from .warsmann import assess_warsmann
+from .pfas import PfasClient, empty_pfas_data
+from .vigieau import VigieauClient, empty_vigieau_data
 from .const import (
     CACHE_MAX_AGE_DAYS,
     CONF_EMAIL,
@@ -98,20 +105,24 @@ from .const import (
     CONF_LEAK_MULTIPLIER,
     CONF_MAX_RETRIES,
     CONF_PASSWORD,
+    CONF_PFAS_ENABLED,
     CONF_PRICE_ENTITY,
     CONF_SUBSCRIPTION_ANNUAL,
     CONF_TARIF_M3,
     CONF_TARIFF_MODE,
     CONF_UPDATE_INTERVAL_HOURS,
+    CONF_VIGIEAU_ENABLED,
     CONF_WATER_HARDNESS,
     CONF_WATER_QUALITY_COMMUNE,
     DEFAULT_EXPERIMENTAL,
     DEFAULT_HOUSEHOLD_SIZE,
     DEFAULT_LEAK_MULTIPLIER,
     DEFAULT_MAX_RETRIES,
+    DEFAULT_PFAS_ENABLED,
     DEFAULT_SUBSCRIPTION_ANNUAL,
     DEFAULT_TARIF_M3,
     DEFAULT_UPDATE_INTERVAL_HOURS,
+    DEFAULT_VIGIEAU_ENABLED,
     DEFAULT_WATER_HARDNESS,
     DOMAIN,
     NETWORK_RETRY_BASE_DELAY_S,
@@ -148,7 +159,10 @@ class _RebuildableStore(Store[dict[str, object]]):
     """
 
     async def _async_migrate_func(
-        self, old_major_version: int, old_minor_version: int, old_data: dict[str, object]
+        self,
+        old_major_version: int,
+        old_minor_version: int,
+        old_data: dict[str, object],
     ) -> dict[str, object]:
         _LOGGER.debug(
             "Cache %s en version %s.%s — reconstruction depuis l'API (reset)",
@@ -206,6 +220,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
             entry.data[CONF_PASSWORD],
             experimental=experimental,
         )
+        # Hub'Eau is anonymous public data and must never receive the private
+        # OAuth session, its cookies, or Eau du Grand Lyon account identifiers.
+        self._hubeau_client = HubeauWaterQualityClient(async_get_clientsession(hass))
+        self._pfas_client = PfasClient(self._own_session)
+        self._vigieau_client = VigieauClient(self._own_session)
         self._last_request_mono: float | None = None
         self._min_request_delay_s: float = RATE_LIMIT_DELAY_S
 
@@ -227,7 +246,8 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         # Cache persistant pour l'historique offline
         self._store = _RebuildableStore(hass, 1, f"{DOMAIN}_{entry.entry_id}_history")
 
-        # Historique mensuel cumulatif — accumule jusqu'à 36 mois pour le calcul N-1
+        # Historique mensuel cumulatif — 37 mois couvrent le mois courant et
+        # les trois périodes homologues nécessaires au calcul Warsmann.
         # (l'API ne retourne que 12 mois ; ce store persiste les mois précédents entre mises à jour)
         # Version 2 : correction du bug mois base-0 (v1 avait des mois_index décalés d'un rang).
         # _RebuildableStore migre une ancienne version en repartant d'un cache vide.
@@ -384,7 +404,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
     def _merge_monthly_history(
         stored: list[MonthlyConsumption],
         fresh: list[MonthlyConsumption],
-        max_months: int = 36,
+        max_months: int = 37,
     ) -> list[MonthlyConsumption]:
         """Fusionne l'historique stocké avec les données fraîches de l'API.
 
@@ -408,7 +428,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
 
     @staticmethod
     def _merge_daily_history(
-        stored: list[DailyConsumption], fresh: list[DailyConsumption], max_days: int = 366
+        stored: list[DailyConsumption],
+        fresh: list[DailyConsumption],
+        max_days: int = 1097,
     ) -> list[DailyConsumption]:
         """Fusionne les journées, les données fraîches remplaçant les anciennes."""
         by_date: dict[str, DailyConsumption] = {}
@@ -633,8 +655,14 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         prochaine_coupure = interruptions[0] if interruptions else None
 
         commune = self._entry.options.get(CONF_WATER_QUALITY_COMMUNE) or None
-        water_quality_task = asyncio.create_task(cycle_api.get_water_quality(commune))
+        water_quality_task = asyncio.create_task(self._hubeau_client.async_get_water_quality(commune))
         interventions_task = asyncio.create_task(cycle_api.get_interventions())
+        pfas_enabled = bool(self._entry.options.get(CONF_PFAS_ENABLED, DEFAULT_PFAS_ENABLED))
+        vigieau_enabled = bool(self._entry.options.get(CONF_VIGIEAU_ENABLED, DEFAULT_VIGIEAU_ENABLED))
+        pfas_task = asyncio.create_task(self._pfas_client.async_get(commune)) if pfas_enabled and commune else None
+        vigieau_task = (
+            asyncio.create_task(self._vigieau_client.async_get(commune)) if vigieau_enabled and commune else None
+        )
 
         try:
             tarif_m3 = self._calculate_tarif_m3()
@@ -700,7 +728,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
             if valid_contracts and not contracts_data and first_contract_error is not None:
                 raise first_contract_error
 
-            water_quality = await water_quality_task
+            try:
+                water_quality = await water_quality_task
+            except Exception as err:  # noqa: BLE001 - public source must never break private account refresh
+                _LOGGER.debug("Hub'Eau water-quality fetch failed unexpectedly: %s", err)
+                water_quality = empty_water_quality()
+            pfas = await pfas_task if pfas_task is not None else empty_pfas_data()
+            vigieau = await vigieau_task if vigieau_task is not None else empty_vigieau_data()
             try:
                 interventions_planifiees = await interventions_task
             except (
@@ -740,6 +774,10 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
                 "prochaine_coupure": prochaine_coupure,
                 "interventions_planifiees": interventions_planifiees,
                 "water_quality": water_quality,
+                "pfas": pfas,
+                "pfas_enabled": pfas_enabled,
+                "vigieau": vigieau,
+                "vigieau_enabled": vigieau_enabled,
                 "experimental_mode": experimental,
                 "api_mode": "Experimental (2026)" if experimental else "Legacy",
                 "last_update_success_time": datetime.now(tz=timezone.utc),
@@ -752,7 +790,13 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         finally:
             # Annuler les tâches encore en vol (chemins d'erreur) pour éviter
             # requêtes fantômes et « Task exception was never retrieved ».
-            leftovers = [t for t in (water_quality_task, interventions_task) if not t.done()]
+            optional_tasks = (
+                water_quality_task,
+                interventions_task,
+                pfas_task,
+                vigieau_task,
+            )
+            leftovers = [t for t in optional_tasks if t is not None and not t.done()]
             for task in leftovers:
                 task.cancel()
             if leftovers:
@@ -896,7 +940,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         )
         self._daily_history[ref] = consos_journalieres
 
-        # Merge avec l'historique persistant pour avoir jusqu'à 36 mois (nécessaire pour N-1 annuel)
+        # Merge avec l'historique persistant (N-1 annuel et comparaison sur trois ans).
         merged_consos = self._merge_monthly_history(
             self._monthly_history.get(ref, []),
             consos,
@@ -941,7 +985,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         # Comparaison N-1 (Mois vs Mois N-1) — utilise les données fraîches uniquement
         conso_mois_n1, label_n1 = self._get_consumption_n1(consos)
 
-        # Consommation annuelle N-1 — utilise l'historique étendu (jusqu'à 36 mois)
+        # Consommation annuelle N-1 — utilise l'historique étendu.
         last_24 = merged_consos[-24:-12] if len(merged_consos) >= 24 else []
         conso_annuelle_n1 = round(sum(e["consommation_m3"] for e in last_24), 1) if last_24 else None
 
@@ -949,6 +993,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         mois_manquants = _find_missing_months(consos)
 
         conso_7j, conso_30j = self._calculate_daily_aggregates(consos_journalieres)
+        warsmann_assessment = assess_warsmann(
+            merged_consos,
+            consos_journalieres,
+            teleo=bool(details.get("teleo_compatible") or raw_daily_data.get("nb_entries", 0) > 0),
+        )
 
         # ── Index journalier le plus récent (capteur EauGrandLyonIndexJournalierSensor) ──
         # Extrait depuis les données journalières, disponible sur compteurs Téléo.
@@ -1109,6 +1158,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
                 "derniere_conso_jour_m3": derniere_conso_jour,
                 "surconso_jour_depassee": surconso_jour_depassee,
                 "surconso_mois_depassee": surconso_mois_depassee,
+                "warsmann_assessment": warsmann_assessment,
             },
         )
 
@@ -1132,7 +1182,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         return conso_7j, conso_30j
 
     def _calculate_intelligence(
-        self, current: float | None, n1: float | None, daily: list[DailyConsumption], tarif: float
+        self,
+        current: float | None,
+        n1: float | None,
+        daily: list[DailyConsumption],
+        tarif: float,
     ) -> tuple[float | None, float | None, float | None]:
         """Calcule les tendances et prédictions."""
         if current is None:
@@ -1318,7 +1372,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         AVANT ce mois) : le cumul repart de cette base et les mois antérieurs sont
         laissés intacts. Sans ancrage, le cumul part de 0 sur toute la fenêtre.
         Ancrer sur le recorder évite les deltas négatifs quand la fenêtre glissante
-        de 36 mois perd son plus ancien mois (le cumul repartait sinon de 0).
+        glissante perd son plus ancien mois (le cumul repartait sinon de 0).
         """
         series: list["StatisticData"] = []
         cumulative = anchor[1] if anchor else 0.0
@@ -1389,7 +1443,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
 
     @staticmethod
     def _build_daily_stat_series(
-        consos: list[DailyConsumption], value_fn: Callable[[float], float] = float, ndigits: int = 3
+        consos: list[DailyConsumption],
+        value_fn: Callable[[float], float] = float,
+        ndigits: int = 3,
     ) -> list["StatisticData"]:
         """Reconstruit un cumul journalier à la date réelle de chaque journée."""
         series: list["StatisticData"] = []
@@ -1471,7 +1527,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
                         f"coût journalier {ref}",
                     )
 
-            # Historique fusionné (jusqu'à 36 mois) pour que le passé soit toujours
+            # Historique fusionné pour que le passé soit toujours
             # injecté, pas seulement les ~12 mois renvoyés par l'API à chaque appel.
             consos = self._monthly_history.get(ref) or contract.get("consommations", [])
             if not consos:
@@ -1623,9 +1679,6 @@ class _CycleCachedApi:
     async def get_alertes(self) -> list[dict[str, Any]]:
         return cast(list[dict[str, Any]], await self._cached("get_alertes"))
 
-    async def get_water_quality(self, commune: str | None = None) -> WaterQualityData:
-        return cast(WaterQualityData, await self._cached("get_water_quality", commune))
-
     async def get_interventions(self) -> list[OutageData]:
         return cast(list[OutageData], await self._cached("get_interventions"))
 
@@ -1633,7 +1686,10 @@ class _CycleCachedApi:
         return cast(list[dict[str, Any]], await self._cached("get_factures"))
 
     async def get_monthly_consumptions(self, contract_id: str) -> list[dict[str, Any]]:
-        return cast(list[dict[str, Any]], await self._cached("get_monthly_consumptions", contract_id))
+        return cast(
+            list[dict[str, Any]],
+            await self._cached("get_monthly_consumptions", contract_id),
+        )
 
     async def get_daily_consumptions(self, contract_id: str, nb_jours: int = 90) -> dict[str, Any]:
         return cast(
@@ -1642,13 +1698,19 @@ class _CycleCachedApi:
         )
 
     async def get_alerte_surconsommation(self, contract_id: str) -> dict[str, Any]:
-        return cast(dict[str, Any], await self._cached("get_alerte_surconsommation", contract_id))
+        return cast(
+            dict[str, Any],
+            await self._cached("get_alerte_surconsommation", contract_id),
+        )
 
     async def get_date_prochaine_facture(self, contract_id: str) -> str | None:
         return cast(str | None, await self._cached("get_date_prochaine_facture", contract_id))
 
     async def get_point_de_service_etendu(self, contract_id: str) -> dict[str, Any]:
-        return cast(dict[str, Any], await self._cached("get_point_de_service_etendu", contract_id))
+        return cast(
+            dict[str, Any],
+            await self._cached("get_point_de_service_etendu", contract_id),
+        )
 
     async def get_courbe_de_charge(self, contract_id: str, nb_jours: int = 7) -> list[dict[str, Any]]:
         return cast(
@@ -1657,7 +1719,10 @@ class _CycleCachedApi:
         )
 
     async def get_derniere_releve_siamm(self, contract_id: str) -> dict[str, Any] | None:
-        return cast(dict[str, Any] | None, await self._cached("get_derniere_releve_siamm", contract_id))
+        return cast(
+            dict[str, Any] | None,
+            await self._cached("get_derniere_releve_siamm", contract_id),
+        )
 
 
 # ------------------------------------------------------------------

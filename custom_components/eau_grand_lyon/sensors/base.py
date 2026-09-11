@@ -85,7 +85,7 @@ class _EauGrandLyonHourlyBase(_EauGrandLyonBase):
 
 
 class _EauGrandLyonWaterQualityBase(_EauGrandLyonGlobalBase):
-    """Base pour les sensors qualité eau — unavailable si Open Data indisponible."""
+    """Base pour les sensors qualité eau — unavailable si Hub'Eau indisponible."""
 
     _attr_entity_registry_enabled_default = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -103,6 +103,9 @@ class _EauGrandLyonWaterQualityBase(_EauGrandLyonGlobalBase):
         wq = (self.coordinator.data or {}).get("water_quality", {})
         return {
             "commune": wq.get("commune"),
+            "code_commune": wq.get("code_commune"),
+            "code_reseau": wq.get("code_reseau"),
+            "nom_reseau": wq.get("nom_reseau"),
             "date_analyse": wq.get("date_analyse"),
             "source": wq.get("source"),
         }

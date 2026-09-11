@@ -198,7 +198,11 @@ def _stub_homeassistant() -> None:
         SelectOptionDict=lambda **kw: dict(kw),
         SelectSelectorMode=types.SimpleNamespace(DROPDOWN="dropdown", LIST="list"),
     )
-    _make_module("homeassistant.helpers.aiohttp_client", async_create_clientsession=MagicMock())
+    _make_module(
+        "homeassistant.helpers.aiohttp_client",
+        async_create_clientsession=MagicMock(),
+        async_get_clientsession=MagicMock(),
+    )
 
     class _RestoreEntity:
         async def async_get_last_state(self):

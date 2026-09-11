@@ -263,7 +263,6 @@ async def test_recorder_absence_daily_index_and_cycle_cache_wrappers(monkeypatch
     method_names = (
         "get_contracts",
         "get_alertes",
-        "get_water_quality",
         "get_interventions",
         "get_factures",
         "get_monthly_consumptions",
@@ -280,7 +279,6 @@ async def test_recorder_absence_daily_index_and_cycle_cache_wrappers(monkeypatch
 
     assert await cycle.get_contracts() == "get_contracts"
     assert await cycle.get_alertes() == "get_alertes"
-    assert await cycle.get_water_quality("Lyon") == "get_water_quality"
     assert await cycle.get_interventions() == "get_interventions"
     assert await cycle.get_factures() == "get_factures"
     assert await cycle.get_monthly_consumptions("C1") == "get_monthly_consumptions"

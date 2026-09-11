@@ -12,13 +12,20 @@ AGENTS.md
 
 # --- OS cruft ---
 .DS_Store
-custom_components/eau_grand_lyon/.DS_Store
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100/
+.Trashes/
 Thumbs.db
 desktop.ini
 
 # --- Editor / IDE ---
 .vscode/
 .idea/
+.fleet/
+.zed/
+*.code-workspace
 *.swp
 *.swo
 *~
@@ -31,6 +38,8 @@ desktop.ini
 .cursor/
 .aider*
 CLAUDE.md
+.direnv/
+.envrc
 
 # --- Python ---
 __pycache__/
@@ -57,6 +66,10 @@ coverage.json
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
+.pyre/
+.pyright/
+.pytype/
 .tox/
 .nox/
 .cache/
@@ -82,6 +95,7 @@ tts/
 
 # --- Build / packaging / misc ---
 node_modules/
+site/
 *.bak
 *.orig
 *.rej

@@ -51,7 +51,13 @@ _INDEX_KEYS = (
 
 
 def _is_litre_unit(value: Any) -> bool:
-    return str(value or "").strip().lower() in {"l", "litre", "litres", "liter", "liters"}
+    return str(value or "").strip().lower() in {
+        "l",
+        "litre",
+        "litres",
+        "liter",
+        "liters",
+    }
 
 
 def _is_litre_rate_unit(value: Any) -> bool:
@@ -168,7 +174,12 @@ class EauGrandLyonApi:
                     status=resp.status,
                 )
                 if resp.status == 401:
-                    _LOGGER.debug("api_request_reauth cid=%s method=%s url=%s", correlation_id, method, url)
+                    _LOGGER.debug(
+                        "api_request_reauth cid=%s method=%s url=%s",
+                        correlation_id,
+                        method,
+                        url,
+                    )
                     await self._auth.authenticate(correlation_id=correlation_id)
                     headers = {"Authorization": f"Bearer {self._auth.access_token}"}
                     retry_start = time.perf_counter()
@@ -250,7 +261,13 @@ class EauGrandLyonApi:
             **kwargs,
         )
 
-    async def _do_get(self, url: str, params: JsonObject | None = None, *, log_response_errors: bool = True) -> Any:
+    async def _do_get(
+        self,
+        url: str,
+        params: JsonObject | None = None,
+        *,
+        log_response_errors: bool = True,
+    ) -> Any:
         return await self._request("GET", url, params=params, log_response_errors=log_response_errors)
 
     async def _do_post(self, url: str, body: JsonObject | None = None) -> Any:
@@ -346,10 +363,15 @@ class EauGrandLyonApi:
         async def _safe(sub_path: str, label: str) -> Any:
             try:
                 return await self._get_produits(f"contrats/{contract_id}/{sub_path}", log_response_errors=False)
-            except HttpError as err:
-                if err.status != 404:
-                    raise
-                _LOGGER.debug("Endpoint %s indisponible (contrat %s) : %s", label, contract_id, err)
+            except (ApiError, NetworkError, WafBlockedError) as err:
+                # Données purement informatives : une route absente, en erreur
+                # ou bloquée ne doit jamais invalider le rafraîchissement métier.
+                _LOGGER.debug(
+                    "Endpoint optionnel %s indisponible (contrat %s) : %s",
+                    label,
+                    contract_id,
+                    err,
+                )
                 return None
 
         raw_jour = await _safe("seuilAlerteSurconsommation/journaliere", "seuil journalier")
@@ -593,7 +615,7 @@ class EauGrandLyonApi:
                     result.append(
                         {
                             "reference": item.get("reference", ""),
-                            "type": sous_type.get("libelle", "") if isinstance(sous_type, dict) else str(sous_type),
+                            "type": (sous_type.get("libelle", "") if isinstance(sous_type, dict) else str(sous_type)),
                             "statut": str(statut_raw) if statut_raw is not None else "",
                             "date_debut": date_debut,
                             "date_fin": date_fin,
@@ -728,79 +750,6 @@ class EauGrandLyonApi:
             )
             raise NetworkError(f"Erreur reseau lors du telechargement PDF: {err}") from err
 
-    async def get_water_quality(self, commune: str | None = None) -> JsonObject:
-        """Qualité de l'eau depuis l'Open Data Métropole de Lyon.
-
-        Sans `commune`, retourne la première mesure du jeu de données (commune
-        arbitraire du réseau). Avec `commune`, filtre côté client sur le nom.
-        """
-        maxfeatures = 1000 if commune else 1
-        opendata_url = (
-            "https://data.grandlyon.com/fr/datapusher/ws/grandlyon"
-            f"/eau_eau.eauqualite/json/?maxfeatures={maxfeatures}&start=1"
-            "&fields=commune,durete,nitrates,chloreresiduel,turbidite,dateanalyse"
-        )
-        empty: JsonObject = {
-            "durete_fh": None,
-            "nitrates_mgl": None,
-            "chlore_mgl": None,
-            "turbidite_ntu": None,
-            "commune": None,
-            "date_analyse": None,
-            "source": "Open Data Metropole de Lyon",
-        }
-        try:
-            async with self._session.get(
-                opendata_url,
-                headers={"Accept": "application/json"},
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                if resp.status != 200:
-                    _LOGGER.debug("[OPEN DATA] Qualite eau -> HTTP %s", resp.status)
-                    return empty
-                data = json.loads(await resp.text())
-            values = data.get("values", [])
-            if not values:
-                _LOGGER.debug("[OPEN DATA] Qualite eau -> reponse vide")
-                return empty
-            row = values[0]
-            if commune:
-                wanted = commune.strip().casefold()
-                match = next(
-                    (r for r in values if wanted in str(r.get("commune") or "").casefold()),
-                    None,
-                )
-                if match is not None:
-                    row = match
-                else:
-                    _LOGGER.warning(
-                        "[OPEN DATA] Commune '%s' introuvable dans les mesures qualite eau — "
-                        "premiere mesure du reseau utilisee (voir l'attribut 'commune')",
-                        commune,
-                    )
-
-            def _safe_float(val: Any) -> float | None:
-                try:
-                    return float(val) if val is not None else None
-                except (ValueError, TypeError):
-                    return None
-
-            return {
-                "durete_fh": _safe_float(row.get("durete")),
-                "nitrates_mgl": _safe_float(row.get("nitrates")),
-                "chlore_mgl": _safe_float(row.get("chloreresiduel")),
-                "turbidite_ntu": _safe_float(row.get("turbidite")),
-                "commune": row.get("commune"),
-                "date_analyse": (row.get("dateanalyse") or "")[:10] or None,
-                "source": "Open Data Metropole de Lyon",
-            }
-        except (aiohttp.ClientError, TimeoutError, asyncio.TimeoutError) as err:
-            _LOGGER.debug("[OPEN DATA] Network error fetching water quality: %s", err)
-            return empty
-        except (json.JSONDecodeError, ValueError, TypeError, KeyError) as err:
-            _LOGGER.debug("[OPEN DATA] Invalid water quality response: %s", err)
-            return empty
-
     @staticmethod
     def format_consumptions(raw_entries: list[JsonObject]) -> list[JsonObject]:
         result = []
@@ -910,6 +859,7 @@ class EauGrandLyonApi:
     def _parse_daily_response(data: Any) -> list[JsonObject]:
         entries: list[object] = []
         from_postes = False
+        from_valeurs = False
         unites: JsonObject = {}
         if isinstance(data, dict):
             raw_unites = data.get("unites")
@@ -924,8 +874,42 @@ class EauGrandLyonApi:
                 entries = data["data"]
             elif "consommationsJournalieres" in data and isinstance(data["consommationsJournalieres"], list):
                 entries = data["consommationsJournalieres"]
+            elif isinstance(data.get("valeurs"), list):
+                # Forme d'enveloppe confirmée en production le 2026-08-31.
+                # Les champs internes d'une entrée peuplée ne le sont pas encore :
+                # journaliser uniquement les clés permet d'affiner le mapping sans
+                # exposer les valeurs de consommation de l'utilisateur.
+                from_valeurs = True
+                entries = data["valeurs"]
         elif isinstance(data, list):
             entries = data
+        if from_valeurs:
+            first_mapping = next((entry for entry in entries if isinstance(entry, dict) and entry), None)
+            if first_mapping is not None:
+                _LOGGER.debug(
+                    "Courbe de charge: cles de la premiere entree valeurs=%s",
+                    sorted(str(key) for key in first_mapping),
+                )
+
+            normalized_values: list[JsonObject] = []
+            values_in_litres = _is_litre_unit(data.get("unite"))
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                item = dict(entry)
+                consumption_key = next(
+                    (key for key in ("consommation", "volume", "quantite", "valeur") if key in item),
+                    None,
+                )
+                if consumption_key is None:
+                    continue
+                if values_in_litres:
+                    try:
+                        item[consumption_key] = float(item[consumption_key] or 0) / 1000.0
+                    except (ValueError, TypeError):
+                        continue
+                normalized_values.append(item)
+            return normalized_values
         if not from_postes:
             return cast(list[JsonObject], entries)
 
@@ -996,7 +980,18 @@ class EauGrandLyonApi:
         result = []
         for facture in raw_factures:
             try:
-                statut_raw = facture.get("statutPaiement") or {}
+                statut_raw = facture.get("statutReglement") or facture.get("statutPaiement") or {}
+                consommation_raw = facture.get("consommationTotale") or {}
+                if isinstance(consommation_raw, dict):
+                    volume_m3 = float(consommation_raw.get("value", 0) or 0)
+                    if _is_litre_unit(consommation_raw.get("unit")):
+                        volume_m3 /= 1000.0
+                else:
+                    # Compatibilité avec les anciennes réponses déjà couvertes
+                    # par les tests et potentiellement conservées dans un cache.
+                    volume_m3 = float(facture.get("volume", 0) or 0)
+                if not consommation_raw and facture.get("volume") is not None:
+                    volume_m3 = float(facture.get("volume", 0) or 0)
                 date_ed = (facture.get("dateEdition") or "")[:10] or None
                 date_ex = (facture.get("dateExigibilite") or "")[:10] or None
                 result.append(
@@ -1007,7 +1002,7 @@ class EauGrandLyonApi:
                         "date_exigibilite": date_ex,
                         "montant_ht": float(facture.get("montantHT", 0) or 0),
                         "montant_ttc": float(facture.get("montantTTC", 0) or 0),
-                        "volume_m3": float(facture.get("volume", 0) or 0),
+                        "volume_m3": round(volume_m3, 3),
                         "statut_paiement": statut_raw.get("libelle", ""),
                         "contrat_id": (facture.get("contrat") or {}).get("id", ""),
                         "telechargeable": facture.get("telechargeable") is not False,

@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from custom_components.eau_grand_lyon.api import HttpError, NetworkError
-from custom_components.eau_grand_lyon.api.client import EauGrandLyonApi, _infer_unit_from_magnitude
-from custom_components.eau_grand_lyon.api import client as client_module
+from custom_components.eau_grand_lyon.api.client import (
+    EauGrandLyonApi,
+    _infer_unit_from_magnitude,
+)
 
 
 def _api() -> EauGrandLyonApi:
@@ -62,7 +63,10 @@ async def test_contract_and_monthly_endpoint_payload_variants():
         ]
     )
     monthly = await api.get_monthly_consumptions("C1", nb_jours=0)
-    assert [(item["annee"], item["mois"]) for item in monthly] == [("2025", "9"), ("2026", "8")]
+    assert [(item["annee"], item["mois"]) for item in monthly] == [
+        ("2025", "9"),
+        ("2026", "8"),
+    ]
     assert await api.get_monthly_consumptions("C1") == []
 
 
@@ -99,8 +103,11 @@ async def test_daily_retry_alert_thresholds_and_error_policies():
     }
 
     api._get_produits = AsyncMock(side_effect=HttpError(500, "GET", "threshold", "down"))
-    with pytest.raises(HttpError):
-        await api.get_alerte_surconsommation("C1")
+    assert await api.get_alerte_surconsommation("C1") == {
+        "seuil_surconso_jour_m3": None,
+        "seuil_surconso_mois_m3": None,
+        "abonne_alerte_fuite": None,
+    }
 
 
 @pytest.mark.asyncio
@@ -112,7 +119,7 @@ async def test_optional_endpoint_non_mapping_and_non_404_errors_propagate():
     for method in (api.get_point_de_service_etendu, api.get_interventions):
         api._do_get = AsyncMock(side_effect=HttpError(500, "GET", "optional", "down"))
         with pytest.raises(HttpError):
-            await method("C1") if method == api.get_point_de_service_etendu else await method()
+            (await method("C1") if method == api.get_point_de_service_etendu else await method())
 
     api._get_produits = AsyncMock(side_effect=[[], {"content": [{"id": "I1"}]}, "bad"])
     assert await api.get_factures() == []
@@ -129,48 +136,6 @@ async def test_optional_endpoint_non_mapping_and_non_404_errors_propagate():
     api._get_produits = AsyncMock(side_effect=HttpError(418, "GET", "siamm", "teapot"))
     with pytest.raises(HttpError):
         await api.get_derniere_releve_siamm("C1")
-
-
-class _WaterResponse:
-    def __init__(self, text: str, status: int = 200) -> None:
-        self.status = status
-        self._text = text
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-    async def text(self) -> str:
-        return self._text
-
-
-@pytest.mark.asyncio
-async def test_water_quality_empty_invalid_missing_commune_and_network(monkeypatch):
-    class ClientError(Exception):
-        pass
-
-    monkeypatch.setattr(
-        client_module.aiohttp, "ClientTimeout", lambda total: SimpleNamespace(total=total), raising=False
-    )
-    monkeypatch.setattr(client_module.aiohttp, "ClientError", ClientError, raising=False)
-    session = MagicMock()
-    api = EauGrandLyonApi(session, "user@example.com", "secret")
-
-    session.get.side_effect = [
-        _WaterResponse('{"values": []}'),
-        _WaterResponse("not-json"),
-        _WaterResponse('{"values":[{"commune":"Lyon","durete":"bad"}]}'),
-        RuntimeError("unexpected payload"),
-    ]
-    assert (await api.get_water_quality())["commune"] is None
-    assert (await api.get_water_quality())["commune"] is None
-    fallback = await api.get_water_quality("Missing")
-    assert fallback["commune"] == "Lyon"
-    assert fallback["durete_fh"] is None
-    with pytest.raises(RuntimeError):
-        await api.get_water_quality()
 
 
 def test_static_formatters_handle_malformed_and_all_realistic_payload_shapes():
@@ -195,7 +160,12 @@ def test_static_formatters_handle_malformed_and_all_realistic_payload_shapes():
     assert EauGrandLyonApi.format_daily_consumptions([], "C1") == []
     daily = EauGrandLyonApi.format_daily_consumptions(
         [
-            {"date": "2026-08-01", "volumeFuiteEstime": "bad", "debitMin": "bad", "index": "bad"},
+            {
+                "date": "2026-08-01",
+                "volumeFuiteEstime": "bad",
+                "debitMin": "bad",
+                "index": "bad",
+            },
             {"date": "2026-08-02", "volumeFuiteEstime": 0.1},
         ],
         "C1",

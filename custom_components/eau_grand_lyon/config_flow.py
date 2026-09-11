@@ -31,21 +31,25 @@ from .const import (
     CONF_LEAK_MULTIPLIER,
     CONF_MAX_RETRIES,
     CONF_PASSWORD,
+    CONF_PFAS_ENABLED,
     CONF_PRICE_ENTITY,
     CONF_SUBSCRIPTION_ANNUAL,
     CONF_TARIF_M3,
     CONF_TARIFF_MODE,
     CONF_UPDATE_INTERVAL_HOURS,
+    CONF_VIGIEAU_ENABLED,
     CONF_WATER_HARDNESS,
     CONF_WATER_QUALITY_COMMUNE,
     DEFAULT_EXPERIMENTAL,
     DEFAULT_HOUSEHOLD_SIZE,
     DEFAULT_LEAK_MULTIPLIER,
     DEFAULT_MAX_RETRIES,
+    DEFAULT_PFAS_ENABLED,
     DEFAULT_SUBSCRIPTION_ANNUAL,
     DEFAULT_TARIF_M3,
     DEFAULT_TARIFF_MODE,
     DEFAULT_UPDATE_INTERVAL_HOURS,
+    DEFAULT_VIGIEAU_ENABLED,
     DEFAULT_WATER_HARDNESS,
     DEFAULT_WATER_QUALITY_COMMUNE,
     DOMAIN,
@@ -287,6 +291,8 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
         current_commune = opts.get(CONF_WATER_QUALITY_COMMUNE, DEFAULT_WATER_QUALITY_COMMUNE)
         current_subscription = float(opts.get(CONF_SUBSCRIPTION_ANNUAL, DEFAULT_SUBSCRIPTION_ANNUAL))
         current_leak_multiplier = float(opts.get(CONF_LEAK_MULTIPLIER, DEFAULT_LEAK_MULTIPLIER))
+        current_pfas_enabled = bool(opts.get(CONF_PFAS_ENABLED, DEFAULT_PFAS_ENABLED))
+        current_vigieau_enabled = bool(opts.get(CONF_VIGIEAU_ENABLED, DEFAULT_VIGIEAU_ENABLED))
 
         options_schema = vol.Schema(
             {
@@ -344,6 +350,14 @@ class EauGrandLyonOptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_WATER_QUALITY_COMMUNE,
                     default=current_commune,
                 ): str,
+                vol.Optional(
+                    CONF_PFAS_ENABLED,
+                    default=current_pfas_enabled,
+                ): bool,
+                vol.Optional(
+                    CONF_VIGIEAU_ENABLED,
+                    default=current_vigieau_enabled,
+                ): bool,
                 vol.Optional(
                     CONF_SUBSCRIPTION_ANNUAL,
                     default=current_subscription,

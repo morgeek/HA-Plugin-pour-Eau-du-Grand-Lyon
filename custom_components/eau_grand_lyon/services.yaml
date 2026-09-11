@@ -33,9 +33,11 @@ download_latest_invoice:
   fields:
     path:
       name: Chemin de destination
-      description: Chemin complet du fichier PDF.
-      example: "/config/www/eau_grand_lyon/derniere_facture.pdf"
-      default: "/config/www/eau_grand_lyon/latest_invoice.pdf"
+      description: >
+        Chemin complet du fichier PDF. Si omis, utilise le dossier www de
+        l'installation Home Assistant.
+      example: "/home/homeassistant/.homeassistant/www/eau_grand_lyon/derniere_facture.pdf"
+      required: false
       selector:
         text:
     contract_reference:

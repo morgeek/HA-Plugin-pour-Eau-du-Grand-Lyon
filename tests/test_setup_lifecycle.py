@@ -129,9 +129,12 @@ class TestHttpSessionSecurity:
         cookie_jar_factory = MagicMock(return_value=jar)
         timeout_factory = MagicMock(return_value=timeout)
         session_factory = MagicMock(return_value=session)
+        public_session = MagicMock()
+        public_session_factory = MagicMock(return_value=public_session)
         monkeypatch.setattr(coordinator_module.aiohttp, "CookieJar", cookie_jar_factory, raising=False)
         monkeypatch.setattr(coordinator_module.aiohttp, "ClientTimeout", timeout_factory, raising=False)
         monkeypatch.setattr(coordinator_module, "async_create_clientsession", session_factory)
+        monkeypatch.setattr(coordinator_module, "async_get_clientsession", public_session_factory)
         monkeypatch.setattr(coordinator_module, "_RebuildableStore", MagicMock())
 
         hass = MagicMock()
@@ -140,6 +143,7 @@ class TestHttpSessionSecurity:
         cookie_jar_factory.assert_called_once_with()
         timeout_factory.assert_called_once_with(total=30)
         session_factory.assert_called_once_with(hass, cookie_jar=jar, timeout=timeout)
+        public_session_factory.assert_called_once_with(hass)
 
     def test_pkce_challenge_matches_rfc_7636_vector(self):
         verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
@@ -237,6 +241,23 @@ class TestServiceHandlers:
         notification = hass.services.async_call.await_args.args[2]
         assert "/local/eau_grand_lyon/invoice.pdf" in notification["message"]
         assert ".." not in notification["message"]
+
+    @pytest.mark.asyncio
+    async def test_download_invoice_default_path_uses_instance_config_directory(self, tmp_path):
+        coordinator = self._invoice_coordinator()
+        hass, handlers = _service_hass(coordinator)
+        www_root = tmp_path / "bare-metal-config" / "www"
+        hass.config.path.return_value = str(www_root)
+        hass.config.is_allowed_path.return_value = True
+        hass.services.async_call = AsyncMock()
+
+        await handlers["download_latest_invoice"](MagicMock(data={}))
+
+        target = www_root / "eau_grand_lyon" / "latest_invoice.pdf"
+        assert target.read_bytes() == b"%PDF-test"
+        hass.config.is_allowed_path.assert_called_once_with(str(target))
+        notification = hass.services.async_call.await_args.args[2]
+        assert "/local/eau_grand_lyon/latest_invoice.pdf" in notification["message"]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("directory", ["exports", "www_fake"])

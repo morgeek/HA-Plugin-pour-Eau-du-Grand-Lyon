@@ -59,10 +59,16 @@ DEFAULT_HOUSEHOLD_SIZE = 2
 CONF_WATER_HARDNESS = "water_hardness"
 DEFAULT_WATER_HARDNESS = 30.0  # °fH (Moyenne Lyon)
 
-# Commune pour filtrer les mesures Open Data de qualité de l'eau.
-# Vide = première mesure du jeu de données (commune arbitraire du réseau).
+# Commune exacte pour résoudre les analyses réglementaires Hub'Eau.
+# Vide = données de qualité indisponibles.
 CONF_WATER_QUALITY_COMMUNE = "water_quality_commune"
 DEFAULT_WATER_QUALITY_COMMUNE = ""
+
+# Sources publiques optionnelles, explicitement désactivées par défaut.
+CONF_PFAS_ENABLED = "pfas_enabled"
+DEFAULT_PFAS_ENABLED = False
+CONF_VIGIEAU_ENABLED = "vigieau_enabled"
+DEFAULT_VIGIEAU_ENABLED = False
 
 # Tuning runtime comportement
 RATE_LIMIT_DELAY_S = 30.0
