@@ -57,16 +57,16 @@ views:
           - entity: sensor.eau_du_grand_lyon_empreinte_co2
             name: Impact CO2 (kg CO2e)
 
-      # ── QUALITÉ DE L'EAU (OPEN DATA) ─────────────────────────────
+      # ── QUALITÉ DE L'EAU (HUB'EAU) ───────────────────────────────
       - type: entities
-        title: 🔬 Qualité de l'Eau (Open Data)
+        title: 🔬 Qualité de l'Eau (Hub'Eau)
         show_header_toggle: false
         entities:
-          - entity: sensor.eau_du_grand_lyon_durete_de_l_eau_open_data
+          - entity: sensor.eau_du_grand_lyon_durete_de_l_eau_hub_eau
             name: Dureté réelle (°fH)
-          - entity: sensor.eau_du_grand_lyon_nitrates_open_data
+          - entity: sensor.eau_du_grand_lyon_nitrates_hub_eau
             name: Nitrates (mg/L)
-          - entity: sensor.eau_du_grand_lyon_chlore_residuel_open_data
+          - entity: sensor.eau_du_grand_lyon_chlore_libre_hub_eau
             name: Chlore (mg/L)
 
       # ── MAINTENANCE & CALCAIRE ───────────────────────────────────

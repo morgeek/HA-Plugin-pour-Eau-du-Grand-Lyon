@@ -94,8 +94,51 @@ async def async_setup_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry)
     except Exception:  # noqa: BLE001 - best-effort migration must never break setup
         _LOGGER.exception("Legacy device cleanup failed; keeping the existing device")
 
+    try:
+        _async_reenable_formerly_disabled_defaults(hass, entry)
+    except Exception:  # noqa: BLE001 - best-effort migration must never break setup
+        _LOGGER.exception("Re-enabling formerly disabled entities failed")
+
     entry.async_on_unload(entry.add_update_listener(_async_update_options))
     return True
+
+
+# Unique-id suffixes of entities whose entity_registry_enabled_default switched
+# from False to True after some users had already set up the integration
+# (dureté/nitrates/chlore Hub'Eau, conso 7j/30j, coût énergie — voir CHANGELOG 2.9.0).
+_REENABLED_BY_DEFAULT_UNIQUE_ID_SUFFIXES = (
+    "_water_hardness_live",
+    "_nitrates",
+    "_chlore",
+    "_conso_7j",
+    "_conso_30j",
+    "_energy_cost",
+)
+
+
+def _async_reenable_formerly_disabled_defaults(hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> int:
+    """Re-enable entities that HA auto-disabled under an older default.
+
+    Home Assistant only applies `entity_registry_enabled_default` when an
+    entity is first registered; it never revisits already-registered entities
+    when the integration's default changes later. Users who set up the
+    integration before these sensors became enabled-by-default are stuck with
+    them hidden as "disabled by integration" forever unless something
+    explicitly re-enables them. Entities a user disabled themselves
+    (disabled_by=USER) are left untouched.
+    """
+    entity_registry = er.async_get(hass)
+    reenabled = 0
+    for entity_entry in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
+        if entity_entry.disabled_by != er.RegistryEntryDisabler.INTEGRATION:
+            continue
+        if not entity_entry.unique_id.endswith(_REENABLED_BY_DEFAULT_UNIQUE_ID_SUFFIXES):
+            continue
+        entity_registry.async_update_entity(entity_entry.entity_id, disabled_by=None)
+        reenabled += 1
+    if reenabled:
+        _LOGGER.info("Re-enabled %d entities previously disabled by an outdated default", reenabled)
+    return reenabled
 
 
 def _async_cleanup_legacy_device(hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> bool:

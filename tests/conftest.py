@@ -109,10 +109,18 @@ def _stub_homeassistant() -> None:
         DeviceInfo=MagicMock,
         async_get=MagicMock(),
     )
+
+    class _RegistryEntryDisabler:
+        INTEGRATION = "integration"
+        USER = "user"
+        CONFIG_ENTRY = "config_entry"
+
     _make_module(
         "homeassistant.helpers.entity_registry",
         async_get=MagicMock(),
         async_entries_for_device=MagicMock(return_value=[]),
+        async_entries_for_config_entry=MagicMock(return_value=[]),
+        RegistryEntryDisabler=_RegistryEntryDisabler,
     )
     _make_module("homeassistant.helpers.entity_platform", AddEntitiesCallback=MagicMock)
 
