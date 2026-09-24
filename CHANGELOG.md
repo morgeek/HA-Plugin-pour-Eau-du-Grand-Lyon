@@ -6,7 +6,7 @@ Tous les changements notables apportés à cette intégration seront documentés
 
 ### Maintenance
 
-- Découpage de `coordinator.py` (1 800 → ~900 lignes) : il ne conserve que l'orchestration des cycles, le retry/mode hors-ligne et la persistance. Les calculs locaux (tendances, Eco-Score, heuristiques de fuite, courbe horaire, calcaire) passent dans `analytics.py`, les statistiques Recorder dans `recorder_statistics.py`, la fusion des historiques dans `history.py`, le parsing des coupures dans `outages.py`, le cache d'API par cycle dans `api/cycle_cache.py` et le calcul des estimations de coût dans `billing.py`. Aucun changement de comportement, d'entité ni de `statistic_id`.
+- Découpage de `coordinator.py` (1 800 → ~1 000 lignes) : il ne conserve que l'orchestration des cycles, le retry/mode hors-ligne et la persistance. Les calculs locaux (tendances, Eco-Score, heuristiques de fuite, courbe horaire, calcaire) passent dans `analytics.py`, les statistiques Recorder dans `recorder_statistics.py`, la fusion des historiques dans `history.py`, le parsing des coupures dans `outages.py`, le cache d'API par cycle dans `api/cycle_cache.py` et le calcul des estimations de coût dans `billing.py`. Aucun changement de comportement, d'entité ni de `statistic_id`.
 - Suppression de code mort (`_get_real_monthly_cost`, `_get_real_annual_cost`, `_stats_month_counts`).
 - Restauration du `.gitignore`.
 
