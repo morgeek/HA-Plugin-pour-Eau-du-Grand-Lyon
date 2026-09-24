@@ -6,8 +6,15 @@ from dataclasses import dataclass
 import math
 import re
 from collections.abc import Mapping
+from typing import Any
 
-from .models import CostBreakdown
+from .const import (
+    TARIFF_MODE_DYNAMIC,
+    TARIFF_MODE_LATEST_INVOICE,
+    TARIFF_MODE_MANUAL,
+    TARIFF_MODE_OFFICIAL_2026,
+)
+from .models import BillingData, CostBreakdown, InvoiceData
 
 # Grille générale TTC applicable au 01/01/2026.
 # Source : https://www.eaudugrandlyon.com/wp-content/uploads/2026/04/Tarif-general-2026.pdf
@@ -177,3 +184,81 @@ def official_2026_subscription(calibre: object) -> tuple[float, str]:
             source += "_assumed"
         return OFFICIAL_2026_SUBSCRIPTIONS_TTC[diameter], source
     return OFFICIAL_2026_SUBSCRIPTIONS_TTC[15], "official_2026_dn15_fallback"
+
+
+def build_billing_data(
+    mode: str,
+    details: Mapping[str, Any],
+    latest_invoice: InvoiceData | None,
+    conso_courant: float | None,
+    conso_annuelle: float,
+    conso_cumulee_annee: float,
+    configured_rate: float,
+    subscription_annual: float | int | str,
+) -> BillingData:
+    """Build transparent monthly and rolling-annual cost estimates.
+
+    `subscription_annual` est la valeur brute de l'option : elle n'est
+    convertie qu'en mode manuel/dynamique, seuls modes qui l'utilisent.
+    """
+    monthly_volume = conso_courant or 0.0
+
+    if mode == TARIFF_MODE_LATEST_INVOICE:
+        invoice_rate = effective_invoice_rate(latest_invoice)
+        if invoice_rate is not None:
+            source = "latest_invoice_ttc_per_m3"
+            monthly = linear_estimate(monthly_volume, invoice_rate, source=source)
+            annual = linear_estimate(conso_annuelle, invoice_rate, source=source)
+            rate = invoice_rate
+            subscription = 0.0
+        else:
+            # Aucune facture exploitable : la grille officielle vaut mieux
+            # que l'ancien tarif indicatif 5,20 €/m³.
+            mode = TARIFF_MODE_OFFICIAL_2026
+
+    if mode == TARIFF_MODE_OFFICIAL_2026:
+        subscription, subscription_source = official_2026_subscription(details.get("calibre_compteur"))
+        annual = official_2026_estimate(conso_annuelle, fixed_eur=subscription)
+        volume_before_month = max(0.0, conso_cumulee_annee - monthly_volume)
+        monthly = official_2026_estimate(
+            monthly_volume,
+            fixed_eur=subscription / 12.0,
+            starting_annual_volume_m3=volume_before_month,
+        )
+        rate = OFFICIAL_2026_TIER_2_TOTAL_TTC_M3
+        source = subscription_source
+    elif mode in (TARIFF_MODE_MANUAL, TARIFF_MODE_DYNAMIC):
+        subscription = float(subscription_annual)
+        source = "dynamic_entity" if mode == TARIFF_MODE_DYNAMIC else "manual_flat_rate"
+        monthly = linear_estimate(
+            monthly_volume,
+            configured_rate,
+            subscription / 12.0,
+            source=source,
+        )
+        annual = linear_estimate(conso_annuelle, configured_rate, subscription, source=source)
+        rate = configured_rate
+
+    invoice_amount = None
+    invoice_volume = None
+    invoice_rate = effective_invoice_rate(latest_invoice)
+    if latest_invoice:
+        invoice_amount = latest_invoice.get("montant_ttc")
+        invoice_volume = latest_invoice.get("volume_m3")
+
+    return {
+        "billing_mode": mode,
+        "tariff_source": source,
+        "estimation": True,
+        "tarif_m3": round(rate, 6),
+        "subscription_annual": round(subscription, 2),
+        "cout_mois_courant_eur": (monthly.variable_eur if conso_courant is not None else None),
+        "cout_annuel_eur": annual.variable_eur,
+        "cout_reel_mois": (monthly.total_eur if conso_courant is not None or monthly.fixed_eur else None),
+        "cout_reel_annuel": annual.total_eur,
+        "cost_breakdown_monthly": monthly.as_dict(),
+        "cost_breakdown_annual": annual.as_dict(),
+        "latest_invoice_ttc": invoice_amount,
+        "latest_invoice_volume_m3": invoice_volume,
+        "latest_invoice_effective_rate_eur_m3": (round(invoice_rate, 6) if invoice_rate is not None else None),
+    }
