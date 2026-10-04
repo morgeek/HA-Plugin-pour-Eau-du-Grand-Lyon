@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import calendar
 import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -306,3 +307,21 @@ def test_outage_parser_ignores_malformed_alert_and_normalizes_fallback_fields():
             "reference": "1",
         }
     ]
+
+
+def test_calculate_intelligence_predicts_from_current_month_daily_entries() -> None:
+    coord = _coordinator()
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1)
+    days_in_month = calendar.monthrange(now.year, now.month)[1]
+    daily = [
+        {"date": (month_start - timedelta(days=1)).strftime("%Y-%m-%d"), "consommation_m3": 9.0},
+        {"date": month_start.strftime("%Y-%m-%d"), "consommation_m3": 0.2},
+    ]
+
+    # 12.0 is the last monthly reading (previous month): it must not be extrapolated.
+    pred, cost, tendance = coord._calculate_intelligence(12.0, 6.0, daily, 4.0)
+
+    assert pred == round(0.2 * days_in_month, 1)
+    assert cost == round(pred * 4.0, 2)
+    assert tendance == 100.0
