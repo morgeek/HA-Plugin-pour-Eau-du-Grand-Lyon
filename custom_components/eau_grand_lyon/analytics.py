@@ -88,8 +88,9 @@ def trend_and_prediction(
 ) -> tuple[float | None, float | None, float | None]:
     """Retourne (prédiction m³ fin de mois, prédiction coût, tendance N-1 en %).
 
-    La prédiction est une extrapolation linéaire au dernier jour publié,
-    uniquement quand ce jour appartient au mois courant.
+    La prédiction extrapole le cumul des relevés journaliers du mois en cours :
+    le dernier relevé mensuel (`current`) peut porter sur le mois précédent et
+    ne doit pas être divisé par le nombre de jours écoulés du mois courant.
     """
     if current is None:
         return None, None, None
@@ -97,21 +98,20 @@ def trend_and_prediction(
     tendance = round(((current - n1) / n1) * 100, 1) if n1 and n1 > 0 else None
 
     now = datetime.now(timezone.utc)
-    last_data_date = now
-    if daily:
-        try:
-            last_data_date = datetime.strptime(daily[-1]["date"], "%Y-%m-%d")
-        except (ValueError, KeyError, TypeError):
-            pass
+    prefixe_mois = now.strftime("%Y-%m-")
+    jours_mois = [d for d in daily if str(d.get("date", "")).startswith(prefixe_mois)]
+    if not jours_mois:
+        return None, None, tendance
 
-    if last_data_date.month == now.month and last_data_date.year == now.year:
-        jours_ecoules = last_data_date.day
-        _, jours_total = calendar.monthrange(now.year, now.month)
-        if jours_ecoules > 0:
-            pred_conso = round((current / jours_ecoules) * jours_total, 1)
-            return pred_conso, round(pred_conso * tarif, 2), tendance
+    try:
+        jours_ecoules = datetime.strptime(str(jours_mois[-1]["date"]), "%Y-%m-%d").day
+    except ValueError:
+        return None, None, tendance
 
-    return None, None, tendance
+    volume_mois = sum(d.get("consommation_m3") or 0.0 for d in jours_mois)
+    _, jours_total = calendar.monthrange(now.year, now.month)
+    pred_conso = round((volume_mois / jours_ecoules) * jours_total, 1)
+    return pred_conso, round(pred_conso * tarif, 2), tendance
 
 
 def household_size(details: dict[str, Any], configured: int | float | str | None, default: int) -> int:

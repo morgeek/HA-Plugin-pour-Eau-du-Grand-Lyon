@@ -4,6 +4,10 @@ Tous les changements notables apportés à cette intégration seront documentés
 
 ## [Non publié]
 
+### Corrections
+
+- La prédiction de consommation du mois extrapole désormais le cumul des relevés journaliers du mois en cours, au lieu de diviser le dernier relevé mensuel (souvent celui du mois précédent) par le nombre de jours écoulés, ce qui donnait des valeurs aberrantes en début de mois (ex. 372 m³ le 1er octobre). Merci à @carbonimax pour la découverte et le correctif initial (#32).
+
 ### Maintenance
 
 - Découpage de `coordinator.py` (1 800 → ~1 000 lignes) : il ne conserve que l'orchestration des cycles, le retry/mode hors-ligne et la persistance. Les calculs locaux (tendances, Eco-Score, heuristiques de fuite, courbe horaire, calcaire) passent dans `analytics.py`, les statistiques Recorder dans `recorder_statistics.py`, la fusion des historiques dans `history.py`, le parsing des coupures dans `outages.py`, le cache d'API par cycle dans `api/cycle_cache.py` et le calcul des estimations de coût dans `billing.py`. Aucun changement de comportement, d'entité ni de `statistic_id`.
