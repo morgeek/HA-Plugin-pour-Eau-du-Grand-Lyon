@@ -308,7 +308,7 @@ def test_outage_parser_ignores_malformed_alert_and_normalizes_fallback_fields():
 
 
 def test_trend_and_prediction_uses_current_month_daily_entries() -> None:
-    now = datetime.now(timezone.utc)
+    now = analytics.local_now()
     month_start = now.replace(day=1)
     days_in_month = calendar.monthrange(now.year, now.month)[1]
     daily = [
@@ -322,3 +322,18 @@ def test_trend_and_prediction_uses_current_month_daily_entries() -> None:
     assert pred == round(0.2 * days_in_month, 1)
     assert cost == round(pred * 4.0, 2)
     assert tendance == 100.0
+
+
+def test_trend_and_prediction_uses_lyon_date_at_month_boundary() -> None:
+    # 1er novembre 00:30 à Lyon = 31 octobre 23:30 UTC : le mois courant est novembre.
+    lyon_now = datetime(2026, 11, 1, 0, 30, tzinfo=analytics.LOCAL_TZ)
+    daily = [
+        {"date": "2026-10-31", "consommation_m3": 9.0},
+        {"date": "2026-11-01", "consommation_m3": 0.2},
+    ]
+
+    with patch.object(analytics, "local_now", return_value=lyon_now):
+        pred, _cost, _tendance = analytics.trend_and_prediction(12.0, 6.0, daily, 4.0)
+        assert analytics.drought_level() == "normal"
+
+    assert pred == 6.0  # 0.2 m³ × 30 jours, et non 9.2 m³ extrapolés sur octobre

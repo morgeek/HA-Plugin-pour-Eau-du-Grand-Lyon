@@ -753,7 +753,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         last_12 = consos[-12:] if len(consos) >= 12 else consos
         conso_annuelle = round(sum(e["consommation_m3"] for e in last_12), 1)
 
-        current_year = datetime.now(timezone.utc).year
+        current_year = analytics.local_now().year
         conso_cumulee_annee = round(
             sum(e["consommation_m3"] for e in consos if e.get("annee") == current_year),
             1,

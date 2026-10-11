@@ -10,8 +10,9 @@ from __future__ import annotations
 import calendar
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .api import MONTHS_FR
 from .models import DailyConsumption, MonthlyConsumption
@@ -24,6 +25,13 @@ CO2_KG_PER_M3 = 0.52
 LIMESCALE_ALERT_G = 100000
 # Plancher de l'heuristique de pic journalier (500 L/j) contre les faux positifs.
 LEAK_MIN_DAILY_M3 = 0.5
+# Fuseau des dates publiées par Eau du Grand Lyon (relevés journaliers, mois, années).
+LOCAL_TZ = ZoneInfo("Europe/Paris")
+
+
+def local_now() -> datetime:
+    """Date/heure courante à Lyon : les relevés sont datés en heure locale, pas en UTC."""
+    return datetime.now(LOCAL_TZ)
 
 
 def parse_nb_habitants(val: str) -> int:
@@ -97,7 +105,7 @@ def trend_and_prediction(
 
     tendance = round(((current - n1) / n1) * 100, 1) if n1 and n1 > 0 else None
 
-    now = datetime.now(timezone.utc)
+    now = local_now()
     prefixe_mois = now.strftime("%Y-%m-")
     jours_mois = [d for d in daily if str(d.get("date", "")).startswith(prefixe_mois)]
     if not jours_mois:
@@ -258,5 +266,5 @@ def limescale(consos: list[MonthlyConsumption], hardness_fh: float) -> tuple[flo
 
 def drought_level() -> str:
     """Niveau de sécheresse (heuristique calendaire). Valeurs = clés ENUM traduites."""
-    current_month = datetime.now(timezone.utc).month
+    current_month = local_now().month
     return "vigilance" if 6 <= current_month <= 9 else "normal"
