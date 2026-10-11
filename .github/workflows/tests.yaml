@@ -3,11 +3,27 @@ name: Tests & Validation
 on:
   push:
     branches: [main, DEV]
+    tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch: {}
 
 jobs:
+  release-consistency:
+    name: Cohérence version / CHANGELOG / tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier manifest, CHANGELOG et tag
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            python3 scripts/check_release.py "${GITHUB_REF_NAME}"
+          else
+            python3 scripts/check_release.py
+          fi
+
   tests:
     name: Tests Python
     runs-on: ubuntu-latest
