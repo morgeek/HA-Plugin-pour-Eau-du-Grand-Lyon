@@ -9,6 +9,7 @@ Tous les changements notables apportés à cette intégration seront documentés
 ### Corrections
 
 - La version du `manifest.json` (restée à 3.5.5 dans la release v3.6) est alignée sur la release, et la CI (`scripts/check_release.py`) refuse désormais tout tag ou toute fusion où manifest, CHANGELOG et tag divergent.
+- Les calculs liés à la date du jour (mois de la prédiction, cumul de l'année, saison sécheresse) utilisent l'heure de Lyon et non plus l'UTC : le 1er du mois (ou le 1er janvier) entre minuit et 1 h/2 h, la prédiction visait encore le mois précédent.
 - La prédiction de consommation du mois extrapole désormais le cumul des relevés journaliers du mois en cours, au lieu de diviser le dernier relevé mensuel (souvent celui du mois précédent) par le nombre de jours écoulés, ce qui donnait des valeurs aberrantes en début de mois (ex. 372 m³ le 1er octobre). Merci à @carbonimax pour la découverte et le correctif initial (#32).
 
 ### Maintenance
