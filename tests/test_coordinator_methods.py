@@ -12,7 +12,15 @@ from custom_components.eau_grand_lyon.api import (
     NetworkError,
     WafBlockedError,
 )
+from custom_components.eau_grand_lyon.analytics import daily_aggregates
 from custom_components.eau_grand_lyon.coordinator import EauGrandLyonCoordinator
+from custom_components.eau_grand_lyon.history import merge_daily_history, merge_monthly_history, sanitize_daily_history
+from custom_components.eau_grand_lyon.recorder_statistics import (
+    build_daily_series,
+    build_monthly_series,
+    statistic_id,
+    statistic_ref,
+)
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
@@ -40,20 +48,17 @@ def _make_coordinator(options=None):
 
 
 class TestCalculateDailyAggregates:
-    def setup_method(self):
-        self.coord = _make_coordinator()
-
     def test_empty_returns_none_none(self):
-        assert self.coord._calculate_daily_aggregates([]) == (None, None)
+        assert daily_aggregates([]) == (None, None)
 
     def test_fewer_than_7_uses_all(self):
         daily = [{"consommation_m3": 1.0} for _ in range(5)]
-        c7, c30 = self.coord._calculate_daily_aggregates(daily)
+        c7, c30 = daily_aggregates(daily)
         assert c7 == 5.0
         assert c30 == 5.0
 
     def test_7_days_correct(self, sample_daily):
-        c7, c30 = self.coord._calculate_daily_aggregates(sample_daily)
+        c7, c30 = daily_aggregates(sample_daily)
         expected_7 = round(sum(e["consommation_m3"] for e in sample_daily[-7:]), 2)
         expected_30 = round(sum(e["consommation_m3"] for e in sample_daily[-30:]), 2)
         assert c7 == expected_7
@@ -61,7 +66,7 @@ class TestCalculateDailyAggregates:
 
     def test_30_days_same_as_7_when_only_7_entries(self):
         daily = [{"consommation_m3": 2.0} for _ in range(7)]
-        c7, c30 = self.coord._calculate_daily_aggregates(daily)
+        c7, c30 = daily_aggregates(daily)
         assert c7 == c30 == 14.0
 
 
@@ -306,7 +311,6 @@ class TestUpdateErrorPaths:
     async def test_inject_statistics_cost_metadata_unit_class_is_none(self):
         """Cost stats must set unit_class=None (currency has no converter; omitting it is deprecated)."""
         self.coord.hass = MagicMock()
-        self.coord._stats_month_counts = {}
         self.coord._monthly_history = {}
 
         contract_data = {
@@ -320,7 +324,7 @@ class TestUpdateErrorPaths:
         }
 
         with patch(
-            "custom_components.eau_grand_lyon.coordinator.async_add_external_statistics",
+            "custom_components.eau_grand_lyon.recorder_statistics.async_add_external_statistics",
             new=MagicMock(return_value=None),
         ) as add_stats:
             await self.coord._inject_statistics(contract_data)
@@ -348,7 +352,7 @@ class TestUpdateErrorPaths:
         }
 
         with patch(
-            "custom_components.eau_grand_lyon.coordinator.async_add_external_statistics",
+            "custom_components.eau_grand_lyon.recorder_statistics.async_add_external_statistics",
             new=MagicMock(return_value=None),
         ) as add_stats:
             await self.coord._inject_statistics(contract_data)
@@ -373,7 +377,7 @@ class TestUpdateErrorPaths:
         }
 
         with patch(
-            "custom_components.eau_grand_lyon.coordinator.async_add_external_statistics",
+            "custom_components.eau_grand_lyon.recorder_statistics.async_add_external_statistics",
             new=MagicMock(return_value=None),
         ) as add_stats:
             await self.coord._inject_statistics(contract_data)
@@ -395,8 +399,8 @@ class TestUpdateErrorPaths:
             {"mois_index": 1, "annee": 2025, "consommation_m3": 12.0},
             {"mois_index": 2, "annee": 2025, "consommation_m3": 8.0},
         ]
-        with patch("custom_components.eau_grand_lyon.coordinator.StatisticData", new=lambda **kw: kw):
-            series = EauGrandLyonCoordinator._build_stat_series(consos, lambda c: c, None, 3)
+        with patch("custom_components.eau_grand_lyon.recorder_statistics.StatisticData", new=lambda **kw: kw):
+            series = build_monthly_series(consos, lambda c: c, None, 3)
         assert [s["sum"] for s in series] == [10.0, 22.0, 30.0]
         assert [s["state"] for s in series] == [10.0, 12.0, 8.0]
 
@@ -409,8 +413,8 @@ class TestUpdateErrorPaths:
         ]
         # Recorder : dernier point = Fév 2025, somme cumulée 122 (base avant Fév = 110).
         anchor = ((2025, 2), 110.0)
-        with patch("custom_components.eau_grand_lyon.coordinator.StatisticData", new=lambda **kw: kw):
-            series = EauGrandLyonCoordinator._build_stat_series(consos, lambda c: c, anchor, 3)
+        with patch("custom_components.eau_grand_lyon.recorder_statistics.StatisticData", new=lambda **kw: kw):
+            series = build_monthly_series(consos, lambda c: c, anchor, 3)
         # Janvier (antérieur au dernier point) est préservé, pas ré-injecté.
         assert len(series) == 2
         # Fév repart de 110 (+12=122), Mars continue (+8=130) : suite strictement croissante.
@@ -419,8 +423,8 @@ class TestUpdateErrorPaths:
 
     def test_build_stat_series_applies_value_fn_and_rounding(self):
         consos = [{"mois_index": 0, "annee": 2025, "consommation_m3": 10.0}]
-        with patch("custom_components.eau_grand_lyon.coordinator.StatisticData", new=lambda **kw: kw):
-            series = EauGrandLyonCoordinator._build_stat_series(consos, lambda c: round(c * 1.5, 2), None, 2)
+        with patch("custom_components.eau_grand_lyon.recorder_statistics.StatisticData", new=lambda **kw: kw):
+            series = build_monthly_series(consos, lambda c: round(c * 1.5, 2), None, 2)
         assert series[0]["state"] == 15.0
         assert series[0]["sum"] == 15.0
 
@@ -430,8 +434,8 @@ class TestUpdateErrorPaths:
             {"date": "2026-08-16", "consommation_m3": 1.0},
             {"date": "2026-08-17", "consommation_m3": 3.0},
         ]
-        with patch("custom_components.eau_grand_lyon.coordinator.StatisticData", new=lambda **kw: kw):
-            series = EauGrandLyonCoordinator._build_daily_stat_series(daily)
+        with patch("custom_components.eau_grand_lyon.recorder_statistics.StatisticData", new=lambda **kw: kw):
+            series = build_daily_series(daily)
         assert [point["start"].date().isoformat() for point in series] == [
             "2026-08-16",
             "2026-08-17",
@@ -445,14 +449,14 @@ class TestUpdateErrorPaths:
             {"date": "2026-08-16", "consommation_m3": 2.5},
             {"date": "2026-08-17", "consommation_m3": 3.0},
         ]
-        with patch("custom_components.eau_grand_lyon.coordinator.StatisticData", new=lambda **kw: kw):
-            series = EauGrandLyonCoordinator._build_daily_stat_series(daily)
+        with patch("custom_components.eau_grand_lyon.recorder_statistics.StatisticData", new=lambda **kw: kw):
+            series = build_daily_series(daily)
         assert len(series) == 2
         assert [point["state"] for point in series] == [2.5, 3.0]
         assert [point["sum"] for point in series] == [2.5, 5.5]
 
     def test_merge_daily_history_fresh_value_replaces_late_correction(self):
-        merged = EauGrandLyonCoordinator._merge_daily_history(
+        merged = merge_daily_history(
             [{"date": "2026-08-16", "consommation_m3": 1.0}],
             [
                 {"date": "2026-08-16", "consommation_m3": 2.5},
@@ -474,9 +478,7 @@ class TestUpdateErrorPaths:
             ],
             "BROKEN": "not-a-list",
         }
-        assert EauGrandLyonCoordinator._sanitize_daily_history(stored) == {
-            "REF1": [{"date": "2026-08-16", "consommation_m3": 1.2}]
-        }
+        assert sanitize_daily_history(stored) == {"REF1": [{"date": "2026-08-16", "consommation_m3": 1.2}]}
 
     def test_statistic_ref_sanitizes_invalid_characters(self):
         """Recorder statistic ids only allow lowercase [a-z0-9_], no edge/double underscores.
@@ -484,14 +486,14 @@ class TestUpdateErrorPaths:
         Regression: refs with uppercase letters or dashes produced an invalid
         statistic_id and statistics injection silently failed for those users.
         """
-        assert EauGrandLyonCoordinator._statistic_ref("0123456789") == "0123456789"
-        assert EauGrandLyonCoordinator._statistic_ref("REF1") == "ref1"
-        assert EauGrandLyonCoordinator._statistic_ref("AB-12 34/X") == "ab_12_34_x"
-        assert EauGrandLyonCoordinator._statistic_ref("--") == "contract"
+        assert statistic_ref("0123456789") == "0123456789"
+        assert statistic_ref("REF1") == "ref1"
+        assert statistic_ref("AB-12 34/X") == "ab_12_34_x"
+        assert statistic_ref("--") == "contract"
 
     def test_statistic_id_preserves_public_prefixes_and_sanitizes_ref(self):
-        assert EauGrandLyonCoordinator._statistic_id("water", "AB-12") == "eau_grand_lyon:water_ab_12"
-        assert EauGrandLyonCoordinator._statistic_id("cost_daily", "REF1") == "eau_grand_lyon:cost_daily_ref1"
+        assert statistic_id("water", "AB-12") == "eau_grand_lyon:water_ab_12"
+        assert statistic_id("cost_daily", "REF1") == "eau_grand_lyon:cost_daily_ref1"
 
     @pytest.mark.asyncio
     async def test_offline_cache_persists_failure_context(self):
@@ -530,21 +532,21 @@ class TestUpdateErrorPaths:
 
 
 class TestMergeMonthlyHistory:
-    """Tests for _merge_monthly_history static method."""
+    """Tests for history.merge_monthly_history."""
 
     def _make_month(self, annee, mois_index, conso):
         return {"annee": annee, "mois_index": mois_index, "label": f"M{mois_index}/{annee}", "consommation_m3": conso}
 
     def test_empty_stored_returns_fresh(self):
         fresh = [self._make_month(2025, 1, 10.0), self._make_month(2025, 2, 12.0)]
-        result = EauGrandLyonCoordinator._merge_monthly_history([], fresh)
+        result = merge_monthly_history([], fresh)
         assert len(result) == 2
         assert result[0]["consommation_m3"] == 10.0
 
     def test_fresh_overrides_stored_for_same_month(self):
         stored = [self._make_month(2025, 1, 10.0)]
         fresh = [self._make_month(2025, 1, 15.0)]  # API has updated value
-        result = EauGrandLyonCoordinator._merge_monthly_history(stored, fresh)
+        result = merge_monthly_history(stored, fresh)
         assert len(result) == 1
         assert result[0]["consommation_m3"] == 15.0
 
@@ -552,7 +554,7 @@ class TestMergeMonthlyHistory:
         # Simulates API returning months 13-24 (old) stored, now returning months 1-12 (new)
         stored = [self._make_month(2024, m, 10.0) for m in range(1, 13)]  # 12 months 2024
         fresh = [self._make_month(2025, m, 12.0) for m in range(1, 13)]  # 12 months 2025
-        result = EauGrandLyonCoordinator._merge_monthly_history(stored, fresh)
+        result = merge_monthly_history(stored, fresh)
         assert len(result) == 24
         assert result[0]["annee"] == 2024
         assert result[-1]["annee"] == 2025
@@ -560,14 +562,14 @@ class TestMergeMonthlyHistory:
     def test_sorted_chronologically(self):
         stored = [self._make_month(2024, 6, 8.0), self._make_month(2024, 3, 9.0)]
         fresh = [self._make_month(2024, 1, 10.0)]
-        result = EauGrandLyonCoordinator._merge_monthly_history(stored, fresh)
+        result = merge_monthly_history(stored, fresh)
         years_months = [(e["annee"], e["mois_index"]) for e in result]
         assert years_months == sorted(years_months)
 
     def test_capped_at_max_months(self):
         stored = [self._make_month(2023, m, 10.0) for m in range(1, 13)]  # 12 months 2023
         fresh = [self._make_month(2024, m, 11.0) for m in range(1, 13)]  # 12 months 2024
-        result = EauGrandLyonCoordinator._merge_monthly_history(stored, fresh, max_months=15)
+        result = merge_monthly_history(stored, fresh, max_months=15)
         assert len(result) == 15
         # Most recent months kept
         assert result[-1]["annee"] == 2024
@@ -576,7 +578,7 @@ class TestMergeMonthlyHistory:
         """After 1 year of accumulation, N-1 annual calculation becomes possible."""
         stored = [self._make_month(2024, m, 10.0) for m in range(1, 13)]
         fresh = [self._make_month(2025, m, 12.0) for m in range(1, 13)]
-        merged = EauGrandLyonCoordinator._merge_monthly_history(stored, fresh)
+        merged = merge_monthly_history(stored, fresh)
         assert len(merged) >= 24
         last_24 = merged[-24:-12]
         conso_n1 = sum(e["consommation_m3"] for e in last_24)
@@ -599,7 +601,6 @@ class TestCoordinatorFetchOrchestration:
         coord._hubeau_client.async_get_water_quality = AsyncMock(return_value={"commune": "Lyon"})
         coord.api.get_interventions = AsyncMock(return_value=[])
         coord._calculate_tarif_m3 = MagicMock(return_value=4.0)
-        coord._get_drought_level = MagicMock(return_value="normal")
         coord._check_vacation_alert = MagicMock(return_value=False)
         coord._inject_statistics = AsyncMock()
         coord._handle_alert_notifications = MagicMock()
@@ -627,7 +628,6 @@ class TestCoordinatorFetchOrchestration:
         coord._hubeau_client = MagicMock()
         coord._hubeau_client.async_get_water_quality = AsyncMock(side_effect=RuntimeError("Hub'Eau down"))
         coord._calculate_tarif_m3 = MagicMock(return_value=4.0)
-        coord._get_drought_level = MagicMock(return_value="normal")
         coord._check_vacation_alert = MagicMock(return_value=False)
         coord._inject_statistics = AsyncMock()
         coord._handle_alert_notifications = MagicMock()
@@ -683,10 +683,6 @@ class TestCoordinatorFetchOrchestration:
                 {"date": "2026-08-02T09:00:00", "consommation": 0.4},
             ]
         )
-        coord._calculate_intelligence = MagicMock(return_value=(12.0, 48.0, 25.0))
-        coord._calculate_eco_score = MagicMock(return_value=(5.0, "A", 2))
-        coord._calculate_experimental_leak = MagicMock(return_value=0.1)
-        coord._detect_local_leak = MagicMock(return_value=True)
         coord._get_real_index = AsyncMock(return_value=100.5)
 
         result = await coord._process_contract(

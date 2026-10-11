@@ -152,7 +152,7 @@ class TestHttpSessionSecurity:
         monkeypatch.setattr(coordinator_module.aiohttp, "ClientTimeout", timeout_factory, raising=False)
         monkeypatch.setattr(coordinator_module, "async_create_clientsession", session_factory)
         monkeypatch.setattr(coordinator_module, "async_get_clientsession", public_session_factory)
-        monkeypatch.setattr(coordinator_module, "_RebuildableStore", MagicMock())
+        monkeypatch.setattr(coordinator_module, "RebuildableStore", MagicMock())
 
         hass = MagicMock()
         EauGrandLyonCoordinator(hass, _entry())
