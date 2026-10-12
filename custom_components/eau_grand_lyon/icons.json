@@ -66,7 +66,8 @@
       "surconso_jour": { "default": "mdi:water-alert" },
       "surconso_mois": { "default": "mdi:water-alert" },
       "warsmann_eligibility": { "default": "mdi:scale-balance" },
-      "pfas_conform": { "default": "mdi:water-check" }
+      "pfas_conform": { "default": "mdi:water-check" },
+      "vacation_alert": { "default": "mdi:home-outline", "state": { "on": "mdi:home-alert" } }
     },
     "button": {
       "download_invoice": { "default": "mdi:file-download" }

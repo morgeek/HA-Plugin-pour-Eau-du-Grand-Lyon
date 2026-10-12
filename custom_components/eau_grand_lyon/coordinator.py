@@ -7,8 +7,9 @@ import json
 import logging
 import random
 import time
-from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Awaitable
+from datetime import date, datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 import aiohttp
 from homeassistant.core import HomeAssistant
@@ -92,6 +93,23 @@ from .repairs import check_long_outage_issue
 
 _LOGGER = logging.getLogger(__name__)
 
+_T = TypeVar("_T")
+
+
+async def _optional_contract_data(label: str, ref: str, call: Awaitable[_T], default: _T) -> _T:
+    """Récupère une donnée secondaire d'un contrat sans faire échouer le cycle.
+
+    Une erreur serveur, réseau ou WAF sur ces endpoints (prochaine facture,
+    point de service, seuils, courbe horaire, relevé SIAMM) ne doit pas faire
+    perdre les consommations déjà récupérées. Les erreurs d'authentification
+    continuent de remonter pour déclencher la réauthentification.
+    """
+    try:
+        return await call
+    except (ApiError, NetworkError, WafBlockedError, TimeoutError, ValueError, KeyError) as err:
+        _LOGGER.debug("Donnée secondaire « %s » indisponible pour le contrat %s : %s", label, ref, err)
+        return default
+
 
 class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
     """Manages periodic data updates for Eau du Grand Lyon.
@@ -120,6 +138,8 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         except (ValueError, TypeError):
             self._max_retries = DEFAULT_MAX_RETRIES
         self.vacation_mode = False
+        # Jour d'activation du mode vacances (heure de Lyon), restauré par le switch.
+        self.vacation_since: date | None = None
 
         # Mode expérimental — lu depuis les options
 
@@ -599,7 +619,11 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
                 _LOGGER.debug("Lazy interventions fetch failed: %s", err)
                 interventions_planifiees = []
 
-            drought_level = analytics.drought_level()
+            # Niveau officiel VigiEau quand la source est activée et a répondu,
+            # sinon heuristique saisonnière (vigilance de juin à septembre).
+            official_level = vigieau.get("level") if vigieau_enabled else None
+            drought_level = official_level or analytics.drought_level()
+            drought_source = "vigieau" if official_level else "heuristique"
 
             vacation_alert = self._check_vacation_alert(contracts_data)
 
@@ -621,6 +645,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
                 "contracts": contracts_data,
                 "global": global_data,
                 "drought_level": drought_level,
+                "drought_source": drought_source,
                 "vacation_alert": vacation_alert,
                 "nb_alertes": nb_alertes,
                 "interruptions": interruptions,
@@ -729,9 +754,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         ) = await asyncio.gather(
             cycle_api.get_monthly_consumptions(cid),
             cycle_api.get_daily_consumptions(cid, nb_jours=365),
-            cycle_api.get_date_prochaine_facture(cid),
-            cycle_api.get_point_de_service_etendu(cid),
-            cycle_api.get_alerte_surconsommation(cid),
+            _optional_contract_data("prochaine facture", ref, cycle_api.get_date_prochaine_facture(cid), None),
+            _optional_contract_data("point de service", ref, cycle_api.get_point_de_service_etendu(cid), {}),
+            _optional_contract_data("seuils de surconsommation", ref, cycle_api.get_alerte_surconsommation(cid), {}),
         )
         consos = cast(list[MonthlyConsumption], EauGrandLyonApi.format_consumptions(raw_consos))
         consos_journalieres = cast(list[DailyConsumption], raw_daily_data["entries"])
@@ -816,7 +841,9 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         # ── [EXPÉRIMENTAL] Courbe de charge et analyse horaire ────────────
         courbe_de_charge: list[dict[str, Any]] = []
         if experimental and consos_journalieres:
-            courbe_de_charge = await cycle_api.get_courbe_de_charge(cid, nb_jours=7)
+            courbe_de_charge = await _optional_contract_data(
+                "courbe de charge", ref, cycle_api.get_courbe_de_charge(cid, nb_jours=7), []
+            )
         consommation_derniere_heure_m3, heure_pic, debit_moyen_m3h = analytics.analyze_load_curve(courbe_de_charge)
 
         multiplier = float(self._entry.options.get(CONF_LEAK_MULTIPLIER, DEFAULT_LEAK_MULTIPLIER))
@@ -919,7 +946,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         """Récupère l'index réel du compteur."""
         if not experimental:
             return None
-        siamm = await cycle_api.get_derniere_releve_siamm(cid)
+        siamm = await _optional_contract_data("relevé SIAMM", cid, cycle_api.get_derniere_releve_siamm(cid), None)
         index = EauGrandLyonApi.parse_siamm_index(siamm) if siamm is not None else None
         if index is None and daily:
             for e in reversed(daily):
@@ -927,17 +954,29 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
                     return float(e["index_m3"])
         return index
 
+    def vacation_consumption(self, contracts: dict[str, ContractData] | None = None) -> tuple[float, int]:
+        """Consommation publiée (m³) et journées publiées depuis l'activation du mode vacances.
+
+        Tous contrats confondus ; (0.0, 0) quand le mode vacances est inactif.
+        """
+        if not self.vacation_mode or self.vacation_since is None:
+            return 0.0, 0
+        source = contracts if contracts is not None else (self.data or {}).get("contracts", {})
+        volume = 0.0
+        published_days = 0
+        for contract in source.values():
+            contract_volume, contract_days = analytics.consumption_after(
+                contract.get("consommations_journalieres", []), self.vacation_since
+            )
+            volume += contract_volume
+            published_days = max(published_days, contract_days)
+        return round(volume, 3), published_days
+
     def _check_vacation_alert(self, contracts_data: dict[str, ContractData]) -> bool:
-        """Vérifie si une alerte vacances doit être levée."""
-        if not self.vacation_mode:
-            return False
-        total_24h = 0.0
-        for c in contracts_data.values():
-            daily = c.get("consommations_journalieres", [])
-            if daily:
-                total_24h += daily[-1].get("consommation_m3", 0)
-        if total_24h > 0.001:
-            _LOGGER.warning("VACATION ALERT: %.3f m3 consumption detected", total_24h)
+        """Vrai si de l'eau a été consommée depuis l'activation du mode vacances."""
+        volume, _ = self.vacation_consumption(contracts_data)
+        if volume > analytics.VACATION_ALERT_M3:
+            _LOGGER.info("Vacation mode: %.3f m³ consumed since %s", volume, self.vacation_since)
             return True
         return False
 

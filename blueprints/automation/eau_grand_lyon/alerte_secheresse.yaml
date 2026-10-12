@@ -1,9 +1,11 @@
 blueprint:
   name: "🌵 Eau Grand Lyon — Alerte Niveau Sécheresse"
   description: >
-    Envoie une notification quand l'indicateur saisonnier local passe en
-    vigilance. Cet indicateur est une heuristique calendaire et ne reflète pas
-    les arrêtés préfectoraux ni les restrictions réellement en vigueur.
+    Envoie une notification quand le capteur « Niveau de sécheresse » passe à
+    l'un des niveaux sélectionnés. Si VigiEau est activé dans les options de
+    l'intégration, ce capteur reprend le niveau officiel de votre commune ;
+    sinon, c'est une heuristique calendaire (vigilance de juin à septembre)
+    qui ne reflète pas les arrêtés préfectoraux.
   domain: automation
   source_url: https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/blob/main/blueprints/automation/eau_grand_lyon/alerte_secheresse.yaml
   homeassistant:
@@ -23,12 +25,19 @@ blueprint:
       description: "Sélectionnez les niveaux qui doivent envoyer une alerte"
       default:
         - "vigilance"
+        - "alerte"
+        - "alerte_renforcee"
+        - "crise"
       selector:
         select:
           multiple: true
           options:
             - label: "Vigilance"
               value: "vigilance"
+            - label: "Alerte"
+              value: "alerte"
+            - label: "Alerte renforcée"
+              value: "alerte_renforcee"
             - label: "Crise"
               value: "crise"
     service_notification:
@@ -43,6 +52,9 @@ variables:
   sensor_entity: !input sensor_secheresse
   niveau_actuel: "{{ states(sensor_entity) }}"
   niveaux: !input niveaux_alertes
+  libelle: >-
+    {{ {'normal': 'Normal', 'vigilance': 'Vigilance', 'alerte': 'Alerte',
+        'alerte_renforcee': 'Alerte renforcée', 'crise': 'Crise'}.get(niveau_actuel, niveau_actuel) }}
 
 trigger:
   - platform: state
@@ -51,17 +63,20 @@ trigger:
 condition:
   - condition: template
     value_template: "{{ niveau_actuel in niveaux }}"
+  # Ignore les démarrages et les indisponibilités : sans ce filtre, chaque
+  # redémarrage de Home Assistant renvoyait la notification du niveau en cours.
   - condition: template
     value_template: >-
       {{ trigger.from_state is not none and trigger.to_state is not none
+         and trigger.from_state.state not in ['unknown', 'unavailable']
          and trigger.from_state.state != trigger.to_state.state }}
 
 action:
   - service: !input service_notification
     data:
-      title: "🌵 Alerte Sécheresse — {{ niveau_actuel }}"
+      title: "🌵 Alerte Sécheresse — {{ libelle }}"
       message: >
-        Le niveau de sécheresse dans votre zone vient de passer à **{{ niveau_actuel }}**.
+        Le niveau de sécheresse dans votre zone vient de passer à **{{ libelle }}**.
 
         ⚠️ Des restrictions d'usage de l'eau peuvent s'appliquer :
         - 🚫 Arrosage de jardins (heures creuses ou interdit)

@@ -17,6 +17,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
+from .analytics import VACATION_ALERT_M3
 from .const import CONF_LEAK_MULTIPLIER, DEFAULT_LEAK_MULTIPLIER
 from .coordinator import EauGrandLyonCoordinator
 from .device import account_device_info, contract_device_info
@@ -46,6 +47,7 @@ async def async_setup_entry(
 
         # [FEAT 3] Coupure/Travaux planifiés — capteur global
         candidates.append(EauGrandLyonOutageSensor(coordinator, entry))
+        candidates.append(EauGrandLyonVacationAlertSensor(coordinator, entry))
         if (coordinator.data or {}).get("pfas_enabled"):
             candidates.append(EauGrandLyonPfasConformSensor(coordinator, entry))
 
@@ -541,6 +543,47 @@ class EauGrandLyonPfasConformSensor(CoordinatorEntity[EauGrandLyonCoordinator], 
             "seuil_reglementaire_ug_l": data.get("threshold_ug_l", 0.1),
             "commune": data.get("commune"),
             "source": data.get("source", "Site public Eau du Grand Lyon"),
+        }
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return account_device_info(self.coordinator, self._entry)
+
+
+class EauGrandLyonVacationAlertSensor(CoordinatorEntity[EauGrandLyonCoordinator], BinarySensorEntity):
+    """Consommation publiée pour un jour postérieur à l'activation du mode vacances (Téléo)."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_translation_key = "vacation_alert"
+
+    def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_vacation_alert"
+
+    @property
+    def available(self) -> bool:
+        """Nécessite des relevés journaliers (compteur Téléo)."""
+        contracts = (self.coordinator.data or {}).get("contracts", {})
+        return bool(super().available and any(c.get("consommations_journalieres") for c in contracts.values()))
+
+    @property
+    def is_on(self) -> bool:
+        volume, _ = self.coordinator.vacation_consumption()
+        return volume > VACATION_ALERT_M3
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        volume, published_days = self.coordinator.vacation_consumption()
+        since = self.coordinator.vacation_since if self.coordinator.vacation_mode else None
+        return {
+            "mode_vacances": bool(self.coordinator.vacation_mode),
+            "depuis": since.isoformat() if since else None,
+            "consommation_depuis_m3": volume,
+            "jours_publies_depuis": published_days,
+            "seuil_litres": round(VACATION_ALERT_M3 * 1000),
+            "note": "Relevés Téléo publiés avec 1 à 3 jours de décalage : l'alerte peut arriver avec ce délai.",
         }
 
     @property

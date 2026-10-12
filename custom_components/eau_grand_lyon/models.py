@@ -206,6 +206,7 @@ EauGrandLyonData = TypedDict(
         "consecutive_failures": int,
         "contracts": dict[str, ContractData],
         "drought_level": str,
+        "drought_source": str,
         "experimental_mode": bool,
         "global": GlobalData,
         "interruptions": list[OutageData],

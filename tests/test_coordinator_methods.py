@@ -622,6 +622,45 @@ class TestCoordinatorFetchOrchestration:
         coord._handle_alert_notifications.assert_called_once_with(0)
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("vigieau_enabled", "official_level", "expected_level", "expected_source"),
+        [
+            (True, "crise", "crise", "vigieau"),
+            (True, None, "vigilance", "heuristique"),  # VigiEau muet : repli sur l'heuristique
+            (False, "crise", "vigilance", "heuristique"),  # VigiEau désactivé : jamais consulté
+        ],
+    )
+    async def test_drought_level_prefers_official_vigieau_level(
+        self, monkeypatch, vigieau_enabled, official_level, expected_level, expected_source
+    ):
+        from custom_components.eau_grand_lyon import analytics
+        from custom_components.eau_grand_lyon.vigieau import empty_vigieau_data
+
+        monkeypatch.setattr(analytics, "drought_level", lambda: "vigilance")
+        coord = _make_coordinator()
+        coord._entry.options = {"vigieau_enabled": vigieau_enabled, "water_quality_commune": "Lyon"}
+        coord.api = MagicMock(experimental=False)
+        coord.api.get_contracts = AsyncMock(return_value=[])
+        coord.api.get_alertes = AsyncMock(return_value=[])
+        coord.api.get_factures = AsyncMock(return_value=[])
+        coord.api.get_interventions = AsyncMock(return_value=[])
+        coord._hubeau_client = MagicMock()
+        coord._hubeau_client.async_get_water_quality = AsyncMock(return_value={"commune": "Lyon"})
+        coord._vigieau_client = MagicMock()
+        coord._vigieau_client.async_get = AsyncMock(return_value={**empty_vigieau_data(), "level": official_level})
+        coord._calculate_tarif_m3 = MagicMock(return_value=4.0)
+        coord._check_vacation_alert = MagicMock(return_value=False)
+        coord._inject_statistics = AsyncMock()
+        coord._handle_alert_notifications = MagicMock()
+        coord._save_monthly_history = AsyncMock()
+        coord._save_daily_history = AsyncMock()
+
+        result = await coord._fetch_all_data()
+
+        assert result["drought_level"] == expected_level
+        assert result["drought_source"] == expected_source
+
+    @pytest.mark.asyncio
     async def test_hubeau_failure_does_not_put_private_api_offline(self):
         coord = _make_coordinator()
         coord._entry.options = {}
@@ -744,6 +783,62 @@ class TestCoordinatorFetchOrchestration:
         assert result["surconso_jour_depassee"] is True
         assert result["surconso_mois_depassee"] is True
         assert result["derniere_facture"]["reference"] == "INV-1"
+
+    @pytest.mark.asyncio
+    async def test_process_contract_keeps_consumptions_when_secondary_endpoints_fail(self):
+        """Une 5xx sur une donnée secondaire ne fait plus sauter tout le contrat."""
+        coord = _make_coordinator()
+        coord._daily_history = {}
+        coord._monthly_history = {}
+        cycle_api = MagicMock()
+        cycle_api.get_monthly_consumptions = AsyncMock(
+            return_value=[
+                {"mois": 6, "annee": 2026, "consommation": 8.0},
+                {"mois": 7, "annee": 2026, "consommation": 10.0},
+            ]
+        )
+        cycle_api.get_daily_consumptions = AsyncMock(
+            return_value={
+                "entries": [{"date": "2026-08-02", "consommation_m3": 0.3, "index_m3": 100.5}],
+                "source": "Produits",
+                "nb_entries": 1,
+                "last_date": "2026-08-02",
+            }
+        )
+        cycle_api.get_date_prochaine_facture = AsyncMock(side_effect=ApiError("HTTP 500"))
+        cycle_api.get_point_de_service_etendu = AsyncMock(side_effect=NetworkError("timeout"))
+        cycle_api.get_alerte_surconsommation = AsyncMock(side_effect=WafBlockedError("blocked"))
+        cycle_api.get_courbe_de_charge = AsyncMock(side_effect=ApiError("HTTP 502"))
+        cycle_api.get_derniere_releve_siamm = AsyncMock(side_effect=ApiError("HTTP 503"))
+
+        result = await coord._process_contract(
+            cycle_api, {"id": "C1", "reference": "REF1", "teleo_compatible": True}, 4.0, [], True
+        )
+
+        assert result["consommation_mois_courant"] == 10.0
+        assert result["index_journalier_dernier"] == 100.5
+        assert result["real_index"] == 100.5  # repli sur l'index journalier
+        assert result["next_bill_date"] is None
+        assert result["date_prochaine_releve"] is None
+        assert result["seuil_surconso_jour_m3"] is None
+        assert result["courbe_de_charge"] == []
+
+    @pytest.mark.asyncio
+    async def test_process_contract_still_propagates_authentication_errors(self):
+        coord = _make_coordinator()
+        coord._daily_history = {}
+        coord._monthly_history = {}
+        cycle_api = MagicMock()
+        cycle_api.get_monthly_consumptions = AsyncMock(return_value=[])
+        cycle_api.get_daily_consumptions = AsyncMock(
+            return_value={"entries": [], "source": None, "nb_entries": 0, "last_date": None}
+        )
+        cycle_api.get_date_prochaine_facture = AsyncMock(side_effect=AuthenticationError("expired"))
+        cycle_api.get_point_de_service_etendu = AsyncMock(return_value={})
+        cycle_api.get_alerte_surconsommation = AsyncMock(return_value={})
+
+        with pytest.raises(AuthenticationError):
+            await coord._process_contract(cycle_api, {"id": "C1", "reference": "REF1"}, 4.0, [], False)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("optional_body", ["", "<!DOCTYPE html><html>maintenance</html>", "not-json"])

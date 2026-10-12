@@ -95,3 +95,30 @@ async def test_vigieau_blueprint_notifies_only_on_real_level_changes(
     await set_level("alerte_renforcee")
     assert len(calls) == 2
     assert calls[1].data["title"] == "🚱 Restriction d'eau — Alerte renforcée"
+
+
+async def test_drought_blueprint_ignores_restarts_and_labels_official_levels(
+    hass: HomeAssistant, blueprints_in_config: None
+) -> None:
+    sensor = "sensor.eau_du_grand_lyon_niveau_de_secheresse"
+    calls: list[ServiceCall] = async_mock_service(hass, "notify", "test")
+    hass.states.async_set(sensor, "normal")
+    assert await async_setup_component(
+        hass,
+        "automation",
+        {"automation": [_automation("alerte_secheresse.yaml", REQUIRED_INPUTS["alerte_secheresse.yaml"])]},
+    )
+    await hass.async_block_till_done()
+
+    async def set_level(level: str) -> None:
+        hass.states.async_set(sensor, level)
+        await hass.async_block_till_done()
+
+    await set_level("alerte_renforcee")
+    assert len(calls) == 1
+    assert calls[0].data["title"] == "🌵 Alerte Sécheresse — Alerte renforcée"
+
+    # Redémarrage : le capteur repasse par « unavailable » sans nouvelle notification.
+    await set_level(STATE_UNAVAILABLE)
+    await set_level("alerte_renforcee")
+    assert len(calls) == 1

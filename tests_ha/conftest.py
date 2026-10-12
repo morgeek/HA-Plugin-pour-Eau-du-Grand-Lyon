@@ -70,8 +70,8 @@ def raw_daily() -> list[dict[str, Any]]:
     return days
 
 
-def daily_response() -> dict[str, Any]:
-    entries = EauGrandLyonApi.format_daily_consumptions(raw_daily(), "C1")
+def daily_response(raw: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    entries = EauGrandLyonApi.format_daily_consumptions(raw if raw is not None else raw_daily(), "C1")
     return {"entries": entries, "source": "test", "nb_entries": len(entries), "last_date": entries[-1]["date"]}
 
 

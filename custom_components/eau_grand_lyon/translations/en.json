@@ -258,6 +258,8 @@
         "state": {
           "normal": "Normal",
           "vigilance": "Alert",
+          "alerte": "Alert",
+          "alerte_renforcee": "Reinforced alert",
           "crise": "Crisis"
         }
       },
@@ -377,6 +379,9 @@
       },
       "pfas_conform": {
         "name": "PFAS-compliant water"
+      },
+      "vacation_alert": {
+        "name": "Consumption while away"
       }
     }
   },

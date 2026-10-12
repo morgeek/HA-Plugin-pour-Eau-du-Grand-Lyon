@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import calendar
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -32,6 +32,7 @@ def _coordinator() -> EauGrandLyonCoordinator:
     coord._cumulative_index_cache = {}
     coord._prev_nb_alertes = 0
     coord.vacation_mode = False
+    coord.vacation_since = None
     coord._persistent_data_loaded = False
     coord._persistent_data_lock = asyncio.Lock()
     coord._store = MagicMock()
@@ -199,8 +200,15 @@ async def test_real_index_vacation_and_statistic_error_branches(monkeypatch):
     assert await coord._get_real_index(cycle, True, "C1", []) is None
 
     coord.vacation_mode = True
+    coord.vacation_since = date(2026, 8, 1)
     assert coord._check_vacation_alert({"REF1": {"consommations_journalieres": []}}) is False
-    assert coord._check_vacation_alert({"REF1": {"consommations_journalieres": [{"consommation_m3": 0.1}]}}) is True
+    # Le jour du départ est ignoré, seules les journées suivantes comptent.
+    departure_day = {"REF1": {"consommations_journalieres": [{"date": "2026-08-01", "consommation_m3": 0.1}]}}
+    assert coord._check_vacation_alert(departure_day) is False
+    next_day = {"REF1": {"consommations_journalieres": [{"date": "2026-08-02", "consommation_m3": 0.1}]}}
+    assert coord._check_vacation_alert(next_day) is True
+    coord.vacation_mode = False
+    assert coord._check_vacation_alert(next_day) is False
 
     with patch.object(stats_module, "StatisticData", new=lambda **kwargs: kwargs):
         series = stats_module.build_monthly_series(

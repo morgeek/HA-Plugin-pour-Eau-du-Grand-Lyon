@@ -134,3 +134,17 @@ async def test_contract_statistics_skipped_when_recorder_not_loaded(monkeypatch)
     await stats_module.async_inject_contract_statistics(hass, contracts, {}, {})
 
     add_stats.assert_not_called()
+
+
+def test_consumption_after_ignores_departure_day_and_malformed_entries():
+    from datetime import date
+
+    daily = [
+        {"date": "2026-10-09", "consommation_m3": 1.0},
+        {"date": "2026-10-10", "consommation_m3": 0.4},  # jour du départ : ignoré
+        {"date": "2026-10-11", "consommation_m3": 0.002},
+        {"date": "pas-une-date", "consommation_m3": 9.0},
+        {"date": "2026-10-12", "consommation_m3": None},
+    ]
+    assert analytics.consumption_after(daily, date(2026, 10, 10)) == (0.002, 2)
+    assert analytics.consumption_after([], date(2026, 10, 10)) == (0.0, 0)

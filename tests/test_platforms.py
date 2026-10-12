@@ -12,6 +12,8 @@ from custom_components.eau_grand_lyon.button import (
 from custom_components.eau_grand_lyon import button as button_platform
 from custom_components.eau_grand_lyon import switch as switch_platform
 from custom_components.eau_grand_lyon.switch import EauGrandLyonVacationSwitch
+from custom_components.eau_grand_lyon.binary_sensor import EauGrandLyonVacationAlertSensor
+from custom_components.eau_grand_lyon.coordinator import EauGrandLyonCoordinator
 from custom_components.eau_grand_lyon import calendar as calendar_platform
 from custom_components.eau_grand_lyon.calendar import EauGrandLyonCalendar
 from custom_components.eau_grand_lyon.device import account_device_info, contract_device_info
@@ -213,6 +215,122 @@ class TestVacationSwitch:
         assert s._attr_is_on is False
         assert s.coordinator.vacation_mode is False
         s.async_write_ha_state.assert_called_once()
+
+
+class TestVacationTracking:
+    """Mode vacances : date de départ mémorisée et alerte « Consommation pendant l'absence »."""
+
+    TODAY = date(2026, 10, 12)
+
+    def _patch_today(self, monkeypatch):
+        from datetime import datetime
+
+        monkeypatch.setattr(
+            "custom_components.eau_grand_lyon.analytics.local_now", lambda: datetime(2026, 10, 12, 9, 0)
+        )
+
+    async def test_turn_on_records_departure_day_and_refreshes_entities(self, monkeypatch):
+        self._patch_today(monkeypatch)
+        s = _make_switch()
+        s.coordinator.vacation_since = None
+
+        await s.async_turn_on()
+
+        assert s.coordinator.vacation_since == self.TODAY
+        assert s.extra_state_attributes == {"depuis": "2026-10-12"}
+        s.coordinator.async_update_listeners.assert_called_once()
+
+    async def test_turn_on_again_keeps_original_departure_day(self, monkeypatch):
+        self._patch_today(monkeypatch)
+        s = _make_switch()
+        s._attr_is_on = True
+        s.coordinator.vacation_since = date(2026, 10, 1)
+
+        await s.async_turn_on()
+
+        assert s.coordinator.vacation_since == date(2026, 10, 1)
+
+    async def test_turn_off_forgets_departure_day(self):
+        s = _make_switch()
+        s._attr_is_on = True
+        s.coordinator.vacation_since = date(2026, 10, 1)
+
+        await s.async_turn_off()
+
+        assert s.coordinator.vacation_since is None
+        assert s.extra_state_attributes == {"depuis": None}
+        s.coordinator.async_update_listeners.assert_called_once()
+
+    async def test_restore_reads_departure_day_or_falls_back_to_today(self, monkeypatch):
+        self._patch_today(monkeypatch)
+        monkeypatch.setattr(
+            "custom_components.eau_grand_lyon.switch.CoordinatorEntity.async_added_to_hass",
+            AsyncMock(),
+            raising=False,
+        )
+        entry = MagicMock(entry_id="entry-1")
+        switch = EauGrandLyonVacationSwitch(MagicMock(), entry)
+        switch.async_get_last_state = AsyncMock(
+            return_value=SimpleNamespace(state="on", attributes={"depuis": "2026-10-01"})
+        )
+        await switch.async_added_to_hass()
+        assert switch.coordinator.vacation_since == date(2026, 10, 1)
+
+        # État enregistré par une version sans date mémorisée.
+        switch.async_get_last_state = AsyncMock(return_value=SimpleNamespace(state="on", attributes={}))
+        await switch.async_added_to_hass()
+        assert switch.coordinator.vacation_since == self.TODAY
+
+        switch.async_get_last_state = AsyncMock(return_value=SimpleNamespace(state="off", attributes={}))
+        await switch.async_added_to_hass()
+        assert switch.coordinator.vacation_since is None
+
+    def _coordinator(self, contracts, *, mode=True, since=date(2026, 10, 10)):
+        coordinator = EauGrandLyonCoordinator.__new__(EauGrandLyonCoordinator)
+        coordinator.data = {"contracts": contracts}
+        coordinator.vacation_mode = mode
+        coordinator.vacation_since = since
+        return coordinator
+
+    def test_vacation_consumption_sums_contracts_after_departure_day(self):
+        coordinator = self._coordinator(
+            {
+                "REF1": {"consommations_journalieres": [{"date": "2026-10-10", "consommation_m3": 0.5}]},
+                "REF2": {
+                    "consommations_journalieres": [
+                        {"date": "2026-10-11", "consommation_m3": 0.002},
+                        {"date": "2026-10-12", "consommation_m3": 0.003},
+                    ]
+                },
+            }
+        )
+        assert coordinator.vacation_consumption() == (0.005, 2)
+        coordinator.vacation_mode = False
+        assert coordinator.vacation_consumption() == (0.0, 0)
+
+    def test_alert_sensor_state_attributes_and_availability(self):
+        entry = MagicMock(entry_id="entry-1")
+        coordinator = self._coordinator(
+            {"REF1": {"consommations_journalieres": [{"date": "2026-10-11", "consommation_m3": 0.02}]}}
+        )
+        sensor = EauGrandLyonVacationAlertSensor(coordinator, entry)
+
+        assert sensor._attr_unique_id == "entry-1_vacation_alert"
+        assert sensor.available is True
+        assert sensor.is_on is True
+        attrs = sensor.extra_state_attributes
+        assert attrs["depuis"] == "2026-10-10"
+        assert attrs["consommation_depuis_m3"] == 0.02
+        assert attrs["jours_publies_depuis"] == 1
+        assert attrs["seuil_litres"] == 1
+
+        coordinator.vacation_mode = False
+        assert sensor.is_on is False
+        assert sensor.extra_state_attributes["depuis"] is None
+
+        # Compteur Standard : pas de relevés journaliers, alerte impossible.
+        coordinator.data = {"contracts": {"REF1": {"consommations_journalieres": []}}}
+        assert sensor.available is False
 
 
 # ── EauGrandLyonCalendar ───────────────────────────────────────────────────
