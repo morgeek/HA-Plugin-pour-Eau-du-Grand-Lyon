@@ -20,9 +20,13 @@ Tous les changements notables apportés à cette intégration seront documentés
 - Chaque déchargement ou rechargement (par exemple après un changement d'options) écrivait l'avertissement Home Assistant « closes the Home Assistant aiohttp session … create a bug report » : l'intégration ne ferme plus elle-même sa session, que Home Assistant détache déjà automatiquement.
 - Les niveaux du capteur « Niveau officiel VigiEau » (`alerte_renforcee`, `crise`…) s'affichaient en valeur brute : ils sont traduits, et un test vérifie désormais la traduction de chaque état des capteurs à valeurs énumérées.
 - Lors d'une nouvelle installation, les boutons, le switch « Mode vacances » et le calendrier pouvaient recevoir un `entity_id` sans le préfixe `eau_du_grand_lyon_` (ex. `button.forcer_la_mise_a_jour`) selon l'ordre de démarrage des plateformes (environ une installation sur trois en test) : ils déclarent désormais les mêmes métadonnées d'appareil que les capteurs. Les `entity_id` des installations existantes ne sont pas modifiés.
+- Une erreur serveur, réseau ou WAF sur une donnée secondaire d'un contrat (prochaine facture, point de service, seuils de surconsommation, courbe horaire, relevé SIAMM) faisait perdre tout le contrat pour le cycle : les consommations sont désormais conservées et seule la donnée en échec reste vide. Les erreurs d'authentification déclenchent toujours la réauthentification.
+- Le blueprint « Alerte sécheresse » renvoyait la notification du niveau en cours à chaque redémarrage de Home Assistant (passage par `unavailable`).
 
 ### Ajouts
 
+- **Mode vacances complété** : le switch mémorise le jour du départ (conservé après redémarrage) et le nouveau `binary_sensor` « Consommation pendant l'absence » passe à ON dès qu'un relevé Téléo publié pour un jour suivant dépasse 1 litre. Il est réévalué immédiatement quand on bascule le switch.
+- **Changement de comportement — sécheresse** : quand VigiEau est activé, « Niveau de sécheresse » reprend le niveau officiel de la commune (nouveaux états `alerte` et `alerte_renforcee`) au lieu de l'heuristique saisonnière, qui reste utilisée si VigiEau est désactivé ou ne répond pas. L'attribut `source` indique l'origine du niveau. Le blueprint « Alerte sécheresse » gère désormais les cinq niveaux, avec leurs libellés.
 - Blueprint « Restriction d'eau officielle (VigiEau) » : notification quand le niveau officiel de la commune change (alerte, alerte renforcée, crise…), avec lien vers l'arrêté.
 - Modèles de signalement GitHub (bug, amélioration) demandant version, type de compteur et fichier de diagnostics.
 

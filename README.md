@@ -127,8 +127,8 @@ Ce tableau distingue les données fournies par Eau du Grand Lyon des calculs eff
 | Qualité de l'eau | Conditionnel | Analyses réglementaires nationales via Hub'Eau ; une commune exacte est nécessaire |
 | PFAS | Expérimental/opt-in | Valeurs publiques du widget Eau du Grand Lyon, au plus une lecture par jour ; entités désactivées par défaut |
 | Calendrier | Fonctionnel selon les dates fournies | La prochaine facture n'est publiée comme état que si l'API renvoie une date exploitable ; l'estimation locale à échéance + 180 jours reste séparée dans l'attribut `date_estimée` |
-| Mode vacances | Incomplet | Le seuil est calculé et journalisé, mais aucune entité d'alerte ni notification dédiée n'est actuellement exposée |
-| Sécheresse | Indicatif + officiel opt-in | L'heuristique calendaire est conservée ; VigiEau peut fournir séparément le niveau officiel AEP de la commune |
+| Mode vacances | Fonctionnel (Téléo) | Le switch mémorise le jour du départ ; « Consommation pendant l'absence » passe à ON dès qu'un relevé publié pour un jour suivant dépasse 1 litre (relevés publiés avec 1 à 3 jours de décalage) |
+| Sécheresse | Officiel si VigiEau est activé, sinon indicatif | « Niveau de sécheresse » reprend le niveau officiel VigiEau de la commune ; sans VigiEau (ou s'il ne répond pas), il revient à l'heuristique calendaire. L'attribut `source` indique l'origine du niveau |
 | Aide Warsmann | Indicatif | Compare une période aux trois périodes homologues précédentes ; indisponible sans historique complet et désactivée par défaut |
 
 ### Alertes de consommation et de fuite
@@ -148,7 +148,7 @@ Les seuils journalier et mensuel configurés dans l'espace fournisseur sont expo
 ### PFAS, VigiEau et aide Warsmann
 
 - **PFAS** : après activation explicite, l'intégration résout la commune configurée via l'autocomplétion publique puis lit la [page Qualité de mon eau](https://www.eaudugrandlyon.com/mon-eau/eau-chez-moi/qualite-de-mon-eau/). Les valeurs moyenne/maximale et le nombre de prélèvements sont mis en cache 24 h. Une valeur maximale inférieure ou égale à 0,1 µg/L donne l'indication « conforme » ; si le HTML change, les entités deviennent indisponibles.
-- **VigiEau** : après activation explicite, la commune est résolue en code INSEE puis l'[API officielle VigiEau](https://api.vigieau.gouv.fr/swagger/) est interrogée pour le profil `particulier` et l'eau potable (`AEP`). Le capteur officiel complète l'heuristique saisonnière sans la remplacer.
+- **VigiEau** : après activation explicite, la commune est résolue en code INSEE puis l'[API officielle VigiEau](https://api.vigieau.gouv.fr/swagger/) est interrogée pour le profil `particulier` et l'eau potable (`AEP`). Le niveau obtenu alimente aussi « Niveau de sécheresse », qui ne retombe sur l'heuristique saisonnière que si VigiEau est désactivé ou ne répond pas.
 - **Warsmann** : le capteur désactivé par défaut applique le seuil du double de la moyenne sur trois périodes homologues, conformément à [l'article L2224-12-4 du CGCT](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000041410387). Il reste une aide : il ne vérifie ni la nature de la fuite, ni la réparation, ni la notification du fournisseur. Le délai légal actuel est d'un mois après l'information, et aucun compte à rebours automatique n'est créé.
 
 ### Estimations locales indicatives
@@ -187,6 +187,8 @@ Si l'API Eau du Grand Lyon est indisponible (coupure réseau, maintenance, bloca
 - Le cache est persistant sur disque — il survit à un redémarrage de Home Assistant
 - Dès que l'API répond à nouveau, les données sont rafraîchies et le mode hors-ligne se désactive automatiquement
 
+Une panne partielle ne déclenche pas ce mode : si seule une donnée secondaire échoue (prochaine facture, point de service, seuils de surconsommation, courbe horaire, interventions), les consommations sont tout de même mises à jour et seuls les capteurs concernés restent sans valeur jusqu'au cycle suivant.
+
 Les tentatives intermédiaires restent au niveau `DEBUG`. Une panne persistante produit un seul avertissement lors du passage en mode hors-ligne, puis un seul message d'information au retour du service ; les cycles identiques suivants ne répètent pas le même avertissement.
 
 ### Contrats ajoutés après l'installation
@@ -216,7 +218,8 @@ Si votre compteur est compatible, les capteurs supplémentaires apparaîtront au
 - **Nombre d'habitants** : utilisé pour l'Éco-Score et les conseils personnalisés.
 - **Mode expérimental** : laissez-le désactivé tant que vous n'avez pas besoin des données étendues Téléo.
 - **PFAS / VigiEau** : configurez d'abord une commune exacte, puis activez uniquement la source souhaitée. Chaque source est limitée à une interrogation par 24 heures.
-- **Sécheresse** : le capteur « Niveau de sécheresse » n'est qu'une heuristique calendaire (vigilance de juin à septembre). Pour connaître les restrictions réellement en vigueur, activez VigiEau et le capteur « Niveau officiel VigiEau ».
+- **Sécheresse** : activez VigiEau pour que « Niveau de sécheresse » reflète les restrictions réellement en vigueur ; sans VigiEau, ce n'est qu'une heuristique calendaire (vigilance de juin à septembre).
+- **Vacances** : activez le switch « Mode vacances » au moment du départ, puis surveillez « Consommation pendant l'absence » (par exemple avec le blueprint « Alerte fuite/surconsommation »).
 
 ## Mise à jour des données
 
@@ -305,7 +308,7 @@ Cinq Blueprints d'automatisation sont fournis dans [`blueprints/automation/eau_g
 - [Alerte budget](blueprints/automation/eau_grand_lyon/alerte_budget.yaml) : notifie lorsqu'un capteur de coût franchit un seuil configurable.
 - [Alerte coupure](blueprints/automation/eau_grand_lyon/alerte_coupure.yaml) : notifie lorsqu'une interruption de service est active ou prévue dans les 48 heures et peut lancer des actions de préparation.
 - [Alerte fuite/surconsommation](blueprints/automation/eau_grand_lyon/alerte_fuite.yaml) : surveille l'un des `binary_sensor` d'anomalie, de surconsommation ou de fuite fournis par l'intégration.
-- [Alerte sécheresse](blueprints/automation/eau_grand_lyon/alerte_secheresse.yaml) : signale le passage de l'heuristique saisonnière au niveau `vigilance`. Cet indicateur ne remplace pas les arrêtés préfectoraux ni [VigiEau](https://vigieau.gouv.fr/).
+- [Alerte sécheresse](blueprints/automation/eau_grand_lyon/alerte_secheresse.yaml) : notifie quand « Niveau de sécheresse » passe à un niveau choisi. Avec VigiEau activé, il s'agit du niveau officiel ; sinon de l'heuristique saisonnière, qui ne remplace pas les arrêtés préfectoraux.
 - [Restriction d'eau officielle (VigiEau)](blueprints/automation/eau_grand_lyon/alerte_vigieau.yaml) : notifie quand le niveau officiel de restriction de votre commune passe à un niveau choisi (alerte, alerte renforcée, crise…), avec un lien vers l'arrêté. Nécessite l'option VigiEau et le capteur « Niveau officiel VigiEau ».
 
 Ces Blueprints sont inclus dans ce dépôt, mais ne sont pas annoncés comme publiés sur Blueprint Exchange. Pour satisfaire la règle officielle `docs-examples` lors d'une future soumission Home Assistant Core, un ensemble limité devra être publié dans le dépôt documentaire Home Assistant ou sur Blueprint Exchange, puis lié depuis la page officielle de l'intégration.
@@ -423,10 +426,10 @@ Une même instance Home Assistant peut configurer plusieurs comptes Eau du Grand
 - **Compteurs Standard** : Les détails horaires et alertes temps réel ne sont disponibles que sur compteurs Téléo.
 - **Mode hors-ligne** : En cas d'indisponibilité prolongée (>7 jours), une alerte apparaît dans les réparations HA.
 - **Alertes locales** : elles détectent une surconsommation ou une anomalie statistique, pas une fuite certaine. Le capteur local est indisponible sans au moins 24 points horaires ou 7 jours de données.
-- **Mode vacances** : son résultat n'est pas encore exposé sous forme de capteur ou de notification ; le switch seul ne constitue donc pas une alarme opérationnelle.
+- **Mode vacances** : l'alerte dépend des relevés journaliers Téléo, publiés avec 1 à 3 jours de décalage ; elle n'existe pas pour les compteurs Standard et ne remplace pas une détection de fuite en temps réel.
 - **Qualité de l'eau** : renseignez une commune exacte dans les options. Hub'Eau publie mensuellement les analyses du contrôle sanitaire national ; les valeurs dépendent des paramètres réellement analysés et ne sont pas des données temps réel. Une mesure absente reste indisponible et n'est jamais remplacée par zéro.
 - **PFAS et VigiEau** : ces sources publiques optionnelles peuvent changer ou être indisponibles ; leur échec n'affecte jamais le rafraîchissement principal. PFAS dépend du rendu HTML public, VigiEau d'une résolution fiable de la commune.
-- **Indicateurs environnementaux** : Eco-Score, coaching, CO₂e, calcaire et sécheresse sont des calculs locaux indicatifs.
+- **Indicateurs environnementaux** : Eco-Score, coaching, CO₂e et calcaire sont des calculs locaux indicatifs, de même que la sécheresse lorsque VigiEau n'est pas activé.
 
 ## Dépannage
 
