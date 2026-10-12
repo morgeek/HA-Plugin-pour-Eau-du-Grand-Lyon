@@ -109,8 +109,10 @@ async def test_contract_statistics_legacy_mean_flag_and_no_cost_without_tariff(m
         }
     }
 
+    hass = MagicMock()
+    hass.config.components = {"recorder"}
     with patch.object(stats_module, "StatisticData", new=lambda **kwargs: kwargs):
-        await stats_module.async_inject_contract_statistics(MagicMock(), contracts, {}, {})
+        await stats_module.async_inject_contract_statistics(hass, contracts, {}, {})
 
     assert [call.args[1]["statistic_id"] for call in add_stats.call_args_list] == ["eau_grand_lyon:water_ref1"]
     metadata = add_stats.call_args.args[1]
@@ -118,3 +120,17 @@ async def test_contract_statistics_legacy_mean_flag_and_no_cost_without_tariff(m
     assert "mean_type" not in metadata
     series = add_stats.call_args.args[2]
     assert series == [{"start": datetime(2026, 1, 1, tzinfo=timezone.utc), "sum": 3.0, "state": 3.0}]
+
+
+@pytest.mark.asyncio
+async def test_contract_statistics_skipped_when_recorder_not_loaded(monkeypatch):
+    """Régression : sans Recorder, get_instance() levait KeyError et chaque mise à jour échouait."""
+    add_stats = MagicMock()
+    monkeypatch.setattr(stats_module, "async_add_external_statistics", add_stats)
+    hass = MagicMock()
+    hass.config.components = {"sensor"}
+    contracts = {"REF1": {"tarif_m3": 4.0, "consommations": [{"annee": 2026, "mois_index": 0, "consommation_m3": 3.0}]}}
+
+    await stats_module.async_inject_contract_statistics(hass, contracts, {}, {})
+
+    add_stats.assert_not_called()

@@ -238,6 +238,10 @@ async def async_inject_contract_statistics(
     """Injecte l'historique mensuel et journalier dans les statistiques longue durée HA."""
     if not _HAS_RECORDER:
         return
+    if "recorder" not in hass.config.components:
+        # Recorder désactivé : rien où injecter. Sans ce garde-fou, get_instance()
+        # levait KeyError et chaque mise à jour de l'intégration échouait.
+        return
 
     # StatisticMeanType sur les HA récents, has_mean en fallback sur les anciens
     if StatisticMeanType is not None:

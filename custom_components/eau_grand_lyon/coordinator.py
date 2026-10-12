@@ -322,10 +322,15 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         _LOGGER.info("Eau du Grand Lyon persistent cache cleared")
 
     async def async_close(self) -> None:
-        """Révoque le token et ferme la session aiohttp dédiée."""
+        """Révoque le token OAuth.
+
+        La session dédiée n'est pas fermée ici : créée pendant le setup de
+        l'entrée avec `async_create_clientsession`, elle est détachée par Home
+        Assistant au déchargement (ou après un setup en échec). Son `close()`
+        est d'ailleurs neutralisé par HA, qui journalisait seulement
+        « closes the Home Assistant aiohttp session … create a bug report ».
+        """
         await self.api.async_revoke_token()
-        if not self._own_session.closed:
-            await self._own_session.close()
 
     # ------------------------------------------------------------------
     # Mise à jour principale avec retry

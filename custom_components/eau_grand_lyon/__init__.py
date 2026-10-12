@@ -81,8 +81,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry)
         await coordinator.async_initialize()
         await coordinator.async_config_entry_first_refresh()
     except Exception:
-        # Le coordinator possède sa propre ClientSession ; sans fermeture ici,
-        # chaque tentative de setup échouée (ConfigEntryNotReady, reauth) en fuit une.
+        # Révoque le jeton obtenu pendant cette tentative ; la session dédiée est
+        # détachée par Home Assistant après un setup en échec.
         await coordinator.async_close()
         raise
 

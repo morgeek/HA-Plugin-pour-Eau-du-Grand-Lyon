@@ -352,7 +352,14 @@
         "name": "PFAS — valeur maximale"
       },
       "vigieau": {
-        "name": "Niveau officiel VigiEau"
+        "name": "Niveau officiel VigiEau",
+        "state": {
+          "normal": "Pas de restriction",
+          "vigilance": "Vigilance",
+          "alerte": "Alerte",
+          "alerte_renforcee": "Alerte renforcée",
+          "crise": "Crise"
+        }
       }
     },
     "button": {

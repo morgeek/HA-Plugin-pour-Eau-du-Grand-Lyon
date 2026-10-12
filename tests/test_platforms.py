@@ -366,6 +366,17 @@ class TestDeviceInfo:
         entry = MagicMock(entry_id="entry-1")
         assert account_device_info(coordinator, entry).identifiers == {("eau_grand_lyon", "entry-1_REF1")}
 
+    def test_account_device_carries_full_metadata_whatever_the_platform_order(self, monkeypatch):
+        """Régression : sans nom de device, un bouton enregistré avant les capteurs
+        obtenait un entity_id sans préfixe (button.forcer_la_mise_a_jour)."""
+        monkeypatch.setattr(device_module, "DeviceInfo", lambda **kwargs: SimpleNamespace(**kwargs))
+        coordinator = MagicMock()
+        coordinator.data = {"contracts": {"REF1": {"calibre_compteur": "15", "reference_pds": "PDS-1"}}}
+        entry = MagicMock(entry_id="entry-1")
+
+        assert vars(account_device_info(coordinator, entry)) == vars(contract_device_info(coordinator, entry, "REF1"))
+        assert account_device_info(coordinator, entry).name == "Eau du Grand Lyon"
+
     def test_account_device_without_contract_has_account_identifier(self, monkeypatch):
         monkeypatch.setattr(device_module, "DeviceInfo", lambda **kwargs: SimpleNamespace(**kwargs))
         coordinator = MagicMock()

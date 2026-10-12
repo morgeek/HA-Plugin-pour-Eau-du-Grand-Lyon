@@ -144,9 +144,9 @@ async def test_save_clear_and_close_persistence_paths_are_best_effort():
     coord._own_session = MagicMock(closed=False)
     coord._own_session.close = AsyncMock()
     await coord.async_close()
-    coord._own_session.close.assert_awaited_once()
-    coord._own_session.closed = True
-    await coord.async_close()
+    coord.api.async_revoke_token.assert_awaited_once()
+    # Home Assistant détache lui-même la session ; close() est neutralisé par HA.
+    coord._own_session.close.assert_not_awaited()
 
 
 def test_tariff_intelligence_eco_score_and_date_calculation_edge_cases():

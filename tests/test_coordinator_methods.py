@@ -31,6 +31,7 @@ def _make_coordinator(options=None):
     entry.options = options or {}
     hass = MagicMock()
     hass.data = {}
+    hass.config.components = {"recorder"}
     coord = EauGrandLyonCoordinator.__new__(EauGrandLyonCoordinator)
     coord._entry = entry
     coord.data = None
@@ -311,6 +312,7 @@ class TestUpdateErrorPaths:
     async def test_inject_statistics_cost_metadata_unit_class_is_none(self):
         """Cost stats must set unit_class=None (currency has no converter; omitting it is deprecated)."""
         self.coord.hass = MagicMock()
+        self.coord.hass.config.components = {"recorder"}
         self.coord._monthly_history = {}
 
         contract_data = {
@@ -341,6 +343,7 @@ class TestUpdateErrorPaths:
     @pytest.mark.asyncio
     async def test_injects_daily_statistics_without_monthly_data(self):
         self.coord.hass = MagicMock()
+        self.coord.hass.config.components = {"recorder"}
         self.coord._monthly_history = {}
         contract_data = {
             "REF1": {
@@ -364,6 +367,7 @@ class TestUpdateErrorPaths:
     @pytest.mark.asyncio
     async def test_injects_daily_cost_statistics_separately(self):
         self.coord.hass = MagicMock()
+        self.coord.hass.config.components = {"recorder"}
         self.coord._monthly_history = {}
         self.coord._daily_history = {}
         contract_data = {
@@ -518,6 +522,7 @@ class TestUpdateErrorPaths:
         async_create.reset_mock()
         async_dismiss.reset_mock()
         self.coord.hass = MagicMock()
+        self.coord.hass.config.components = {"recorder"}
 
         self.coord._prev_nb_alertes = 0
         self.coord._handle_alert_notifications(3)
