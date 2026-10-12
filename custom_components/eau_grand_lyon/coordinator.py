@@ -486,7 +486,7 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
                 offline_since = datetime.now(timezone.utc)
             if not already_offline:
                 _LOGGER.warning(
-                    "API unavailable after %d attempts (%s) — offline mode active " "(data from %s)",
+                    "API unavailable after %d attempts (%s) — offline mode active (data from %s)",
                     self._max_retries,
                     last_err_type,
                     cache.get("last_update_success_time", "inconnu"),

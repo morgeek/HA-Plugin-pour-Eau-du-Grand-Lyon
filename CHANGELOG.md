@@ -45,7 +45,7 @@ Tous les changements notables apportés à cette intégration seront documentés
 - Suppression de code mort (`_get_real_monthly_cost`, `_get_real_annual_cost`, `_stats_month_counts`).
 - Restauration du `.gitignore`.
 - Nouvelle suite `tests_ha/` exécutée dans un vrai Home Assistant 2026.8.1 (`pytest-homeassistant-custom-component`) : setup complet, existence de chaque `entity_id` cité dans la documentation, statistiques dans un vrai Recorder, déchargement et suppression, chargement de chaque blueprint ; nouveau job CI « Intégration HA réelle ».
-- `flake8` étendu à `tests/`, `tests_ha/` et `scripts/` (imports inutilisés supprimés).
+- `ruff` (lint et formatage, version épinglée, configuration dans `ruff.toml`) remplace `flake8` et `black`, avec les mêmes règles ; il couvre aussi `tests/`, `tests_ha/` et `scripts/` (imports inutilisés supprimés).
 
 ## [3.5.5] - 2026-09-11
 

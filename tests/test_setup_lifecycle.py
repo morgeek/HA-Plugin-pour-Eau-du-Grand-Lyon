@@ -55,10 +55,13 @@ class TestSetupLifecycle:
         coordinator.async_config_entry_first_refresh = AsyncMock()
         coordinator.async_close = AsyncMock()
 
-        with patch(
-            "custom_components.eau_grand_lyon.EauGrandLyonCoordinator",
-            return_value=coordinator,
-        ), patch("custom_components.eau_grand_lyon._async_cleanup_legacy_device") as cleanup:
+        with (
+            patch(
+                "custom_components.eau_grand_lyon.EauGrandLyonCoordinator",
+                return_value=coordinator,
+            ),
+            patch("custom_components.eau_grand_lyon._async_cleanup_legacy_device") as cleanup,
+        ):
             assert await async_setup_entry(hass, entry) is True
 
         assert entry.runtime_data is coordinator
@@ -76,9 +79,12 @@ class TestSetupLifecycle:
         coordinator.async_initialize = AsyncMock()
         coordinator.async_config_entry_first_refresh = AsyncMock()
 
-        with patch("custom_components.eau_grand_lyon.EauGrandLyonCoordinator", return_value=coordinator), patch(
-            "custom_components.eau_grand_lyon._async_cleanup_legacy_device",
-            side_effect=RuntimeError("registry unavailable"),
+        with (
+            patch("custom_components.eau_grand_lyon.EauGrandLyonCoordinator", return_value=coordinator),
+            patch(
+                "custom_components.eau_grand_lyon._async_cleanup_legacy_device",
+                side_effect=RuntimeError("registry unavailable"),
+            ),
         ):
             assert await async_setup_entry(hass, entry) is True
 
@@ -93,9 +99,12 @@ class TestSetupLifecycle:
         coordinator.async_initialize = AsyncMock()
         coordinator.async_config_entry_first_refresh = AsyncMock()
 
-        with patch("custom_components.eau_grand_lyon.EauGrandLyonCoordinator", return_value=coordinator), patch(
-            "custom_components.eau_grand_lyon._async_reenable_formerly_disabled_defaults",
-            side_effect=RuntimeError("registry unavailable"),
+        with (
+            patch("custom_components.eau_grand_lyon.EauGrandLyonCoordinator", return_value=coordinator),
+            patch(
+                "custom_components.eau_grand_lyon._async_reenable_formerly_disabled_defaults",
+                side_effect=RuntimeError("registry unavailable"),
+            ),
         ):
             assert await async_setup_entry(hass, entry) is True
 
@@ -110,8 +119,9 @@ class TestSetupLifecycle:
         coordinator.async_config_entry_first_refresh = AsyncMock(side_effect=RuntimeError("setup failed"))
         coordinator.async_close = AsyncMock()
 
-        with patch("custom_components.eau_grand_lyon.EauGrandLyonCoordinator", return_value=coordinator), pytest.raises(
-            RuntimeError, match="setup failed"
+        with (
+            patch("custom_components.eau_grand_lyon.EauGrandLyonCoordinator", return_value=coordinator),
+            pytest.raises(RuntimeError, match="setup failed"),
         ):
             await async_setup_entry(hass, entry)
 

@@ -94,7 +94,7 @@ class TestFuiteEstimeeSensor:
         assert EauGrandLyonFuiteEstimeeSensor._attr_entity_registry_enabled_default is False
 
     def test_extra_attrs_capped_14_days(self):
-        daily = [{"date": f"2026-01-{i+1:02d}", "volume_fuite_estime_m3": 0.1} for i in range(20)]
+        daily = [{"date": f"2026-01-{i + 1:02d}", "volume_fuite_estime_m3": 0.1} for i in range(20)]
         s = _make(
             EauGrandLyonFuiteEstimeeSensor,
             {

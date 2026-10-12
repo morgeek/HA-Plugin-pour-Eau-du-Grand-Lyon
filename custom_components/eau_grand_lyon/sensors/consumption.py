@@ -82,7 +82,7 @@ class EauGrandLyonIndexJournalierSensor(_EauGrandLyonBase):
             "source_donnee": c.get("daily_source", "Inconnue"),
             "nb_jours": c.get("daily_nb_entries", 0),
             "note": (
-                "Index lu dans les données journalières Téléo. " "Unavailable si le compteur ne transmet pas l'index."
+                "Index lu dans les données journalières Téléo. Unavailable si le compteur ne transmet pas l'index."
             ),
         }
 

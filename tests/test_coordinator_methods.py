@@ -140,8 +140,9 @@ class TestUpdateErrorPaths:
     async def test_api_error_retries_then_raises_update_failed(self):
         # HTTP 5xx / réponse malformée : retenté comme une erreur réseau puis UpdateFailed.
         self.coord._fetch_all_data.side_effect = ApiError("server exploded")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), patch.object(
-            self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]
+        with (
+            patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()),
+            patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]),
         ):
             with pytest.raises(UpdateFailed):
                 await self.coord._async_update_data()
@@ -155,9 +156,11 @@ class TestUpdateErrorPaths:
         }
         self.coord.data = None
         self.coord._fetch_all_data.side_effect = ApiError("server exploded")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), patch.object(
-            self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]
-        ), patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
+        with (
+            patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()),
+            patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]),
+            patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"),
+        ):
             result = await self.coord._async_update_data()
         assert result["offline_mode"] is True
         assert result["last_error_type"] == "ApiError"
@@ -165,8 +168,9 @@ class TestUpdateErrorPaths:
     @pytest.mark.asyncio
     async def test_waf_failures_without_cache_raise_update_failed(self):
         self.coord._fetch_all_data.side_effect = WafBlockedError("blocked")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), patch.object(
-            self.coord, "_compute_retry_delay", side_effect=[60.0, 120.0]
+        with (
+            patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()),
+            patch.object(self.coord, "_compute_retry_delay", side_effect=[60.0, 120.0]),
         ):
             with pytest.raises(UpdateFailed):
                 await self.coord._async_update_data()
@@ -175,8 +179,9 @@ class TestUpdateErrorPaths:
     @pytest.mark.asyncio
     async def test_network_failures_without_cache_raise_update_failed(self):
         self.coord._fetch_all_data.side_effect = NetworkError("offline")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), patch.object(
-            self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]
+        with (
+            patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()),
+            patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]),
         ):
             with pytest.raises(UpdateFailed):
                 await self.coord._async_update_data()
@@ -191,9 +196,11 @@ class TestUpdateErrorPaths:
         }
         self.coord.data = None
         self.coord._fetch_all_data.side_effect = WafBlockedError("blocked")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), patch.object(
-            self.coord, "_compute_retry_delay", side_effect=[60.0, 120.0]
-        ), patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue") as outage:
+        with (
+            patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()),
+            patch.object(self.coord, "_compute_retry_delay", side_effect=[60.0, 120.0]),
+            patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue") as outage,
+        ):
             result = await self.coord._async_update_data()
         assert result["offline_mode"] is True
         assert result["last_error_type"] == "WafBlockedError"
@@ -210,9 +217,11 @@ class TestUpdateErrorPaths:
         }
         self.coord.data = {"offline_mode": True, "offline_since": offline_since}
         self.coord._fetch_all_data.side_effect = NetworkError("offline")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), patch.object(
-            self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]
-        ), patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
+        with (
+            patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()),
+            patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]),
+            patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"),
+        ):
             result = await self.coord._async_update_data()
         assert result["offline_mode"] is True
         assert result["offline_since"] == offline_since
@@ -245,8 +254,9 @@ class TestUpdateErrorPaths:
             {"contracts": {"REF1": {"reference": "REF1"}}},
         ]
 
-        with caplog.at_level(logging.DEBUG, logger="custom_components.eau_grand_lyon.coordinator"), patch(
-            "custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"
+        with (
+            caplog.at_level(logging.DEBUG, logger="custom_components.eau_grand_lyon.coordinator"),
+            patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"),
         ):
             first = await self.coord._async_update_data()
             self.coord.data = first
@@ -269,12 +279,14 @@ class TestUpdateErrorPaths:
         self.coord._last_request_mono = 100.0
         self.coord._min_request_delay_s = 30.0
         self.coord._fetch_all_data.return_value = {"contracts": {"REF1": {}}}
-        with patch(
-            "custom_components.eau_grand_lyon.coordinator.time.monotonic",
-            side_effect=[110.0, 140.0],
-        ), patch(
-            "custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()
-        ) as sleep_mock, patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
+        with (
+            patch(
+                "custom_components.eau_grand_lyon.coordinator.time.monotonic",
+                side_effect=[110.0, 140.0],
+            ),
+            patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()) as sleep_mock,
+            patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"),
+        ):
             await self.coord._async_update_data()
         sleep_mock.assert_awaited_once_with(20.0)
 
@@ -300,9 +312,10 @@ class TestUpdateErrorPaths:
     async def test_custom_max_retries_is_honored(self):
         self.coord._max_retries = 4
         self.coord._fetch_all_data.side_effect = NetworkError("offline")
-        with patch(
-            "custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()
-        ) as sleep_mock, patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0, 40.0]):
+        with (
+            patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()) as sleep_mock,
+            patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0, 40.0]),
+        ):
             with pytest.raises(UpdateFailed):
                 await self.coord._async_update_data()
         assert self.coord._consecutive_failures == 4
@@ -507,9 +520,11 @@ class TestUpdateErrorPaths:
             "last_update_success_time": now - timedelta(days=7),
         }
         self.coord._fetch_all_data.side_effect = NetworkError("offline")
-        with patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()), patch.object(
-            self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]
-        ), patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
+        with (
+            patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()),
+            patch.object(self.coord, "_compute_retry_delay", side_effect=[10.0, 20.0]),
+            patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"),
+        ):
             result = await self.coord._async_update_data()
         assert isinstance(result["last_failure_time"], datetime)
         assert result["last_failure_reason"] == "offline"
@@ -889,9 +904,11 @@ class TestCoordinatorFetchOrchestration:
         api._request_text = AsyncMock(return_value=(200, "text/html", optional_body))
         coord.api = api
 
-        with caplog.at_level(logging.DEBUG, logger="custom_components.eau_grand_lyon.coordinator"), patch(
-            "custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()
-        ) as sleep_mock, patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"):
+        with (
+            caplog.at_level(logging.DEBUG, logger="custom_components.eau_grand_lyon.coordinator"),
+            patch("custom_components.eau_grand_lyon.coordinator.asyncio.sleep", new=AsyncMock()) as sleep_mock,
+            patch("custom_components.eau_grand_lyon.coordinator.check_long_outage_issue"),
+        ):
             result = await coord._async_update_data()
 
         contract = result["contracts"]["REF1"]

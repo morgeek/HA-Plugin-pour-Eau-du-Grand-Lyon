@@ -44,15 +44,16 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pytest pytest-asyncio pytest-cov voluptuous flake8 black
+          pip install pytest pytest-asyncio pytest-cov voluptuous ruff==0.16.9
 
-      - name: Lint with flake8
+      # Règles et longueur de ligne dans ruff.toml.
+      - name: Lint with ruff
         run: |
-          flake8 custom_components/eau_grand_lyon/ tests/ tests_ha/ scripts/ --max-line-length=120 --extend-ignore=E203,W503 --count --show-source
+          ruff check custom_components/eau_grand_lyon/ tests/ tests_ha/ scripts/
 
-      - name: Format check with black
+      - name: Format check with ruff
         run: |
-          black --check custom_components/eau_grand_lyon/ tests/ tests_ha/ scripts/ --line-length=120
+          ruff format --check custom_components/eau_grand_lyon/ tests/ tests_ha/ scripts/
 
       - name: Run tests with coverage
         run: |

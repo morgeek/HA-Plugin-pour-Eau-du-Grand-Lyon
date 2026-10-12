@@ -1,0 +1,7 @@
+# Lint et formatage (remplacent flake8 et black, mêmes règles qu'avant).
+line-length = 120
+target-version = "py312"
+
+[lint]
+# pycodestyle (E, W) et pyflakes (F), comme flake8 auparavant.
+select = ["E", "F", "W"]

@@ -297,8 +297,7 @@ class EauGrandLyonApi:
 
     async def get_contracts(self) -> list[JsonObject]:
         data = await self._post(
-            f"/application/rest/interfaces/ael/contrats/rechercher"
-            f"?expand={CONTRACTS_EXPAND}&select={CONTRACTS_SELECT}"
+            f"/application/rest/interfaces/ael/contrats/rechercher?expand={CONTRACTS_EXPAND}&select={CONTRACTS_SELECT}"
         )
         if not isinstance(data, (dict, list)):
             _LOGGER.warning("Reponse inattendue pour get_contracts (type=%s)", type(data).__name__)
@@ -444,13 +443,11 @@ class EauGrandLyonApi:
     async def _get_daily_legacy(self, contract_id: str, nb_jours: int) -> tuple[list[JsonObject], str]:
         endpoints = [
             (
-                f"/application/rest/interfaces/ael/contrats/{contract_id}"
-                f"/consommationsJournalieres?nbJours={nb_jours}",
+                f"/application/rest/interfaces/ael/contrats/{contract_id}/consommationsJournalieres?nbJours={nb_jours}",
                 "Legacy (Standard)",
             ),
             (
-                f"/application/rest/interfaces/ael/contrats/{contract_id}"
-                f"/consommationsDailyPeriode?nbJours={nb_jours}",
+                f"/application/rest/interfaces/ael/contrats/{contract_id}/consommationsDailyPeriode?nbJours={nb_jours}",
                 "Legacy (Periode)",
             ),
         ]
@@ -480,7 +477,7 @@ class EauGrandLyonApi:
 
     async def get_alertes(self) -> list[JsonObject]:
         data = await self._get(
-            "/application/rest/interfaces/ael/contrats/alertes" "?expand=infosAlarme,modeleAction,objetMaitre"
+            "/application/rest/interfaces/ael/contrats/alertes?expand=infosAlarme,modeleAction,objetMaitre"
         )
         return data if isinstance(data, list) else []
 
@@ -670,7 +667,7 @@ class EauGrandLyonApi:
             if err.status != 404:
                 raise
             _LOGGER.debug(
-                "[EXPERIMENTAL] Courbe de charge non dispo contrat %s " "(compteur non communicant ou endpoint absent)",
+                "[EXPERIMENTAL] Courbe de charge non dispo contrat %s (compteur non communicant ou endpoint absent)",
                 contract_id,
             )
             return []

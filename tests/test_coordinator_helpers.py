@@ -181,7 +181,7 @@ class TestDetectLocalLeak:
         return detect_local_leak(courbe, daily, "TEST_REF", multiplier)
 
     def _make_daily(self, values):
-        return [{"consommation_m3": v, "date": f"2025-01-{i+1:02d}"} for i, v in enumerate(values)]
+        return [{"consommation_m3": v, "date": f"2025-01-{i + 1:02d}"} for i, v in enumerate(values)]
 
     def test_aucune_donnee_retourne_false(self):
         assert self._call([], []) is False

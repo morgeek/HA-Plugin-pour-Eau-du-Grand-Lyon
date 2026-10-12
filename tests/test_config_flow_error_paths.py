@@ -274,10 +274,13 @@ class TestReauthFlow:
     async def test_reauth_different_email_is_rejected_before_update(self):
         flow, _ = _make_flow()
         flow._abort_if_unique_id_mismatch.side_effect = RuntimeError("unique_id_mismatch")
-        with patch(
-            "custom_components.eau_grand_lyon.config_flow._authenticate_and_handle_errors",
-            new=AsyncMock(return_value={}),
-        ), pytest.raises(RuntimeError, match="unique_id_mismatch"):
+        with (
+            patch(
+                "custom_components.eau_grand_lyon.config_flow._authenticate_and_handle_errors",
+                new=AsyncMock(return_value={}),
+            ),
+            pytest.raises(RuntimeError, match="unique_id_mismatch"),
+        ):
             await flow.async_step_reauth_confirm({CONF_EMAIL: "other@example.com", CONF_PASSWORD: "secret"})
         flow.hass.config_entries.async_update_entry.assert_not_called()
         flow.hass.config_entries.async_reload.assert_not_awaited()
@@ -286,10 +289,13 @@ class TestReauthFlow:
     async def test_reauth_existing_account_conflict_does_not_replace_entry(self):
         flow, _ = _make_flow()
         flow._abort_if_unique_id_mismatch.side_effect = RuntimeError("existing account")
-        with patch(
-            "custom_components.eau_grand_lyon.config_flow._authenticate_and_handle_errors",
-            new=AsyncMock(return_value={}),
-        ), pytest.raises(RuntimeError, match="existing account"):
+        with (
+            patch(
+                "custom_components.eau_grand_lyon.config_flow._authenticate_and_handle_errors",
+                new=AsyncMock(return_value={}),
+            ),
+            pytest.raises(RuntimeError, match="existing account"),
+        ):
             await flow.async_step_reauth_confirm({CONF_EMAIL: "configured@example.com", CONF_PASSWORD: "secret"})
         assert flow._modern_update_calls == []
 
@@ -422,10 +428,13 @@ class TestReconfigureFlow:
     async def test_reconfigure_different_account_is_rejected(self):
         flow, _ = _make_flow()
         flow._abort_if_unique_id_mismatch.side_effect = RuntimeError("unique_id_mismatch")
-        with patch(
-            "custom_components.eau_grand_lyon.config_flow._authenticate_and_handle_errors",
-            new=AsyncMock(return_value={}),
-        ), pytest.raises(RuntimeError, match="unique_id_mismatch"):
+        with (
+            patch(
+                "custom_components.eau_grand_lyon.config_flow._authenticate_and_handle_errors",
+                new=AsyncMock(return_value={}),
+            ),
+            pytest.raises(RuntimeError, match="unique_id_mismatch"),
+        ):
             await flow.async_step_reconfigure({CONF_EMAIL: "other@example.com", CONF_PASSWORD: "secret"})
         flow.hass.config_entries.async_update_entry.assert_not_called()
 

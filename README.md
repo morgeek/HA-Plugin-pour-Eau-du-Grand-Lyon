@@ -568,10 +568,12 @@ En cas de doute, la structure valide est :
 ## Contributions
 Les contributions sont les bienvenues ! N'hésitez pas à proposer des features ou à [signaler un bug](https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/issues/new/choose).
 
-Avant d'ouvrir une pull request, lancez les deux suites de tests :
+Avant d'ouvrir une pull request, vérifiez le style puis lancez les deux suites de tests :
 
 ```bash
-pip install pytest pytest-asyncio pytest-cov voluptuous
+pip install pytest pytest-asyncio pytest-cov voluptuous ruff==0.16.9
+ruff check custom_components/eau_grand_lyon/ tests/ tests_ha/ scripts/
+ruff format custom_components/eau_grand_lyon/ tests/ tests_ha/ scripts/
 pytest tests                       # tests unitaires (Home Assistant simulé)
 
 pip install pytest-homeassistant-custom-component==0.13.355
