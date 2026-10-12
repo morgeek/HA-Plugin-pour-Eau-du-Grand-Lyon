@@ -25,7 +25,7 @@
 #
 #   1. Dans le tableau de bord Énergie, cliquer sur la source d'eau (boîte EAU)
 #   2. Dans le panneau qui s'ouvre, chercher "Ajouter le coût de cette source"
-#   3. Sélectionner : sensor.eau_du_grand_lyon_energie_cout
+#   3. Sélectionner : sensor.eau_du_grand_lyon_cout_energie
 #   4. Cliquer sur "Enregistrer"
 #
 #   ⚠️  IMPORTANT : Le tarif doit être configuré dans Options pour que le
@@ -39,12 +39,12 @@
 
 # 🔹 COMPTEURS TÉLÉO (communicants - relevé journalier) :
 # ────────────────────────────────────────────────────────────────────────────
-# Source d'eau : sensor.eau_du_grand_lyon_index_journalier_energy
+# Source d'eau : sensor.eau_du_grand_lyon_index_journalier_teleo
 #   ✓ Précision maximale (mise à jour quotidienne)
 #   ✓ Récupère l'index directement du compteur Téléo
 #   ✓ Fonctionne avec le calcul automatique de l'Energy Dashboard
 #
-# Coût associé : sensor.eau_du_grand_lyon_energie_cout [ACTIVÉ PAR DÉFAUT]
+# Coût associé : sensor.eau_du_grand_lyon_cout_energie [ACTIVÉ PAR DÉFAUT]
 #   ✓ Calculé automatiquement si le tarif est configuré dans les options
 #   ✓ Cumule les coûts sur l'année (suitable for Energy Dashboard)
 #   ✓ À associer à la source d'eau dans l'Energy Dashboard
@@ -56,7 +56,7 @@
 #   ✓ Fonctionne même sans Téléo
 #   ✓ Moins de détails mais suffisant pour le suivi
 #
-# Coût associé : sensor.eau_du_grand_lyon_energie_cout [ACTIVÉ PAR DÉFAUT]
+# Coût associé : sensor.eau_du_grand_lyon_cout_energie [ACTIVÉ PAR DÉFAUT]
 #   ✓ Estimé selon le tarif configuré dans les options
 #   ✓ À associer à la source d'eau dans l'Energy Dashboard
 
@@ -64,30 +64,23 @@
 # 3. STATISTIQUES INJECTÉES (Longue durée)
 # ────────────────────────────────────────────────────────────────────────────
 #
-# Depuis v2.9.0, deux statistiques externes sont auto-injectées par le
-# coordinateur dans la base de données du recorder :
+# Quatre statistiques externes sont injectées par le coordinateur dans la
+# base de données du recorder (<REF> = référence du contrat) :
 #
-# 📊 eau_grand_lyon:water_<REF>
-#    • Unit: m³
-#    • Période: mensuelle
-#    • Contenu: historique 36 mois de consommation (si disponible)
-#    • Utile pour: statistics-graph cards, Lovelace dashboards
-#    • ID statistic: "statistic:eau_grand_lyon:water_AB1234567890"
+# 📊 eau_grand_lyon:water_<REF>        m³  mensuelle  (jusqu'à 37 mois)
+# 📊 eau_grand_lyon:water_daily_<REF>  m³  journalière (compteurs Téléo)
+# 💰 eau_grand_lyon:cost_<REF>         EUR mensuelle  (si un tarif est disponible)
+# 💰 eau_grand_lyon:cost_daily_<REF>   EUR journalière (Téléo, si un tarif est disponible)
 #
-# 💰 eau_grand_lyon:cost_<REF>
-#    • Unit: EUR
-#    • Période: mensuelle
-#    • Contenu: coût estimé (conso × tarif) sur 36 mois
-#    • Condition: seulement si tarif_m3 > 0 (configuré dans Options)
-#    • Utile pour: suivi budgétaire longue durée, dashboards spécialisés
-#    • ID statistic: "statistic:eau_grand_lyon:cost_AB1234567890"
+# Les coûts ne contiennent que la part variable (conso × tarif) : la part fixe
+# n'est pas répartie dans l'historique.
 #
-# Récupérer votre <REF> :
-#   1. Paramètres > Appareils et services > Eau du Grand Lyon
-#   2. Cliquer sur un capteur (ex: "Consommation annuelle")
-#   3. Noter le dernier segment de l'ID unique
-#      Ex: "eau_du_grand_lyon_CONSO_ANNUELLE_AB1234567890"
-#                                                       ^^^ = votre REF
+# Dans une carte statistics-graph, utilisez l'ID tel quel :
+#   entities:
+#     - entity: eau_grand_lyon:cost_AB1234567890
+#
+# Récupérer votre <REF> : Outils de développement > Statistiques, puis
+# recherchez « eau_grand_lyon ».
 
 # ────────────────────────────────────────────────────────────────────────────
 # 4. UTILISER UN TABLEAU DE BORD PRÊT À L'EMPLOI

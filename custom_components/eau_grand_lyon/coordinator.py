@@ -582,11 +582,16 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
             try:
                 interventions_planifiees = await interventions_task
             except (
+                ApiError,
+                NetworkError,
+                WafBlockedError,
                 aiohttp.ClientError,
                 asyncio.TimeoutError,
                 ValueError,
                 KeyError,
             ) as err:
+                # Donnée secondaire : un 5xx/timeout sur cet endpoint ne doit pas
+                # faire échouer un cycle dont les contrats ont été récupérés.
                 _LOGGER.debug("Lazy interventions fetch failed: %s", err)
                 interventions_planifiees = []
 

@@ -99,7 +99,7 @@ Redémarrez Home Assistant après avoir modifié cette liste.
 
 Si l'API Eau du Grand Lyon est indisponible (coupure réseau, maintenance, blocage WAF), l'intégration bascule automatiquement en **mode hors-ligne** :
 - Les capteurs restent disponibles et affichent les dernières données connues
-- Le capteur **Statut API** affiche `Hors-ligne` (état brut `offline`) avec l'horodatage du début de la panne
+- Le capteur **Santé de l'intégration** (diagnostic, désactivé par défaut) affiche `Hors-ligne` (état brut `offline`) ; ses attributs donnent la dernière erreur et l'horodatage de la panne
 - Le cache est persistant sur disque — il survit à un redémarrage de Home Assistant
 - Dès que l'API répond à nouveau, les données sont rafraîchies et le mode hors-ligne se désactive automatiquement
 

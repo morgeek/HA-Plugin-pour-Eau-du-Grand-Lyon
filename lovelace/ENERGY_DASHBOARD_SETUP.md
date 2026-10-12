@@ -21,7 +21,7 @@ Ajouter le suivi de la consommation d'eau **ET de son coût** au tableau de bord
 Le capteur de coût doit être **activé par défaut depuis la v2.9.0**, mais vérifiez :
 
 1. Allez à : **Paramètres** → **Appareils et services** → **Eau du Grand Lyon**
-2. Cherchez l'entité `sensor.eau_du_grand_lyon_energie_cout`
+2. Cherchez l'entité `sensor.eau_du_grand_lyon_cout_energie`
 3. Si elle est **inactive** (grisée), cliquez dessus et sélectionnez **Activer l'entité**
 
 **Astuce :** L'entity_id peut varier selon votre configuration. Cherchez "Énergie" ou "energie" dans la liste.
@@ -49,7 +49,7 @@ Le coût ne s'affichera que si vous avez configuré le tarif :
 4. Choisissez la source selon votre type de compteur :
 
    **Pour les compteurs Téléo (communicants) :**
-   - Sélectionnez : `sensor.eau_du_grand_lyon_index_journalier_energy`
+   - Sélectionnez : `sensor.eau_du_grand_lyon_index_journalier_teleo`
    - ✓ Vous aurez des données mises à jour **chaque jour**
 
    **Pour les compteurs Standard (relevé manuel) :**
@@ -68,7 +68,7 @@ Cette étape vous permet de voir les **coûts estimés** dans le tableau de bord
 2. Cliquez sur la boîte **EAU** (votre source d'eau)
 3. Un panneau devrait s'ouvrir avec les détails
 4. Cherchez le bouton **"Ajouter le coût de cette source"**
-5. Sélectionnez : `sensor.eau_du_grand_lyon_energie_cout`
+5. Sélectionnez : `sensor.eau_du_grand_lyon_cout_energie`
 6. Cliquez sur **Enregistrer**
 
 > **Remarque :** Si le bouton n'apparaît pas, vérifiez que l'entité `energie_cout` est **activée** (ÉTAPE 1).
@@ -98,7 +98,7 @@ Après ces 4 étapes, votre tableau de bord Énergie devrait afficher :
 ### "Le bouton 'Ajouter le coût' n'apparaît pas"
 
 **Solution :**
-1. Vérifiez que `sensor.eau_du_grand_lyon_energie_cout` est **activé**
+1. Vérifiez que `sensor.eau_du_grand_lyon_cout_energie` est **activé**
    - Paramètres → Appareils et services → Eau du Grand Lyon
    - Cherchez l'entité et cliquez pour l'activer si grisée
 2. Attendez quelques secondes que HA recharge la page
@@ -126,7 +126,7 @@ Après ces 4 étapes, votre tableau de bord Énergie devrait afficher :
 
 | Type | Entity ID | Mise à jour | Précision |
 |------|-----------|-------------|-----------|
-| **Téléo** (communicant) | `sensor.eau_du_grand_lyon_index_journalier_energy` | Quotidienne | Maximale |
+| **Téléo** (communicant) | `sensor.eau_du_grand_lyon_index_journalier_teleo` | Quotidienne | Maximale |
 | **Standard** (manuel) | `sensor.eau_du_grand_lyon_index_compteur` | Mensuelle | Basique |
 
 ---

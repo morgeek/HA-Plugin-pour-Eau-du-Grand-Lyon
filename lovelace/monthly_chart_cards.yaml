@@ -61,7 +61,7 @@ series:
     color: "#1E90FF"
     yaxis_id: conso
   # Coût (ligne, axe droit)
-  - entity: sensor.eau_du_grand_lyon_cout_annuel
+  - entity: sensor.eau_du_grand_lyon_cout_estime_sur_12_mois
     attribute: monthly_chart_data
     transform: |
       return x.map(e => ({x: e.label, y: e.cout_eur}))
@@ -102,7 +102,7 @@ apex_config:
   colors:
     - "#FF6B35"
 series:
-  - entity: sensor.eau_du_grand_lyon_cout_annuel
+  - entity: sensor.eau_du_grand_lyon_cout_estime_sur_12_mois
     attribute: monthly_chart_data
     transform: |
       return x.map(e => ({x: e.label, y: e.cout_eur}))
@@ -118,7 +118,6 @@ type: statistics-graph
 title: Historique 24 mois (m³)
 entities:
   - entity: sensor.eau_du_grand_lyon_consommation_annuelle
-    statistics_type: change
 chart_type: bar
 period: month
 days_to_show: 730
@@ -133,10 +132,9 @@ stat_types:
 type: statistics-graph
 title: Historique coût 24 mois (€)
 entities:
-  - entity: statistic:eau_grand_lyon:cost_VOTRE_REF_CONTRAT
-    # ⚠️ Remplacer VOTRE_REF_CONTRAT par votre référence contrat
-    # (visible dans l'ID de capteur, ex: sensor.eau_du_grand_lyon_*_<ref>)
-    statistics_type: change
+  # ⚠️ Remplacer VOTRE_REF_CONTRAT par votre référence contrat
+  # (visible dans Outils de développement > Statistiques : eau_grand_lyon:cost_<ref>)
+  - entity: eau_grand_lyon:cost_VOTRE_REF_CONTRAT
 chart_type: bar
 period: month
 days_to_show: 730

@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════
 #  Automation : Rafraîchissement planifié quotidien
-#  Eau du Grand Lyon — v2.2.0
+#  Eau du Grand Lyon
 #
 #  Installation :
 #  Option A (recommandée) — via l'UI HA :
@@ -39,7 +39,7 @@ action:
 
   # Notification optionnelle (commentez si indésirable)
   - delay: "00:00:30"   # Attend 30s que les données soient récupérées
-  - service: notify.persistent_notification
+  - service: persistent_notification.create
     data:
       title: "💧 Eau du Grand Lyon mis à jour"
       message: >
@@ -53,30 +53,33 @@ mode: single
 
 ---
 # ═══════════════════════════════════════════════════════════════════
-#  Automation bonus : Alertes API et statut
-#  Envoie une notification si statut API KO
+#  Automation bonus : Alerte santé de l'intégration
+#  Envoie une notification si l'intégration passe en erreur ou hors-ligne
+#  (capteur « Santé de l'intégration », désactivé par défaut : activez-le)
 # ═══════════════════════════════════════════════════════════════════
 
-alias: "Eau Grand Lyon — Alerte statut API KO"
+alias: "Eau Grand Lyon — Alerte intégration en erreur"
 description: >
   Envoie une notification si l'intégration ne peut pas récupérer les données
-  (statut sensor.eau_du_grand_lyon_statut_api KO).
+  (sensor.eau_du_grand_lyon_sante_de_l_integration à « error » ou « offline »).
 
 trigger:
   - platform: state
-    entity_id: sensor.eau_du_grand_lyon_statut_api
-    to: "KO"
+    entity_id: sensor.eau_du_grand_lyon_sante_de_l_integration
+    to:
+      - "error"
+      - "offline"
 
 condition: []
 
 action:
-  - service: notify.persistent_notification
+  - service: persistent_notification.create
     data:
-      title: "⚠️ Eau du Grand Lyon : statut API KO"
+      title: "⚠️ Eau du Grand Lyon : intégration en erreur"
       message: >
-        Le statut API est KO.
-        Dernière erreur : {{ state_attr('sensor.eau_du_grand_lyon_statut_api', 'last_error') }}
-        Type : {{ state_attr('sensor.eau_du_grand_lyon_statut_api', 'last_error_type') }}
+        État : {{ states('sensor.eau_du_grand_lyon_sante_de_l_integration') }}.
+        Dernière erreur : {{ state_attr('sensor.eau_du_grand_lyon_sante_de_l_integration', 'last_error') }}
+        Type : {{ state_attr('sensor.eau_du_grand_lyon_sante_de_l_integration', 'last_error_type') }}
 
 mode: single
 
@@ -106,7 +109,7 @@ action:
         La consommation de {{ state_attr('sensor.eau_du_grand_lyon_consommation_mois_courant', 'période') }}
         atteint {{ states('sensor.eau_du_grand_lyon_consommation_mois_courant') }} m³.
         Cela représente environ
-        {{ states('sensor.eau_du_grand_lyon_cout_estime_mois_courant') }} €.
+        {{ states('sensor.eau_du_grand_lyon_cout_estime_du_mois_courant') }} €.
         Vérifiez qu'il n'y a pas de fuite.
       data:
         url: "https://agence.eaudugrandlyon.com"

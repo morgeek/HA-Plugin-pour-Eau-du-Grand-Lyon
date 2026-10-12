@@ -642,6 +642,43 @@ class TestCoordinatorFetchOrchestration:
         assert result["water_quality"]["source"].startswith("Hub'Eau")
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "error",
+        [ApiError("HTTP 500"), NetworkError("timeout"), WafBlockedError("blocked")],
+        ids=["api_error", "network_error", "waf"],
+    )
+    async def test_interventions_failure_does_not_fail_the_refresh(self, error, monkeypatch):
+        """Régression : une erreur API sur l'endpoint secondaire des interventions
+        faisait échouer tout le cycle (retries puis mode hors-ligne)."""
+        from types import SimpleNamespace
+
+        # aiohttp est un stub vide dans la suite : fournir ClientError à la clause except.
+        monkeypatch.setattr(
+            "custom_components.eau_grand_lyon.coordinator.aiohttp",
+            SimpleNamespace(ClientError=OSError),
+        )
+        coord = _make_coordinator()
+        coord._entry.options = {}
+        coord.api = MagicMock(experimental=False)
+        coord.api.get_contracts = AsyncMock(return_value=[])
+        coord.api.get_alertes = AsyncMock(return_value=[])
+        coord.api.get_factures = AsyncMock(return_value=[])
+        coord.api.get_interventions = AsyncMock(side_effect=error)
+        coord._hubeau_client = MagicMock()
+        coord._hubeau_client.async_get_water_quality = AsyncMock(return_value={"commune": None})
+        coord._calculate_tarif_m3 = MagicMock(return_value=4.0)
+        coord._check_vacation_alert = MagicMock(return_value=False)
+        coord._inject_statistics = AsyncMock()
+        coord._handle_alert_notifications = MagicMock()
+        coord._save_monthly_history = AsyncMock()
+        coord._save_daily_history = AsyncMock()
+
+        result = await coord._fetch_all_data()
+
+        assert result["interventions_planifiees"] == []
+        assert result["last_error"] is None
+
+    @pytest.mark.asyncio
     async def test_process_contract_combines_consumption_billing_and_alerts(self):
         coord = _make_coordinator()
         coord._entry.options = {"water_hardness": 30, "subscription_annual": 180}

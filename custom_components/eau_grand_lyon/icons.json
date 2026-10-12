@@ -36,7 +36,6 @@
       "global_conso": { "default": "mdi:water-group" },
       "global_cost": { "default": "mdi:cash-multiple" },
       "global_prediction": { "default": "mdi:cash-clock" },
-      "water_hardness": { "default": "mdi:water-opacity" },
       "water_hardness_live": { "default": "mdi:water-opacity" },
       "nitrates": { "default": "mdi:flask" },
       "chlore": { "default": "mdi:water-plus" },

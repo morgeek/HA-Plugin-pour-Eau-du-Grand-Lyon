@@ -11,12 +11,14 @@ Tous les changements notables apportés à cette intégration seront documentés
 - La version du `manifest.json` (restée à 3.5.5 dans la release v3.6) est alignée sur la release, et la CI (`scripts/check_release.py`) refuse désormais tout tag ou toute fusion où manifest, CHANGELOG et tag divergent.
 - Les calculs liés à la date du jour (mois de la prédiction, cumul de l'année, saison sécheresse) utilisent l'heure de Lyon et non plus l'UTC : le 1er du mois (ou le 1er janvier) entre minuit et 1 h/2 h, la prédiction visait encore le mois précédent.
 - La prédiction de consommation du mois extrapole désormais le cumul des relevés journaliers du mois en cours, au lieu de diviser le dernier relevé mensuel (souvent celui du mois précédent) par le nombre de jours écoulés, ce qui donnait des valeurs aberrantes en début de mois (ex. 372 m³ le 1er octobre). Merci à @carbonimax pour la découverte et le correctif initial (#32).
-
 - L'option « Multiplicateur d'alerte fuite » s'affichait sans libellé ni description (clé brute `leak_multiplier`) : traductions FR/EN ajoutées, et un test vérifie désormais que chaque option est traduite.
+- Une erreur serveur (5xx), réseau ou WAF sur l'endpoint secondaire des interventions planifiées faisait échouer tout le rafraîchissement (nouvelles tentatives puis mode hors-ligne) alors que les contrats avaient été récupérés : elle est désormais ignorée comme prévu pour cette donnée optionnelle.
 
 ### Documentation
 
 - README remis en cohérence avec le code : description de la prédiction mensuelle, `entity_id` des exemples (préfixe réel `eau_du_grand_lyon_`), configuration du tableau Énergie, capteur « Consommation depuis janvier » inexistant remplacé par l'attribut `consommation_cumulee_m3`, historique de 37 mois, options PFAS/VigiEau/multiplicateur, arborescence des fichiers après le découpage du coordinator, ordres de grandeur réalistes dans les exemples, checklist « Non chargé » déplacée dans Dépannage.
+- Exemples `lovelace/` corrigés : 41 `entity_id` inexistants remplacés par les identifiants réels, automatisation « statut API KO » réécrite sur le capteur « Santé de l'intégration » (états `error`/`offline`), carte statistique au format valide, commentaires des statistiques à jour (4 séries, 37 mois). Suppression de `smart_notifications.yaml`, `dashboard_notifications.yaml` et `notification_config.yaml`, hérités de la v2.2 et appelant des services qui n'existent plus (`smart_alert`, `notify_telegram`, `notify_pushover`, `alert_voice`, `update_data`) : les blueprints fournis les remplacent.
+- `icons.json` : suppression d'une icône orpheline (`water_hardness`).
 
 ### Maintenance
 

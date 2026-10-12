@@ -10,7 +10,7 @@ views:
       - type: horizontal-stack
         cards:
           - type: custom:mini-graph-card
-            entity: sensor.eau_du_grand_lyon_consommation_hier
+            entity: sensor.eau_du_grand_lyon_derniere_conso_journaliere_connue
             name: Hier
             icon: mdi:calendar-today
             line_color: "#1E90FF"
@@ -28,7 +28,7 @@ views:
               icon: true
               legend: false
           - type: custom:mini-graph-card
-            entity: sensor.eau_du_grand_lyon_cout_mois_courant_eur
+            entity: sensor.eau_du_grand_lyon_cout_estime_du_mois_courant
             name: Coût estimé
             icon: mdi:currency-eur
             line_color: "#FF6B35"
@@ -37,7 +37,7 @@ views:
               icon: true
               legend: false
           - type: custom:mini-graph-card
-            entity: sensor.eau_du_grand_lyon_solde_compte
+            entity: sensor.eau_du_grand_lyon_solde_du_compte
             name: Solde
             icon: mdi:bank-check
             line_color: "#28A745"
@@ -87,7 +87,7 @@ views:
             name: "m³"
             color: "#1E90FF"
             yaxis_id: conso
-          - entity: sensor.eau_du_grand_lyon_cout_annuel
+          - entity: sensor.eau_du_grand_lyon_cout_estime_sur_12_mois
             attribute: monthly_chart_data
             transform: |
               return x.map(e => ({x: e.label, y: e.cout_eur}))
@@ -122,7 +122,7 @@ views:
           - entity: sensor.eau_du_grand_lyon_consommation_mois_precedent
             name: Mois précédent
             icon: mdi:water-outline
-          - entity: sensor.eau_du_grand_lyon_conso_moyenne_7j
+          - entity: sensor.eau_du_grand_lyon_consommation_moyenne_7j
             name: Moyenne 7j (L/jour)
             icon: mdi:water-plus
 
@@ -133,16 +133,16 @@ views:
         title: 💰 Coûts et facturation
         show_header_toggle: false
         entities:
-          - entity: sensor.eau_du_grand_lyon_cout_annuel
+          - entity: sensor.eau_du_grand_lyon_cout_estime_sur_12_mois
             name: Coût estimé annuel
             icon: mdi:trending-down
-          - entity: sensor.eau_du_grand_lyon_cout_reel_annuel
+          - entity: sensor.eau_du_grand_lyon_cout_estime_sur_12_mois_part_fixe_incluse
             name: Coût réel annuel (abonnement inclus)
             icon: mdi:receipt-text-outline
-          - entity: sensor.eau_du_grand_lyon_economie
+          - entity: sensor.eau_du_grand_lyon_economie_potentielle
             name: Économie vs année N-1
             icon: mdi:trending-down
-          - entity: sensor.eau_du_grand_lyon_solde_compte
+          - entity: sensor.eau_du_grand_lyon_solde_du_compte
             name: Solde du compte
             icon: mdi:bank-check
           - type: custom:button-card
@@ -161,7 +161,7 @@ views:
         title: 🧠 Intelligence & Coaching
         show_header_toggle: false
         entities:
-          - entity: sensor.eau_du_grand_lyon_eco_score
+          - entity: sensor.eau_du_grand_lyon_eco_score_m3_pers_mois
             name: Score écologique
             icon: mdi:chart-bell-curve-cumulative
           - entity: sensor.eau_du_grand_lyon_conseil_eco_coach
@@ -170,7 +170,7 @@ views:
           - entity: sensor.eau_du_grand_lyon_tendance_vs_n_1
             name: Tendance
             icon: mdi:trending-up
-          - entity: sensor.eau_du_grand_lyon_empreinte_co2_estim
+          - entity: sensor.eau_du_grand_lyon_empreinte_co2
             name: Empreinte CO₂
             icon: mdi:molecule-co2
 
@@ -181,19 +181,19 @@ views:
         title: "📡 Téléo (si compteur communicant)"
         show_header_toggle: false
         entities:
-          - entity: sensor.eau_du_grand_lyon_consommation_7j
+          - entity: sensor.eau_du_grand_lyon_consommation_7_derniers_jours
             name: Consommation 7 jours
             icon: mdi:water-sync
-          - entity: sensor.eau_du_grand_lyon_consommation_30j
+          - entity: sensor.eau_du_grand_lyon_consommation_30_derniers_jours
             name: Consommation 30 jours
             icon: mdi:water-sync
-          - entity: sensor.eau_du_grand_lyon_index_journalier
+          - entity: sensor.eau_du_grand_lyon_index_journalier_teleo
             name: Index journalier
             icon: mdi:counter
-          - entity: sensor.eau_du_grand_lyon_consommation_derniere_heure_m3
+          - entity: sensor.eau_du_grand_lyon_consommation_derniere_heure
             name: Dernière heure
             icon: mdi:receipt-text
-          - entity: binary_sensor.eau_du_grand_lyon_alerte_fuite_teleo
+          - entity: binary_sensor.eau_du_grand_lyon_alerte_fuite_fournisseur_estimation_30_j
             name: Alerte fuite (Téléo)
             icon: mdi:water-alert
           - entity: sensor.eau_du_grand_lyon_signal_teleo
@@ -227,13 +227,13 @@ views:
         title: "⚠️ Alertes & Santé"
         show_header_toggle: false
         entities:
-          - entity: sensor.eau_du_grand_lyon_nb_alertes
+          - entity: sensor.eau_du_grand_lyon_nombre_d_alertes
             name: Nombre d'alertes
             icon: mdi:bell-alert
-          - entity: sensor.eau_du_grand_lyon_sante_integr
+          - entity: sensor.eau_du_grand_lyon_sante_de_l_integration
             name: Santé intégration
             icon: mdi:heart-pulse
-          - entity: sensor.eau_du_grand_lyon_derniere_maj
+          - entity: sensor.eau_du_grand_lyon_derniere_mise_a_jour
             name: Dernière mise à jour
             icon: mdi:clock-check-outline
           - entity: sensor.eau_du_grand_lyon_niveau_de_secheresse
