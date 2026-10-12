@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation et dépannage
+    url: https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon#d%C3%A9pannage
+    about: Les problèmes courants (hors-ligne, pare-feu, capteurs manquants) et leurs solutions.
