@@ -48,11 +48,11 @@ jobs:
 
       - name: Lint with flake8
         run: |
-          flake8 custom_components/eau_grand_lyon/ --max-line-length=120 --extend-ignore=E203,W503 --count --show-source
+          flake8 custom_components/eau_grand_lyon/ tests/ tests_ha/ scripts/ --max-line-length=120 --extend-ignore=E203,W503 --count --show-source
 
       - name: Format check with black
         run: |
-          black --check custom_components/eau_grand_lyon/ tests/ scripts/ --line-length=120
+          black --check custom_components/eau_grand_lyon/ tests/ tests_ha/ scripts/ --line-length=120
 
       - name: Run tests with coverage
         run: |
@@ -99,6 +99,27 @@ jobs:
 
       - name: Exercise inherited ConfigFlow compatibility path
         run: python scripts/ha_config_flow_smoke.py --expect-modern "${{ matrix.expect-modern }}"
+
+  ha-integration:
+    name: Intégration HA réelle
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: "pip"
+          cache-dependency-path: ".github/workflows/tests.yaml"
+
+      # Version alignée sur Home Assistant 2026.8.1, comme le job de typage.
+      - name: Install pytest-homeassistant-custom-component
+        run: pip install pytest-homeassistant-custom-component==0.13.355
+
+      - name: Setup, entités, statistiques Recorder et blueprints dans un vrai Home Assistant
+        run: pytest tests_ha -p no:cacheprovider
 
   typing:
     name: Typage (mypy)

@@ -16,6 +16,15 @@ Tous les changements notables apportés à cette intégration seront documentés
 - Un index journalier renvoyé à `null` (jour pas encore publié) était converti en 0 et devenait le dernier index connu : les capteurs « Index » et « Énergie » simulaient une remise à zéro du compteur, suivie d'un pic de consommation dans le tableau Énergie. Un index absent est désormais ignoré.
 - Le cache journalier persistant est maintenant nettoyé au chargement (`sanitize_daily_history`, jusque-là testée mais jamais appelée) : une journée corrompue faisait échouer chaque cycle jusqu'au vidage manuel du cache.
 - La suppression de l'intégration efface ses caches `.storage` (historique de consommation, références de contrat, factures), qui restaient sur disque.
+- Sans Recorder chargé, l'intégration ne démarrait plus du tout (`KeyError: 'recorder_instance'` à chaque mise à jour) : l'injection des statistiques est désormais simplement ignorée.
+- Chaque déchargement ou rechargement (par exemple après un changement d'options) écrivait l'avertissement Home Assistant « closes the Home Assistant aiohttp session … create a bug report » : l'intégration ne ferme plus elle-même sa session, que Home Assistant détache déjà automatiquement.
+- Les niveaux du capteur « Niveau officiel VigiEau » (`alerte_renforcee`, `crise`…) s'affichaient en valeur brute : ils sont traduits, et un test vérifie désormais la traduction de chaque état des capteurs à valeurs énumérées.
+- Lors d'une nouvelle installation, les boutons, le switch « Mode vacances » et le calendrier pouvaient recevoir un `entity_id` sans le préfixe `eau_du_grand_lyon_` (ex. `button.forcer_la_mise_a_jour`) selon l'ordre de démarrage des plateformes (environ une installation sur trois en test) : ils déclarent désormais les mêmes métadonnées d'appareil que les capteurs. Les `entity_id` des installations existantes ne sont pas modifiés.
+
+### Ajouts
+
+- Blueprint « Restriction d'eau officielle (VigiEau) » : notification quand le niveau officiel de la commune change (alerte, alerte renforcée, crise…), avec lien vers l'arrêté.
+- Modèles de signalement GitHub (bug, amélioration) demandant version, type de compteur et fichier de diagnostics.
 
 ### Documentation
 
@@ -23,12 +32,16 @@ Tous les changements notables apportés à cette intégration seront documentés
 - Exemples `lovelace/` corrigés : 41 `entity_id` inexistants remplacés par les identifiants réels, automatisation « statut API KO » réécrite sur le capteur « Santé de l'intégration » (états `error`/`offline`), carte statistique au format valide, commentaires des statistiques à jour (4 séries, 37 mois). Suppression de `smart_notifications.yaml`, `dashboard_notifications.yaml` et `notification_config.yaml`, hérités de la v2.2 et appelant des services qui n'existent plus (`smart_alert`, `notify_telegram`, `notify_pushover`, `alert_voice`, `update_data`) : les blueprints fournis les remplacent.
 - README : section « Désinstallation » (déclarée faite dans `quality_scale.yaml` mais absente) et renvoi vers les exemples du dossier `lovelace/`, jusque-là introuvables.
 - `icons.json` : suppression d'une icône orpheline (`water_hardness`).
+- README réorganisé : installation, désinstallation et configuration placées avant le détail des fonctionnalités, utilisation et exemples avant le dépannage ; sections en double fusionnées (compteurs pris en charge, intervalle de mise à jour) ; mention des capteurs désactivés par défaut dans les exemples ; recommandation d'utiliser VigiEau plutôt que l'heuristique saisonnière ; commandes de test pour les contributeurs.
+- Guide du tableau Énergie corrigé (noms de capteurs, sommes 7/30 jours et non moyennes, 4 statistiques, historique journalier de 3 ans) ; `lovelace/energy_config.yaml`, qui ne contenait que des commentaires en double, y est fusionné.
 
 ### Maintenance
 
 - Découpage de `coordinator.py` (1 800 → ~1 000 lignes) : il ne conserve que l'orchestration des cycles, le retry/mode hors-ligne et la persistance. Les calculs locaux (tendances, Eco-Score, heuristiques de fuite, courbe horaire, calcaire) passent dans `analytics.py`, les statistiques Recorder dans `recorder_statistics.py`, la fusion des historiques dans `history.py`, le parsing des coupures dans `outages.py`, le cache d'API par cycle dans `api/cycle_cache.py` et le calcul des estimations de coût dans `billing.py`. Aucun changement de comportement, d'entité ni de `statistic_id`.
 - Suppression de code mort (`_get_real_monthly_cost`, `_get_real_annual_cost`, `_stats_month_counts`).
 - Restauration du `.gitignore`.
+- Nouvelle suite `tests_ha/` exécutée dans un vrai Home Assistant 2026.8.1 (`pytest-homeassistant-custom-component`) : setup complet, existence de chaque `entity_id` cité dans la documentation, statistiques dans un vrai Recorder, déchargement et suppression, chargement de chaque blueprint ; nouveau job CI « Intégration HA réelle ».
+- `flake8` étendu à `tests/`, `tests_ha/` et `scripts/` (imports inutilisés supprimés).
 
 ## [3.5.5] - 2026-09-11
 

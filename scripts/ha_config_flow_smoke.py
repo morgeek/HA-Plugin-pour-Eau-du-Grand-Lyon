@@ -11,11 +11,16 @@ from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from homeassistant import config_entries
+from homeassistant import config_entries  # noqa: E402 - après sys.path.insert
 
-from custom_components.eau_grand_lyon import _async_update_options
-from custom_components.eau_grand_lyon.config_flow import EauGrandLyonConfigFlow
-from custom_components.eau_grand_lyon.const import CONF_EMAIL, CONF_PASSWORD, CONF_TARIF_M3, DOMAIN
+from custom_components.eau_grand_lyon import _async_update_options  # noqa: E402 - après sys.path.insert
+from custom_components.eau_grand_lyon.config_flow import EauGrandLyonConfigFlow  # noqa: E402 - après sys.path.insert
+from custom_components.eau_grand_lyon.const import (  # noqa: E402 - après sys.path.insert
+    CONF_EMAIL,
+    CONF_PASSWORD,
+    CONF_TARIF_M3,
+    DOMAIN,
+)
 
 
 class _FlowManager:

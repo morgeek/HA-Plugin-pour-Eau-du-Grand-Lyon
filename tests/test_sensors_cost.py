@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from custom_components.eau_grand_lyon.sensors.cost import (
     EauGrandLyonCoutCumuleSensor,
     EauGrandLyonEconomieSensor,

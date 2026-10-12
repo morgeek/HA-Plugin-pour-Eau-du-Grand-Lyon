@@ -1,8 +1,5 @@
 """Tests for config_flow validation helpers."""
 
-import pytest
-import voluptuous as vol
-
 from custom_components.eau_grand_lyon.config_flow import _is_valid_email, _INTERVAL_VALUES
 
 

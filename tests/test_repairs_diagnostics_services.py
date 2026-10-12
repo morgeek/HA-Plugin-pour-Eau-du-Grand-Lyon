@@ -157,6 +157,7 @@ class TestWritePathValidation:
         hass = MagicMock()
         hass.config.is_allowed_path = MagicMock(return_value=True)
         _validate_write_path(hass, "/config/exports/eau.csv")
+        hass.config.is_allowed_path.assert_called_once_with("/config/exports/eau.csv")
 
 
 class TestRepairIssueRegistry:

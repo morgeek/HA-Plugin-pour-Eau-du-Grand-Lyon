@@ -131,15 +131,15 @@ Après ces 4 étapes, votre tableau de bord Énergie devrait afficher :
 
 ---
 
-## 📌 Statut des capteurs depuis v2.9.0
+## 📌 Capteurs utiles au tableau Énergie
 
 | Capteur | État par défaut | Rôle |
 |---------|-----------------|------|
-| `energie_cout` | **ACTIVÉ** | Coût cumulé pour le tableau de bord Énergie |
-| `conso_hier` | **ACTIVÉ** | Dernière conso journalière connue (2-3 jours de latence Téléo possible) |
-| `conso_7j` | **ACTIVÉ** | Moyenne 7 jours |
-| `conso_30j` | **ACTIVÉ** | Moyenne 30 jours |
-| `conso_moyenne_7j` | **ACTIVÉ** | Moyenne journalière 7j (L/jour) |
+| « Coût (Énergie) » | **ACTIVÉ** | Coût cumulé pour le tableau de bord Énergie |
+| « Dernière conso journalière connue » | **ACTIVÉ** | Dernière journée publiée (2-3 jours de latence Téléo possibles) |
+| « Consommation (7 derniers jours) » | **ACTIVÉ** | Somme des 7 derniers relevés journaliers (m³) |
+| « Consommation (30 derniers jours) » | **ACTIVÉ** | Somme des 30 derniers relevés journaliers (m³) |
+| « Consommation moyenne (7j) » | **ACTIVÉ** | Moyenne journalière sur 7 jours (L/jour) |
 
 ---
 
@@ -147,21 +147,39 @@ Après ces 4 étapes, votre tableau de bord Énergie devrait afficher :
 
 - **Lovelace Cards** — Exemples de cartes personnalisées : `lovelace/monthly_chart_cards.yaml`
 - **Energy Dashboard Preset** — Tableau de bord complet prêt à importer : `lovelace/energy_dashboard_preset.yaml`
-- **Configuration Energy** — Documentation complète : `lovelace/energy_config.yaml`
+- **Dashboard natif** — Sans carte HACS : `lovelace/dashboard.yaml`
+- **Automatisations** — Rafraîchissement planifié et alertes : `lovelace/automation_refresh.yaml`
 
 ---
 
 ## 💡 Astuce avancée : Utiliser les statistiques injectées
 
-Depuis v2.9.0, les statistiques sont **auto-injectées** dans la base de données du recorder :
+Quatre statistiques externes sont **auto-injectées** dans la base de données du
+recorder (`<REF>` = référence du contrat, visible dans Outils de développement >
+Statistiques en recherchant « eau_grand_lyon ») :
 
-1. **`eau_grand_lyon:water_<REF>`** — Consommation mensuelle (m³)
-2. **`eau_grand_lyon:water_daily_<REF>`** — Consommation journalière cumulative (m³)
-3. **`eau_grand_lyon:cost_<REF>`** — Coût estimé mensuel (EUR)
+1. **`eau_grand_lyon:water_<REF>`** — Consommation mensuelle (m³, jusqu'à 37 mois)
+2. **`eau_grand_lyon:water_daily_<REF>`** — Consommation journalière cumulative (m³, compteurs Téléo)
+3. **`eau_grand_lyon:cost_<REF>`** — Coût estimé mensuel (EUR, si un tarif est disponible)
+4. **`eau_grand_lyon:cost_daily_<REF>`** — Coût estimé journalier (EUR, Téléo, si un tarif est disponible)
+
+Les coûts ne contiennent que la part variable (consommation × tarif) : la part
+fixe n'est pas répartie dans l'historique.
 
 La statistique journalière est reconstruite et triée à chaque rafraîchissement sur
-l'historique disponible (jusqu'à 12 mois). Une correction tardive d'une journée
-met donc aussi à jour les cumuls des journées suivantes, sans doublon.
+l'historique accumulé localement (jusqu'à 3 ans). Une correction tardive d'une
+journée met donc aussi à jour les cumuls des journées suivantes, sans doublon.
+
+Dans une carte `statistics-graph`, utilisez l'identifiant tel quel :
+
+```yaml
+type: statistics-graph
+entities:
+  - entity: eau_grand_lyon:cost_AB1234567890
+period: month
+stat_types:
+  - change
+```
 
 ### Migration recommandée du tableau Énergie
 

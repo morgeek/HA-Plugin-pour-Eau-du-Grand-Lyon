@@ -1,7 +1,5 @@
 """Tests for pure helper functions used by the coordinator."""
 
-import pytest
-
 from custom_components.eau_grand_lyon.api.client import EauGrandLyonApi
 from custom_components.eau_grand_lyon.analytics import (
     detect_local_leak,

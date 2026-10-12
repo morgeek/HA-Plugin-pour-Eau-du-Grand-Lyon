@@ -26,7 +26,7 @@ def _stub_homeassistant() -> None:
         return
 
     # Base package
-    ha = _make_module("homeassistant")
+    _make_module("homeassistant")
 
     class _HomeAssistantError(Exception):
         """Mock HomeAssistantError (accepte les kwargs de traduction comme le vrai)."""
@@ -145,7 +145,7 @@ def _stub_homeassistant() -> None:
         UpdateFailed=Exception,
     )
 
-    sensor_mod = _make_module(
+    _make_module(
         "homeassistant.components.sensor",
         SensorEntity=object,
         SensorEntityDescription=MagicMock,
