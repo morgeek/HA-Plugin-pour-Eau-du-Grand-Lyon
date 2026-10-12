@@ -27,6 +27,7 @@ from .const import (
     TARIFF_MODE_MANUAL,
 )
 from .coordinator import EauGrandLyonCoordinator
+from .history import async_remove_entry_stores
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -425,6 +426,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry
         await entry.runtime_data.async_close()
 
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> None:
+    """Supprime les caches `.storage` de l'entrée quand l'intégration est supprimée.
+
+    Sans ce nettoyage, l'historique de consommation, les références de contrat et
+    les factures mises en cache restaient sur disque après la suppression.
+    """
+    await async_remove_entry_stores(hass, entry.entry_id)
 
 
 async def _async_update_options(hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> None:

@@ -13,11 +13,15 @@ Tous les changements notables apportés à cette intégration seront documentés
 - La prédiction de consommation du mois extrapole désormais le cumul des relevés journaliers du mois en cours, au lieu de diviser le dernier relevé mensuel (souvent celui du mois précédent) par le nombre de jours écoulés, ce qui donnait des valeurs aberrantes en début de mois (ex. 372 m³ le 1er octobre). Merci à @carbonimax pour la découverte et le correctif initial (#32).
 - L'option « Multiplicateur d'alerte fuite » s'affichait sans libellé ni description (clé brute `leak_multiplier`) : traductions FR/EN ajoutées, et un test vérifie désormais que chaque option est traduite.
 - Une erreur serveur (5xx), réseau ou WAF sur l'endpoint secondaire des interventions planifiées faisait échouer tout le rafraîchissement (nouvelles tentatives puis mode hors-ligne) alors que les contrats avaient été récupérés : elle est désormais ignorée comme prévu pour cette donnée optionnelle.
+- Un index journalier renvoyé à `null` (jour pas encore publié) était converti en 0 et devenait le dernier index connu : les capteurs « Index » et « Énergie » simulaient une remise à zéro du compteur, suivie d'un pic de consommation dans le tableau Énergie. Un index absent est désormais ignoré.
+- Le cache journalier persistant est maintenant nettoyé au chargement (`sanitize_daily_history`, jusque-là testée mais jamais appelée) : une journée corrompue faisait échouer chaque cycle jusqu'au vidage manuel du cache.
+- La suppression de l'intégration efface ses caches `.storage` (historique de consommation, références de contrat, factures), qui restaient sur disque.
 
 ### Documentation
 
 - README remis en cohérence avec le code : description de la prédiction mensuelle, `entity_id` des exemples (préfixe réel `eau_du_grand_lyon_`), configuration du tableau Énergie, capteur « Consommation depuis janvier » inexistant remplacé par l'attribut `consommation_cumulee_m3`, historique de 37 mois, options PFAS/VigiEau/multiplicateur, arborescence des fichiers après le découpage du coordinator, ordres de grandeur réalistes dans les exemples, checklist « Non chargé » déplacée dans Dépannage.
 - Exemples `lovelace/` corrigés : 41 `entity_id` inexistants remplacés par les identifiants réels, automatisation « statut API KO » réécrite sur le capteur « Santé de l'intégration » (états `error`/`offline`), carte statistique au format valide, commentaires des statistiques à jour (4 séries, 37 mois). Suppression de `smart_notifications.yaml`, `dashboard_notifications.yaml` et `notification_config.yaml`, hérités de la v2.2 et appelant des services qui n'existent plus (`smart_alert`, `notify_telegram`, `notify_pushover`, `alert_voice`, `update_data`) : les blueprints fournis les remplacent.
+- README : section « Désinstallation » (déclarée faite dans `quality_scale.yaml` mais absente) et renvoi vers les exemples du dossier `lovelace/`, jusque-là introuvables.
 - `icons.json` : suppression d'une icône orpheline (`water_hardness`).
 
 ### Maintenance

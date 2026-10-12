@@ -398,6 +398,14 @@ Dans ce cas, Home Assistant ne trouvera pas l'intégration et affichera `Non cha
 
 > **Note** : Si l'intégration n'est pas encore dans HACS, utilisez l'Option 1 ou ajoutez le dépôt personnalisé manuellement dans les paramètres HACS.
 
+## Désinstallation
+
+1. Dans **Paramètres > Appareils et services > Eau du Grand Lyon**, ouvrez le menu ⋮ de l'entrée puis choisissez **Supprimer**. L'intégration révoque son jeton d'accès et efface ses caches locaux (`.storage/eau_grand_lyon_<id>_*` : historique, références de contrat et factures).
+2. Retirez les fichiers : via HACS (**Eau du Grand Lyon > ⋮ > Supprimer**) ou, pour une installation manuelle, en supprimant le dossier `/config/custom_components/eau_grand_lyon/`.
+3. Redémarrez Home Assistant.
+
+Les statistiques long terme déjà injectées (`eau_grand_lyon:*`) restent dans la base du Recorder : retirez la source d'eau correspondante du tableau Énergie. Supprimez aussi les blueprints, automatisations et cartes que vous aviez importés.
+
 ## Configuration
 1. Dans Home Assistant, allez dans **Paramètres** > **Appareils et services**.
 2. Cliquez sur **Ajouter une intégration** et recherchez "Eau du Grand Lyon".
@@ -461,6 +469,15 @@ Quatre Blueprints d'automatisation sont fournis dans [`blueprints/automation/eau
 - [Alerte sécheresse](blueprints/automation/eau_grand_lyon/alerte_secheresse.yaml) : signale le passage de l'heuristique saisonnière au niveau `vigilance`. Cet indicateur ne remplace pas les arrêtés préfectoraux ni [VigiEau](https://vigieau.gouv.fr/).
 
 Ces Blueprints sont inclus dans ce dépôt, mais ne sont pas annoncés comme publiés sur Blueprint Exchange. Pour satisfaire la règle officielle `docs-examples` lors d'une future soumission Home Assistant Core, un ensemble limité devra être publié dans le dépôt documentaire Home Assistant ou sur Blueprint Exchange, puis lié depuis la page officielle de l'intégration.
+
+### Tableaux de bord et exemples YAML
+
+Le dossier [`lovelace/`](lovelace/) fournit des exemples à adapter (vérifiez les `entity_id` de votre installation) :
+
+- [`dashboard.yaml`](lovelace/dashboard.yaml) : tableau de bord complet, uniquement avec des cartes natives.
+- [`energy_dashboard_preset.yaml`](lovelace/energy_dashboard_preset.yaml) et [`monthly_chart_cards.yaml`](lovelace/monthly_chart_cards.yaml) : graphiques avancés nécessitant les cartes HACS `mini-graph-card`, `apexcharts-card` et `button-card`.
+- [`automation_refresh.yaml`](lovelace/automation_refresh.yaml) : rafraîchissement planifié et alertes d'erreur ou de surconsommation.
+- [`ENERGY_DASHBOARD_SETUP.md`](lovelace/ENERGY_DASHBOARD_SETUP.md) et [`energy_config.yaml`](lovelace/energy_config.yaml) : guide de configuration du tableau Énergie.
 
 ### Alerte de surconsommation mensuelle
 

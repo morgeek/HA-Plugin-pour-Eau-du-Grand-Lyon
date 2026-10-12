@@ -829,8 +829,14 @@ class EauGrandLyonApi:
     def _extract_index(entry: JsonObject) -> float | None:
         for key in _INDEX_KEYS:
             if key in entry:
+                raw_index = entry[key]
+                if raw_index is None:
+                    # Jour pas encore publié : un index absent n'est pas un index nul.
+                    # 0.0 ferait chuter les capteurs TOTAL_INCREASING (fausse remise à
+                    # zéro, puis pic de consommation dans le tableau Énergie).
+                    continue
                 try:
-                    value = float(entry[key] or 0)
+                    value = float(raw_index)
                 except (ValueError, TypeError):
                     continue
                 # Filet de sécurité UNIQUEMENT si l'unité n'a pas été déclarée par

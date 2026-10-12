@@ -29,7 +29,13 @@ from .api import (
 )
 from .api.cycle_cache import CycleCachedApi
 from .billing import build_billing_data
-from .history import RebuildableStore, merge_daily_history, merge_monthly_history
+from .history import (
+    RebuildableStore,
+    entry_store_key,
+    merge_daily_history,
+    merge_monthly_history,
+    sanitize_daily_history,
+)
 from .hubeau import HubeauWaterQualityClient, empty_water_quality
 from .models import (
     BillingData,
@@ -155,19 +161,19 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
         self._persistent_data_lock = asyncio.Lock()
 
         # Cache persistant pour l'historique offline
-        self._store = RebuildableStore(hass, 1, f"{DOMAIN}_{entry.entry_id}_history")
+        self._store = RebuildableStore(hass, 1, entry_store_key(entry.entry_id, "history"))
 
         # Historique mensuel cumulatif — 37 mois couvrent le mois courant et
         # les trois périodes homologues nécessaires au calcul Warsmann.
         # (l'API ne retourne que 12 mois ; ce store persiste les mois précédents entre mises à jour)
         # Version 2 : correction du bug mois base-0 (v1 avait des mois_index décalés d'un rang).
         # RebuildableStore migre une ancienne version en repartant d'un cache vide.
-        self._monthly_history_store = RebuildableStore(hass, 2, f"{DOMAIN}_{entry.entry_id}_monthly_history")
+        self._monthly_history_store = RebuildableStore(hass, 2, entry_store_key(entry.entry_id, "monthly_history"))
         self._monthly_history: dict[str, list[MonthlyConsumption]] = {}
 
         # Historique journalier pour reconstruire la statistique dédiée sans
         # perdre les jours sortis de la fenêtre renvoyée par l'API.
-        self._daily_history_store = RebuildableStore(hass, 1, f"{DOMAIN}_{entry.entry_id}_daily_history")
+        self._daily_history_store = RebuildableStore(hass, 1, entry_store_key(entry.entry_id, "daily_history"))
         self._daily_history: dict[str, list[DailyConsumption]] = {}
 
         if experimental:
@@ -211,17 +217,10 @@ class EauGrandLyonCoordinator(DataUpdateCoordinator[EauGrandLyonData]):
 
         try:
             stored_daily_history = await self._daily_history_store.async_load()
-            if stored_daily_history and isinstance(stored_daily_history, dict):
-                self._daily_history = cast(
-                    dict[str, list[DailyConsumption]],
-                    {
-                        ref: entries
-                        for ref, entries in stored_daily_history.items()
-                        if isinstance(ref, str)
-                        and isinstance(entries, list)
-                        and all(isinstance(entry, dict) for entry in entries)
-                    },
-                )
+            if stored_daily_history:
+                # Écarte les journées corrompues (date invalide, volume absent ou
+                # non numérique) : elles feraient échouer chaque cycle de calcul.
+                self._daily_history = sanitize_daily_history(stored_daily_history)
         except (json.JSONDecodeError, OSError, NotImplementedError, ValueError) as err:
             _LOGGER.warning(
                 "Failed to load daily history (cache ignoré, reconstruit depuis l'API) : %s",

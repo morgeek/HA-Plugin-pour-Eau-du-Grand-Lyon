@@ -1,11 +1,11 @@
 # ═══════════════════════════════════════════════════════════════════
-#  Dashboard "Eau du Grand Lyon" — Lovelace YAML (Version PLATINUM 2.5.0)
+#  Dashboard "Eau du Grand Lyon" — Lovelace YAML (cartes natives uniquement)
 # ═══════════════════════════════════════════════════════════════════
 #
-#  Ce dashboard regroupe toutes les fonctions d'intelligence, d'écologie
-#  et de sécurité de la version 2.5.0 (Hardening & Features Pack).
+#  Regroupe consommation, coûts, alertes, qualité de l'eau et diagnostic.
 #
-#  Note : Les noms d'entités peuvent varier selon votre configuration.
+#  Les entity_id sont ceux d'une installation en français avec un seul
+#  contrat : vérifiez-les dans Paramètres > Appareils et services > Entités.
 # ═══════════════════════════════════════════════════════════════════
 
 title: 💧 Eau du Grand Lyon PLATINUM

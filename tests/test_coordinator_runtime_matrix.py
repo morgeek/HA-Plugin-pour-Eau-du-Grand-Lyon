@@ -46,7 +46,15 @@ async def test_initialize_and_load_all_persistent_stores_with_timestamp_normaliz
     now = datetime.now(timezone.utc).replace(microsecond=0)
     coord._monthly_history_store.async_load = AsyncMock(return_value={"REF1": [{"annee": 2026}]})
     coord._daily_history_store.async_load = AsyncMock(
-        return_value={"REF1": [{"date": "2026-08-01"}], 12: [], "BROKEN": "not-list"}
+        return_value={
+            "REF1": [
+                {"date": "2026-08-01", "consommation_m3": 0.2},
+                {"date": "2026-08-02"},  # volume absent : ferait planter les agrégats
+                {"date": "pas-une-date", "consommation_m3": 0.1},
+            ],
+            12: [],
+            "BROKEN": "not-list",
+        }
     )
     coord._store.async_load = AsyncMock(
         return_value={
@@ -63,7 +71,7 @@ async def test_initialize_and_load_all_persistent_stores_with_timestamp_normaliz
 
     assert coord._persistent_data_loaded is True
     assert coord._monthly_history == {"REF1": [{"annee": 2026}]}
-    assert coord._daily_history == {"REF1": [{"date": "2026-08-01"}]}
+    assert coord._daily_history == {"REF1": [{"date": "2026-08-01", "consommation_m3": 0.2}]}
     assert coord.data["offline_mode"] is False
     assert coord.data["offline_since"] is None
     assert isinstance(coord.data["last_update_success_time"], datetime)

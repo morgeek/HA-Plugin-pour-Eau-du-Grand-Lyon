@@ -12,6 +12,7 @@ from custom_components.eau_grand_lyon import (
     _local_invoice_url,
     _async_setup_services,
     async_setup,
+    async_remove_entry,
     async_setup_entry,
     async_unload_entry,
 )
@@ -126,6 +127,29 @@ class TestSetupLifecycle:
 
         assert await async_unload_entry(hass, entry) is True
         entry.runtime_data.async_close.assert_awaited_once_with()
+
+    @pytest.mark.asyncio
+    async def test_remove_entry_deletes_every_persistent_cache(self, monkeypatch):
+        """Régression : historique, références et factures restaient dans .storage
+        après la suppression de l'intégration."""
+        removed: list[str] = []
+
+        class _FakeStore:
+            def __init__(self, hass, version, key):
+                self.key = key
+
+            async def async_remove(self):
+                removed.append(self.key)
+
+        monkeypatch.setattr("custom_components.eau_grand_lyon.history.Store", _FakeStore)
+
+        await async_remove_entry(MagicMock(), _entry())
+
+        assert removed == [
+            "eau_grand_lyon_entry-1_history",
+            "eau_grand_lyon_entry-1_monthly_history",
+            "eau_grand_lyon_entry-1_daily_history",
+        ]
 
     @pytest.mark.asyncio
     async def test_options_listener_triggers_exactly_one_reload(self):
