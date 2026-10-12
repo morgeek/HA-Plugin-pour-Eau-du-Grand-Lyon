@@ -111,7 +111,8 @@
           "water_quality_commune": "Commune (qualité de l'eau Hub'Eau)",
           "pfas_enabled": "Activer les données PFAS publiques (expérimental)",
           "vigieau_enabled": "Activer le niveau officiel VigiEau (expérimental)",
-          "subscription_annual": "💶 Part fixe manuelle (€/an)"
+          "subscription_annual": "💶 Part fixe manuelle (€/an)",
+          "leak_multiplier": "Multiplicateur d'alerte fuite"
         },
         "data_description": {
           "tariff_mode": "La dernière facture utilise son montant TTC réel par m³. La grille 2026 applique les tranches officielles et l'abonnement correspondant au diamètre du compteur. Les modes manuel et dynamique préservent les réglages personnalisés.",
@@ -125,7 +126,8 @@
           "water_quality_commune": "Nom exact de la commune pour les analyses réglementaires Hub'Eau (ex. LYON, VILLEURBANNE). Sans commune, les données de qualité restent indisponibles.",
           "pfas_enabled": "Interroge au maximum une fois par jour le widget public Eau du Grand Lyon pour la commune configurée.",
           "vigieau_enabled": "Interroge au maximum une fois par jour l'API publique officielle VigiEau pour la commune configurée.",
-          "subscription_annual": "Utilisée uniquement en modes manuel et dynamique. Le mode Grille officielle choisit automatiquement la part fixe selon le calibre. À titre indicatif, un DN15 vaut {subscription_example} € TTC/an dans la grille 2026."
+          "subscription_annual": "Utilisée uniquement en modes manuel et dynamique. Le mode Grille officielle choisit automatiquement la part fixe selon le calibre. À titre indicatif, un DN15 vaut {subscription_example} € TTC/an dans la grille 2026.",
+          "leak_multiplier": "Seuil des alertes heuristiques : une alerte est levée quand la consommation dépasse ce multiple de la référence (mois précédent ou moyenne 7 jours). Entre 1,5 et 10 ; 2 par défaut."
         }
       }
     }

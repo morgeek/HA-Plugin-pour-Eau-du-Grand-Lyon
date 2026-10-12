@@ -492,6 +492,35 @@ class TestOptionsFlow:
         assert placeholders["subscription_example"] == "50.66"
 
     @pytest.mark.asyncio
+    async def test_every_option_has_label_and_description_in_all_translations(self, monkeypatch):
+        """Régression : `leak_multiplier` s'affichait sans libellé (clé brute) faute de traduction."""
+        import json
+        from pathlib import Path
+
+        option_keys: list[str] = []
+
+        def spy_optional(key, default=None, **kwargs):
+            option_keys.append(key)
+            return key
+
+        monkeypatch.setattr("custom_components.eau_grand_lyon.config_flow.vol.Optional", spy_optional)
+        flow = EauGrandLyonOptionsFlowHandler()
+        flow.config_entry = MagicMock()
+        flow.config_entry.options = {}
+        flow.config_entry.data = {}
+        flow.async_show_form = MagicMock(side_effect=lambda **kw: {"type": "form", **kw})
+
+        await flow.async_step_init()
+
+        assert option_keys
+        root = Path(__file__).resolve().parent.parent / "custom_components" / "eau_grand_lyon"
+        for name in ("strings.json", "translations/fr.json", "translations/en.json"):
+            step = json.loads((root / name).read_text(encoding="utf-8"))["options"]["step"]["init"]
+            for key in option_keys:
+                assert step["data"].get(key), f"{name}: libellé manquant pour l'option {key!r}"
+                assert step["data_description"].get(key), f"{name}: description manquante pour l'option {key!r}"
+
+    @pytest.mark.asyncio
     async def test_invalid_legacy_tariff_mode_falls_back_to_supported_default(self, monkeypatch):
         optional_defaults = {}
 

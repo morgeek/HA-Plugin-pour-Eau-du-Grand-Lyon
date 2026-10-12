@@ -12,6 +12,12 @@ Tous les changements notables apportés à cette intégration seront documentés
 - Les calculs liés à la date du jour (mois de la prédiction, cumul de l'année, saison sécheresse) utilisent l'heure de Lyon et non plus l'UTC : le 1er du mois (ou le 1er janvier) entre minuit et 1 h/2 h, la prédiction visait encore le mois précédent.
 - La prédiction de consommation du mois extrapole désormais le cumul des relevés journaliers du mois en cours, au lieu de diviser le dernier relevé mensuel (souvent celui du mois précédent) par le nombre de jours écoulés, ce qui donnait des valeurs aberrantes en début de mois (ex. 372 m³ le 1er octobre). Merci à @carbonimax pour la découverte et le correctif initial (#32).
 
+- L'option « Multiplicateur d'alerte fuite » s'affichait sans libellé ni description (clé brute `leak_multiplier`) : traductions FR/EN ajoutées, et un test vérifie désormais que chaque option est traduite.
+
+### Documentation
+
+- README remis en cohérence avec le code : description de la prédiction mensuelle, `entity_id` des exemples (préfixe réel `eau_du_grand_lyon_`), configuration du tableau Énergie, capteur « Consommation depuis janvier » inexistant remplacé par l'attribut `consommation_cumulee_m3`, historique de 37 mois, options PFAS/VigiEau/multiplicateur, arborescence des fichiers après le découpage du coordinator, ordres de grandeur réalistes dans les exemples, checklist « Non chargé » déplacée dans Dépannage.
+
 ### Maintenance
 
 - Découpage de `coordinator.py` (1 800 → ~1 000 lignes) : il ne conserve que l'orchestration des cycles, le retry/mode hors-ligne et la persistance. Les calculs locaux (tendances, Eco-Score, heuristiques de fuite, courbe horaire, calcaire) passent dans `analytics.py`, les statistiques Recorder dans `recorder_statistics.py`, la fusion des historiques dans `history.py`, le parsing des coupures dans `outages.py`, le cache d'API par cycle dans `api/cycle_cache.py` et le calcul des estimations de coût dans `billing.py`. Aucun changement de comportement, d'entité ni de `statistic_id`.

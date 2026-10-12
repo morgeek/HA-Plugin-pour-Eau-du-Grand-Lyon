@@ -69,7 +69,7 @@ Les seuils journalier et mensuel configurés dans l'espace fournisseur sont expo
 
 ### Estimations locales indicatives
 
-- La prédiction de fin de mois est une extrapolation linéaire de la consommation connue au dernier jour publié.
+- La prédiction de fin de mois extrapole le cumul des relevés journaliers du mois en cours (date de Lyon) jusqu'au dernier jour du mois. Elle nécessite des données journalières Téléo pour le mois en cours ; sinon elle reste indisponible.
 - L'Eco-Score utilise des seuils internes par personne ; il ne constitue pas un classement officiel.
 - Le coaching est un ensemble de conseils déterministes selon le score, la tendance et l'heuristique de fuite ; il ne fait pas appel à une IA.
 - Le CO₂e applique un facteur fixe de 0,52 kg CO₂e/m³ et le calcaire dépend de la dureté configurée. Ces résultats sont des ordres de grandeur.
@@ -158,28 +158,27 @@ Les statistic IDs externes suivants sont injectés automatiquement par le coordi
 
 | Statistic ID | Unit | Period | Usage |
 |---|---|---|---|
-| `eau_grand_lyon:water_<ref>` | m³ | Monthly | Historique consommation jusqu'à 36 mois, Energy Dashboard |
+| `eau_grand_lyon:water_<ref>` | m³ | Monthly | Historique consommation jusqu'à 37 mois, Energy Dashboard |
 | `eau_grand_lyon:water_daily_<ref>` | m³ | Daily | Historique journalier reconstruit, corrections tardives incluses |
-| `eau_grand_lyon:cost_<ref>` | EUR | Monthly | Historique coûts jusqu'à 36 mois (si tarif configuré) |
+| `eau_grand_lyon:cost_<ref>` | EUR | Monthly | Historique coûts jusqu'à 37 mois (si tarif configuré) |
 | `eau_grand_lyon:cost_daily_<ref>` | EUR | Daily | Coût variable journalier Téléo (si tarif configuré) |
 
 *`<ref>` = votre numéro de contrat (ex: AB1234567890)*
 
-> **Note sur les capteurs annuels** : Le capteur "Consommation annuelle" affiche les **12 derniers mois glissants** (pas l'année civile). Pour suivre la consommation depuis le 1er janvier, utilisez le capteur "Consommation depuis janvier" (`consommation_cumulee_annee`) ou le capteur de coût cumulé.
+> **Note sur les capteurs annuels** : Le capteur "Consommation annuelle" affiche les **12 derniers mois glissants** (pas l'année civile). Pour suivre la consommation depuis le 1er janvier, utilisez l'attribut `consommation_cumulee_m3` du capteur « Coût cumulé (Année) » (désactivé par défaut).
 
 > **Migration du tableau Énergie** : après la mise à jour, sélectionnez une fois `eau_grand_lyon:water_daily_<ref>` comme statistique historique de la source d'eau. L'ancienne statistique mensuelle reste intacte; cette migration est donc réversible et n'entrepose pas les anciennes valeurs erronées dans la nouvelle série.
 
 > **Abonnement** : les statistiques `cost_<ref>` et `cost_daily_<ref>` contiennent uniquement le coût variable (`consommation × tarif_m3`). L'abonnement annuel configuré est intégré aux capteurs `cout_reel_mois` et `cout_reel_annuel`, mais pas aux statistiques historiques, afin de ne pas dupliquer une charge fixe à chaque journée.
 
-Configuration :
-1. **Vérifier que le capteur de coût est activé** : `sensor.eau_du_grand_lyon_energie_cout`
-2. **Choisir le mode de calcul des coûts** dans Paramètres > Options
-3. **Ajouter une source d'eau** au tableau de bord Énergie :
-   - Téléo : `sensor.eau_du_grand_lyon_index_journalier_energy` (quotidien, haute précision)
-   - Standard : `sensor.eau_du_grand_lyon_index_compteur` (mensuel)
-4. **Ajouter le coût** pour cette source : `sensor.eau_du_grand_lyon_energie_cout`
-5. **Coûts** : `sensor.eau_du_grand_lyon_energie_cout` (auto-calculé si tarif configuré)
-6. **Statistiques** : Utilisez les statistic IDs ci-dessus pour les cartes statistiques.
+Configuration du tableau Énergie (Paramètres > Tableaux de bord > Énergie > Consommation d'eau) :
+1. **Source d'eau** :
+   - Téléo : « Index journalier (Téléo) », par exemple `sensor.eau_du_grand_lyon_index_journalier_teleo` (quotidien)
+   - Standard : « Index compteur », par exemple `sensor.eau_du_grand_lyon_index_compteur` (mensuel)
+2. **Coût** : « Coût (Énergie) », par exemple `sensor.eau_du_grand_lyon_cout_energie` (calculé si un tarif est disponible), ou directement la statistique `eau_grand_lyon:cost_<ref>`.
+3. **Statistiques** : les statistic IDs ci-dessus sont utilisables dans les cartes statistiques.
+
+> **Identifiants d'entités** : les `entity_id` cités dans ce README sont ceux générés pour une installation en français avec un seul contrat. Avec plusieurs contrats, la référence du contrat est insérée dans le nom (`eau_du_grand_lyon_<ref>_…`) ; vérifiez toujours l'identifiant réel dans Paramètres > Appareils et services > Entités.
 
 ### Comprendre les coûts
 
@@ -293,6 +292,73 @@ Vérifiez ensuite :
 
 La route est alignée sur l'application web officielle actuelle, mais sa disponibilité reste dépendante du compte et peut changer côté fournisseur.
 
+### L'intégration affiche « Non chargé » après installation
+
+Checklist de réparation :
+
+1. Vérifiez que ce fichier existe bien :
+   `/config/custom_components/eau_grand_lyon/manifest.json`
+2. Vérifiez que le dossier s'appelle exactement `eau_grand_lyon`
+3. Si vous utilisez HACS, désinstallez puis réinstallez l'intégration, puis redémarrez Home Assistant
+4. Si le dossier est absent mais que la carte d'intégration existe encore dans Home Assistant, supprimez l'entrée d'intégration bloquée puis réinstallez
+5. Faites un redémarrage complet de Home Assistant après réinstallation
+
+En cas de doute, la structure valide est :
+
+```text
+/config/custom_components/eau_grand_lyon/
+  manifest.json
+  __init__.py
+  config_flow.py
+  coordinator.py
+  analytics.py
+  billing.py
+  history.py
+  outages.py
+  recorder_statistics.py
+  hubeau.py
+  pfas.py
+  vigieau.py
+  warsmann.py
+  models.py
+  device.py
+  sensor.py
+  binary_sensor.py
+  button.py
+  calendar.py
+  switch.py
+  repairs.py
+  diagnostics.py
+  const.py
+  icons.json
+  quality_scale.yaml
+  strings.json
+  services.yaml
+  api/
+    __init__.py
+    auth.py
+    client.py
+    cycle_cache.py
+    endpoints.py
+  brand/
+    icon.png
+    logo.png
+  sensors/
+    __init__.py
+    alerts.py
+    base.py
+    consumption.py
+    contract.py
+    cost.py
+    experimental.py
+    global_sensors.py
+    intelligence.py
+    quality.py
+  translations/
+    en.json
+    fr.json
+```
+
 ## Prérequis
 - Home Assistant (`2024.11.0` ou ultérieure)
 - Un compte valide avec Eau du Grand Lyon (email et mot de passe)
@@ -354,6 +420,9 @@ L'intégration récupérera automatiquement les données toutes les **24 heures*
 | Nombre d'habitants | Éco-Score et conseils personnalisés | Nombre réel du foyer |
 | Dureté de l'eau | Estimation du calcaire | Valeur de votre commune ou de votre facture |
 | Commune qualité de l'eau | Résout la commune et ses réseaux dans Hub'Eau | Nécessaire aux capteurs qualité |
+| Activer PFAS | Lecture publique des PFAS de la commune (expérimental) | Désactivé au départ |
+| Activer VigiEau | Niveau officiel de restriction d'eau de la commune (expérimental) | Selon le besoin |
+| Multiplicateur d'alerte fuite | Seuil des alertes heuristiques (mois et jour) par rapport à la référence | 2 (entre 1,5 et 10) |
 | Nombre de tentatives API | Nombre d'essais avant le mode hors-ligne | Valeur par défaut |
 | Mode expérimental | Courbe horaire et données Téléo étendues | Désactivé au départ |
 
@@ -380,56 +449,6 @@ Une fois configuré, les capteurs apparaîtront dans votre tableau de bord Home 
 
 Le dossier `www` réel de l'instance est autorisé automatiquement par Home Assistant pour le téléchargement. L'export et les chemins de facture personnalisés situés ailleurs doivent figurer dans `allowlist_external_dirs`.
 
-Checklist de réparation :
-
-1. Vérifiez que ce fichier existe bien :
-   `/config/custom_components/eau_grand_lyon/manifest.json`
-2. Vérifiez que le dossier s'appelle exactement `eau_grand_lyon`
-3. Si vous utilisez HACS, désinstallez puis réinstallez l'intégration, puis redémarrez Home Assistant
-4. Si le dossier est absent mais que la carte d'intégration existe encore dans Home Assistant, supprimez l'entrée d'intégration bloquée puis réinstallez
-5. Faites un redémarrage complet de Home Assistant après réinstallation
-
-En cas de doute, la structure valide est :
-
-```text
-/config/custom_components/eau_grand_lyon/
-  manifest.json
-  __init__.py
-  config_flow.py
-  coordinator.py
-  sensor.py
-  binary_sensor.py
-  button.py
-  calendar.py
-  switch.py
-  repairs.py
-  diagnostics.py
-  const.py
-  strings.json
-  services.yaml
-  api/
-    __init__.py
-    client.py
-    auth.py
-    endpoints.py
-  brand/
-    icon.png
-    logo.png
-  sensors/
-    __init__.py
-    base.py
-    consumption.py
-    contract.py
-    cost.py
-    experimental.py
-    global_sensors.py
-    intelligence.py
-    quality.py
-  translations/
-    fr.json
-    en.json
-```
-
 ## Cas d'usage & Exemples
 
 ### Blueprints inclus
@@ -451,7 +470,7 @@ Créez une automation qui vous avertit lorsque l'heuristique mensuelle se décle
 alias: Alerte surconsommation d'eau
 trigger:
   - platform: state
-    entity_id: binary_sensor.eau_grand_lyon_alerte_surconsommation_mensuelle_heuristique
+    entity_id: binary_sensor.eau_du_grand_lyon_alerte_surconsommation_mensuelle_heuristique
     to: 'on'
 action:
   - service: persistent_notification.create
@@ -468,13 +487,13 @@ Recevez une alerte si votre facture prévisionnelle dépasse un seuil :
 alias: Alerte Budget Eau
 trigger:
   - platform: numeric_state
-    entity_id: sensor.eau_grand_lyon_prediction_cout_mois
-    above: 50  # Alert if monthly prediction exceeds €50
+    entity_id: sensor.eau_du_grand_lyon_prediction_cout_mois
+    above: 50  # alerte si la prédiction du mois dépasse 50 €
 action:
   - service: notify.mobile_app_smartphone
     data:
       title: "💰 Budget eau dépassé"
-      message: "Estimation coût du mois : {{ states('sensor.eau_grand_lyon_prediction_cout_mois') }}€"
+      message: "Estimation coût du mois : {{ states('sensor.eau_du_grand_lyon_prediction_cout_mois') }}€"
 ```
 
 ### Dashboard personnalisé
@@ -485,18 +504,18 @@ Exemple de carte Lovelace pour afficher votre consommation :
 type: vertical-stack
 cards:
   - type: gauge
-    entity: sensor.eau_grand_lyon_conso_courant_m3
+    entity: sensor.eau_du_grand_lyon_consommation_mois_courant
     min: 0
-    max: 100
+    max: 20
     unit: m³
     title: Consommation mois courant
   
   - type: entities
     entities:
-      - entity: sensor.eau_grand_lyon_conso_7j
-      - entity: sensor.eau_grand_lyon_cout_mois
-      - entity: sensor.eau_grand_lyon_eco_score
-      - entity: binary_sensor.eau_grand_lyon_alerte_surconsommation_mensuelle_heuristique
+      - entity: sensor.eau_du_grand_lyon_consommation_7_derniers_jours
+      - entity: sensor.eau_du_grand_lyon_cout_estime_du_mois_courant
+      - entity: sensor.eau_du_grand_lyon_eco_score_m3_pers_mois
+      - entity: binary_sensor.eau_du_grand_lyon_alerte_surconsommation_mensuelle_heuristique
 ```
 
 ### Export de données mensuel
@@ -522,12 +541,13 @@ action:
 Créez un template pour afficher une estimation personnalisée :
 
 ```jinja2
-{% set consumption = states('sensor.eau_grand_lyon_conso_courant_m3') | float(0) %}
-{% if consumption < 50 %}
+{% set consumption = states('sensor.eau_du_grand_lyon_consommation_mois_courant') | float(0) %}
+{# Ordres de grandeur pour un foyer : environ 4 à 5 m³ par personne et par mois #}
+{% if consumption < 5 %}
   💚 Très économe ({{ consumption }} m³)
-{% elif consumption < 100 %}
+{% elif consumption < 10 %}
   🟢 Bon ({{ consumption }} m³)
-{% elif consumption < 150 %}
+{% elif consumption < 15 %}
   🟡 À optimiser ({{ consumption }} m³)
 {% else %}
   🔴 À réduire ({{ consumption }} m³)
