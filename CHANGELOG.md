@@ -38,6 +38,7 @@ Tous les changements notables apportés à cette intégration seront documentés
 - `icons.json` : suppression d'une icône orpheline (`water_hardness`).
 - README réorganisé : installation, désinstallation et configuration placées avant le détail des fonctionnalités, utilisation et exemples avant le dépannage ; sections en double fusionnées (compteurs pris en charge, intervalle de mise à jour) ; mention des capteurs désactivés par défaut dans les exemples ; recommandation d'utiliser VigiEau plutôt que l'heuristique saisonnière ; commandes de test pour les contributeurs.
 - Guide du tableau Énergie corrigé (noms de capteurs, sommes 7/30 jours et non moyennes, 4 statistiques, historique journalier de 3 ans) ; `lovelace/energy_config.yaml`, qui ne contenait que des commentaires en double, y est fusionné.
+- README : limite VigiEau documentée (aucune zone de restriction, ou commune à plusieurs zones d'alerte en HTTP 409 : capteur officiel indisponible et repli de « Niveau de sécheresse » sur l'heuristique pendant 24 heures).
 
 ### Maintenance
 

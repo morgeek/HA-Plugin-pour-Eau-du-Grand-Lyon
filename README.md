@@ -429,6 +429,7 @@ Une même instance Home Assistant peut configurer plusieurs comptes Eau du Grand
 - **Mode vacances** : l'alerte dépend des relevés journaliers Téléo, publiés avec 1 à 3 jours de décalage ; elle n'existe pas pour les compteurs Standard et ne remplace pas une détection de fuite en temps réel.
 - **Qualité de l'eau** : renseignez une commune exacte dans les options. Hub'Eau publie mensuellement les analyses du contrôle sanitaire national ; les valeurs dépendent des paramètres réellement analysés et ne sont pas des données temps réel. Une mesure absente reste indisponible et n'est jamais remplacée par zéro.
 - **PFAS et VigiEau** : ces sources publiques optionnelles peuvent changer ou être indisponibles ; leur échec n'affecte jamais le rafraîchissement principal. PFAS dépend du rendu HTML public, VigiEau d'une résolution fiable de la commune.
+- **VigiEau sans niveau exploitable** : si l'API ne renvoie aucune zone de restriction pour la commune ou répond par une erreur — par exemple pour une commune découpée en plusieurs zones d'alerte (réponse HTTP 409, observée à Bordeaux ; aucune commune du Grand Lyon testée n'est concernée) —, le capteur « Niveau officiel VigiEau » est indisponible et « Niveau de sécheresse » revient à l'heuristique saisonnière. Ce résultat est conservé 24 heures avant une nouvelle interrogation.
 - **Indicateurs environnementaux** : Eco-Score, coaching, CO₂e et calcaire sont des calculs locaux indicatifs, de même que la sécheresse lorsque VigiEau n'est pas activé.
 
 ## Dépannage
