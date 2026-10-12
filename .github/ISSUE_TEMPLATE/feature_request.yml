@@ -1,0 +1,35 @@
+name: Proposer une amélioration
+description: Une idée de capteur, d'alerte ou d'amélioration de l'intégration.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Besoin
+      description: Quel problème cette amélioration résoudrait-elle ?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposition
+      description: Ce que vous imaginez (capteur, attribut, option, automatisation…).
+    validations:
+      required: true
+
+  - type: dropdown
+    id: meter
+    attributes:
+      label: Type de compteur concerné
+      options:
+        - Téléo (communicant)
+        - Standard
+        - Les deux
+        - Je ne sais pas
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexte
+      description: Captures, exemples de données (sans identifiants ni références de contrat), liens utiles.

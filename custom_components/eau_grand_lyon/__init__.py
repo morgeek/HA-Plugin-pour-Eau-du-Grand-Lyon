@@ -27,6 +27,7 @@ from .const import (
     TARIFF_MODE_MANUAL,
 )
 from .coordinator import EauGrandLyonCoordinator
+from .history import async_remove_entry_stores
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -80,8 +81,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry)
         await coordinator.async_initialize()
         await coordinator.async_config_entry_first_refresh()
     except Exception:
-        # Le coordinator possède sa propre ClientSession ; sans fermeture ici,
-        # chaque tentative de setup échouée (ConfigEntryNotReady, reauth) en fuit une.
+        # Révoque le jeton obtenu pendant cette tentative ; la session dédiée est
+        # détachée par Home Assistant après un setup en échec.
         await coordinator.async_close()
         raise
 
@@ -425,6 +426,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry
         await entry.runtime_data.async_close()
 
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> None:
+    """Supprime les caches `.storage` de l'entrée quand l'intégration est supprimée.
+
+    Sans ce nettoyage, l'historique de consommation, les références de contrat et
+    les factures mises en cache restaient sur disque après la suppression.
+    """
+    await async_remove_entry_stores(hass, entry.entry_id)
 
 
 async def _async_update_options(hass: HomeAssistant, entry: EauGrandLyonConfigEntry) -> None:

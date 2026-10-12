@@ -184,11 +184,11 @@ class EauGrandLyonGlobalPredictionCostSensor(_EauGrandLyonGlobalBase):
 
 
 class EauGrandLyonDroughtSensor(_EauGrandLyonGlobalBase):
-    """Indicateur saisonnier de risque sécheresse (heuristique, pas de donnée préfectorale)."""
+    """Niveau de sécheresse : officiel (VigiEau) si la source est activée, sinon heuristique saisonnière."""
 
     _attr_translation_key = "drought"
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = ["normal", "vigilance", "crise"]
+    _attr_options = ["normal", "vigilance", "alerte", "alerte_renforcee", "crise"]
 
     def __init__(self, coordinator: EauGrandLyonCoordinator, entry: EauGrandLyonConfigEntry) -> None:
         super().__init__(coordinator, entry)
@@ -200,11 +200,16 @@ class EauGrandLyonDroughtSensor(_EauGrandLyonGlobalBase):
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
+        if (self.coordinator.data or {}).get("drought_source") == "vigieau":
+            return {
+                "source": "VigiEau — niveau officiel (eau potable)",
+                "note": "Restrictions issues des arrêtés préfectoraux publiés sur vigieau.gouv.fr.",
+            }
         return {
             "source": "Heuristique saisonnière (juin à septembre = Vigilance)",
             "note": (
                 "Indicateur indicatif — ne reflète pas les arrêtés préfectoraux réels. "
-                "Consultez vigieau.gouv.fr pour les restrictions en vigueur."
+                "Activez VigiEau dans les options pour obtenir le niveau officiel."
             ),
         }
 
@@ -213,7 +218,7 @@ class EauGrandLyonDroughtSensor(_EauGrandLyonGlobalBase):
         val = self.native_value
         if val == "normal":
             return "mdi:water-check"
-        if val == "crise":
+        if val in ("alerte_renforcee", "crise"):
             return "mdi:water-alert"
         return "mdi:water-remove"
 

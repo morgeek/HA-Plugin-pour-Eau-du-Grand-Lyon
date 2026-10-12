@@ -297,8 +297,7 @@ class EauGrandLyonApi:
 
     async def get_contracts(self) -> list[JsonObject]:
         data = await self._post(
-            f"/application/rest/interfaces/ael/contrats/rechercher"
-            f"?expand={CONTRACTS_EXPAND}&select={CONTRACTS_SELECT}"
+            f"/application/rest/interfaces/ael/contrats/rechercher?expand={CONTRACTS_EXPAND}&select={CONTRACTS_SELECT}"
         )
         if not isinstance(data, (dict, list)):
             _LOGGER.warning("Reponse inattendue pour get_contracts (type=%s)", type(data).__name__)
@@ -444,13 +443,11 @@ class EauGrandLyonApi:
     async def _get_daily_legacy(self, contract_id: str, nb_jours: int) -> tuple[list[JsonObject], str]:
         endpoints = [
             (
-                f"/application/rest/interfaces/ael/contrats/{contract_id}"
-                f"/consommationsJournalieres?nbJours={nb_jours}",
+                f"/application/rest/interfaces/ael/contrats/{contract_id}/consommationsJournalieres?nbJours={nb_jours}",
                 "Legacy (Standard)",
             ),
             (
-                f"/application/rest/interfaces/ael/contrats/{contract_id}"
-                f"/consommationsDailyPeriode?nbJours={nb_jours}",
+                f"/application/rest/interfaces/ael/contrats/{contract_id}/consommationsDailyPeriode?nbJours={nb_jours}",
                 "Legacy (Periode)",
             ),
         ]
@@ -480,7 +477,7 @@ class EauGrandLyonApi:
 
     async def get_alertes(self) -> list[JsonObject]:
         data = await self._get(
-            "/application/rest/interfaces/ael/contrats/alertes" "?expand=infosAlarme,modeleAction,objetMaitre"
+            "/application/rest/interfaces/ael/contrats/alertes?expand=infosAlarme,modeleAction,objetMaitre"
         )
         return data if isinstance(data, list) else []
 
@@ -670,7 +667,7 @@ class EauGrandLyonApi:
             if err.status != 404:
                 raise
             _LOGGER.debug(
-                "[EXPERIMENTAL] Courbe de charge non dispo contrat %s " "(compteur non communicant ou endpoint absent)",
+                "[EXPERIMENTAL] Courbe de charge non dispo contrat %s (compteur non communicant ou endpoint absent)",
                 contract_id,
             )
             return []
@@ -829,8 +826,14 @@ class EauGrandLyonApi:
     def _extract_index(entry: JsonObject) -> float | None:
         for key in _INDEX_KEYS:
             if key in entry:
+                raw_index = entry[key]
+                if raw_index is None:
+                    # Jour pas encore publié : un index absent n'est pas un index nul.
+                    # 0.0 ferait chuter les capteurs TOTAL_INCREASING (fausse remise à
+                    # zéro, puis pic de consommation dans le tableau Énergie).
+                    continue
                 try:
-                    value = float(entry[key] or 0)
+                    value = float(raw_index)
                 except (ValueError, TypeError):
                     continue
                 # Filet de sécurité UNIQUEMENT si l'unité n'a pas été déclarée par

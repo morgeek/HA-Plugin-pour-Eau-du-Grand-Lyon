@@ -36,7 +36,6 @@
       "global_conso": { "default": "mdi:water-group" },
       "global_cost": { "default": "mdi:cash-multiple" },
       "global_prediction": { "default": "mdi:cash-clock" },
-      "water_hardness": { "default": "mdi:water-opacity" },
       "water_hardness_live": { "default": "mdi:water-opacity" },
       "nitrates": { "default": "mdi:flask" },
       "chlore": { "default": "mdi:water-plus" },
@@ -67,7 +66,8 @@
       "surconso_jour": { "default": "mdi:water-alert" },
       "surconso_mois": { "default": "mdi:water-alert" },
       "warsmann_eligibility": { "default": "mdi:scale-balance" },
-      "pfas_conform": { "default": "mdi:water-check" }
+      "pfas_conform": { "default": "mdi:water-check" },
+      "vacation_alert": { "default": "mdi:home-outline", "state": { "on": "mdi:home-alert" } }
     },
     "button": {
       "download_invoice": { "default": "mdi:file-download" }

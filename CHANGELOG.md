@@ -11,12 +11,42 @@ Tous les changements notables apportés à cette intégration seront documentés
 - La version du `manifest.json` (restée à 3.5.5 dans la release v3.6) est alignée sur la release, et la CI (`scripts/check_release.py`) refuse désormais tout tag ou toute fusion où manifest, CHANGELOG et tag divergent.
 - Les calculs liés à la date du jour (mois de la prédiction, cumul de l'année, saison sécheresse) utilisent l'heure de Lyon et non plus l'UTC : le 1er du mois (ou le 1er janvier) entre minuit et 1 h/2 h, la prédiction visait encore le mois précédent.
 - La prédiction de consommation du mois extrapole désormais le cumul des relevés journaliers du mois en cours, au lieu de diviser le dernier relevé mensuel (souvent celui du mois précédent) par le nombre de jours écoulés, ce qui donnait des valeurs aberrantes en début de mois (ex. 372 m³ le 1er octobre). Merci à @carbonimax pour la découverte et le correctif initial (#32).
+- L'option « Multiplicateur d'alerte fuite » s'affichait sans libellé ni description (clé brute `leak_multiplier`) : traductions FR/EN ajoutées, et un test vérifie désormais que chaque option est traduite.
+- Une erreur serveur (5xx), réseau ou WAF sur l'endpoint secondaire des interventions planifiées faisait échouer tout le rafraîchissement (nouvelles tentatives puis mode hors-ligne) alors que les contrats avaient été récupérés : elle est désormais ignorée comme prévu pour cette donnée optionnelle.
+- Un index journalier renvoyé à `null` (jour pas encore publié) était converti en 0 et devenait le dernier index connu : les capteurs « Index » et « Énergie » simulaient une remise à zéro du compteur, suivie d'un pic de consommation dans le tableau Énergie. Un index absent est désormais ignoré.
+- Le cache journalier persistant est maintenant nettoyé au chargement (`sanitize_daily_history`, jusque-là testée mais jamais appelée) : une journée corrompue faisait échouer chaque cycle jusqu'au vidage manuel du cache.
+- La suppression de l'intégration efface ses caches `.storage` (historique de consommation, références de contrat, factures), qui restaient sur disque.
+- Sans Recorder chargé, l'intégration ne démarrait plus du tout (`KeyError: 'recorder_instance'` à chaque mise à jour) : l'injection des statistiques est désormais simplement ignorée.
+- Chaque déchargement ou rechargement (par exemple après un changement d'options) écrivait l'avertissement Home Assistant « closes the Home Assistant aiohttp session … create a bug report » : l'intégration ne ferme plus elle-même sa session, que Home Assistant détache déjà automatiquement.
+- Les niveaux du capteur « Niveau officiel VigiEau » (`alerte_renforcee`, `crise`…) s'affichaient en valeur brute : ils sont traduits, et un test vérifie désormais la traduction de chaque état des capteurs à valeurs énumérées.
+- Lors d'une nouvelle installation, les boutons, le switch « Mode vacances » et le calendrier pouvaient recevoir un `entity_id` sans le préfixe `eau_du_grand_lyon_` (ex. `button.forcer_la_mise_a_jour`) selon l'ordre de démarrage des plateformes (environ une installation sur trois en test) : ils déclarent désormais les mêmes métadonnées d'appareil que les capteurs. Les `entity_id` des installations existantes ne sont pas modifiés.
+- Une erreur serveur, réseau ou WAF sur une donnée secondaire d'un contrat (prochaine facture, point de service, seuils de surconsommation, courbe horaire, relevé SIAMM) faisait perdre tout le contrat pour le cycle : les consommations sont désormais conservées et seule la donnée en échec reste vide. Les erreurs d'authentification déclenchent toujours la réauthentification.
+- Le blueprint « Alerte sécheresse » renvoyait la notification du niveau en cours à chaque redémarrage de Home Assistant (passage par `unavailable`).
+
+### Ajouts
+
+- **Mode vacances complété** : le switch mémorise le jour du départ (conservé après redémarrage) et le nouveau `binary_sensor` « Consommation pendant l'absence » passe à ON dès qu'un relevé Téléo publié pour un jour suivant dépasse 1 litre. Il est réévalué immédiatement quand on bascule le switch.
+- **Changement de comportement — sécheresse** : quand VigiEau est activé, « Niveau de sécheresse » reprend le niveau officiel de la commune (nouveaux états `alerte` et `alerte_renforcee`) au lieu de l'heuristique saisonnière, qui reste utilisée si VigiEau est désactivé ou ne répond pas. L'attribut `source` indique l'origine du niveau. Le blueprint « Alerte sécheresse » gère désormais les cinq niveaux, avec leurs libellés.
+- Blueprint « Restriction d'eau officielle (VigiEau) » : notification quand le niveau officiel de la commune change (alerte, alerte renforcée, crise…), avec lien vers l'arrêté.
+- Modèles de signalement GitHub (bug, amélioration) demandant version, type de compteur et fichier de diagnostics.
+
+### Documentation
+
+- README remis en cohérence avec le code : description de la prédiction mensuelle, `entity_id` des exemples (préfixe réel `eau_du_grand_lyon_`), configuration du tableau Énergie, capteur « Consommation depuis janvier » inexistant remplacé par l'attribut `consommation_cumulee_m3`, historique de 37 mois, options PFAS/VigiEau/multiplicateur, arborescence des fichiers après le découpage du coordinator, ordres de grandeur réalistes dans les exemples, checklist « Non chargé » déplacée dans Dépannage.
+- Exemples `lovelace/` corrigés : 41 `entity_id` inexistants remplacés par les identifiants réels, automatisation « statut API KO » réécrite sur le capteur « Santé de l'intégration » (états `error`/`offline`), carte statistique au format valide, commentaires des statistiques à jour (4 séries, 37 mois). Suppression de `smart_notifications.yaml`, `dashboard_notifications.yaml` et `notification_config.yaml`, hérités de la v2.2 et appelant des services qui n'existent plus (`smart_alert`, `notify_telegram`, `notify_pushover`, `alert_voice`, `update_data`) : les blueprints fournis les remplacent.
+- README : section « Désinstallation » (déclarée faite dans `quality_scale.yaml` mais absente) et renvoi vers les exemples du dossier `lovelace/`, jusque-là introuvables.
+- `icons.json` : suppression d'une icône orpheline (`water_hardness`).
+- README réorganisé : installation, désinstallation et configuration placées avant le détail des fonctionnalités, utilisation et exemples avant le dépannage ; sections en double fusionnées (compteurs pris en charge, intervalle de mise à jour) ; mention des capteurs désactivés par défaut dans les exemples ; recommandation d'utiliser VigiEau plutôt que l'heuristique saisonnière ; commandes de test pour les contributeurs.
+- Guide du tableau Énergie corrigé (noms de capteurs, sommes 7/30 jours et non moyennes, 4 statistiques, historique journalier de 3 ans) ; `lovelace/energy_config.yaml`, qui ne contenait que des commentaires en double, y est fusionné.
+- README : limite VigiEau documentée (aucune zone de restriction, ou commune à plusieurs zones d'alerte en HTTP 409 : capteur officiel indisponible et repli de « Niveau de sécheresse » sur l'heuristique pendant 24 heures).
 
 ### Maintenance
 
 - Découpage de `coordinator.py` (1 800 → ~1 000 lignes) : il ne conserve que l'orchestration des cycles, le retry/mode hors-ligne et la persistance. Les calculs locaux (tendances, Eco-Score, heuristiques de fuite, courbe horaire, calcaire) passent dans `analytics.py`, les statistiques Recorder dans `recorder_statistics.py`, la fusion des historiques dans `history.py`, le parsing des coupures dans `outages.py`, le cache d'API par cycle dans `api/cycle_cache.py` et le calcul des estimations de coût dans `billing.py`. Aucun changement de comportement, d'entité ni de `statistic_id`.
 - Suppression de code mort (`_get_real_monthly_cost`, `_get_real_annual_cost`, `_stats_month_counts`).
 - Restauration du `.gitignore`.
+- Nouvelle suite `tests_ha/` exécutée dans un vrai Home Assistant 2026.8.1 (`pytest-homeassistant-custom-component`) : setup complet, existence de chaque `entity_id` cité dans la documentation, statistiques dans un vrai Recorder, déchargement et suppression, chargement de chaque blueprint ; nouveau job CI « Intégration HA réelle ».
+- `ruff` (lint et formatage, version épinglée, configuration dans `ruff.toml`) remplace `flake8` et `black`, avec les mêmes règles ; il couvre aussi `tests/`, `tests_ha/` et `scripts/` (imports inutilisés supprimés).
 
 ## [3.5.5] - 2026-09-11
 

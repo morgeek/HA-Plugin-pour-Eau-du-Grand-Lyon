@@ -1,0 +1,93 @@
+name: Signaler un bug
+description: Un capteur, une alerte ou la configuration ne fonctionne pas comme prévu.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci de prendre le temps de signaler ce problème.
+        Avant de continuer, consultez la section [Dépannage](https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon#d%C3%A9pannage) du README.
+        **Ne collez jamais votre email, votre mot de passe ni vos références de contrat.**
+
+  - type: input
+    id: version
+    attributes:
+      label: Version de l'intégration
+      description: Visible dans HACS ou dans `custom_components/eau_grand_lyon/manifest.json`.
+      placeholder: "3.6.1"
+    validations:
+      required: true
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Version de Home Assistant
+      description: Paramètres > À propos.
+      placeholder: "2026.8.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: meter
+    attributes:
+      label: Type de compteur
+      description: Indiqué par le capteur « Compatibilité compteur » (désactivé par défaut).
+      options:
+        - Téléo (communicant)
+        - Standard
+        - Je ne sais pas
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Mode d'installation
+      options:
+        - HACS
+        - Manuel (copie de custom_components/eau_grand_lyon)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description du problème
+      description: Ce qui se passe, et ce que vous attendiez à la place.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Étapes pour reproduire
+      placeholder: |
+        1. ...
+        2. ...
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Journaux
+      description: |
+        Paramètres > Système > Journaux, en filtrant sur `eau_grand_lyon`.
+        Pour plus de détails, activez la journalisation de débogage depuis la carte de l'intégration.
+      render: shell
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Fichier de diagnostics
+      description: |
+        Paramètres > Appareils et services > Eau du Grand Lyon > ⋮ > **Télécharger les diagnostics**,
+        puis glissez le fichier ici. Email, mot de passe et références de contrat y sont masqués automatiquement.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Vérifications
+      options:
+        - label: J'ai consulté la section Dépannage du README.
+          required: true
+        - label: Je n'ai inclus ni identifiants ni références de contrat dans ce signalement.
+          required: true

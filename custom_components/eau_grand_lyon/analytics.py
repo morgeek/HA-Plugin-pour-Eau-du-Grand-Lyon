@@ -10,7 +10,7 @@ from __future__ import annotations
 import calendar
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -25,6 +25,8 @@ CO2_KG_PER_M3 = 0.52
 LIMESCALE_ALERT_G = 100000
 # Plancher de l'heuristique de pic journalier (500 L/j) contre les faux positifs.
 LEAK_MIN_DAILY_M3 = 0.5
+# Mode vacances : au-delà de 1 litre consommé pendant l'absence, l'alerte est levée.
+VACATION_ALERT_M3 = 0.001
 # Fuseau des dates publiées par Eau du Grand Lyon (relevés journaliers, mois, années).
 LOCAL_TZ = ZoneInfo("Europe/Paris")
 
@@ -268,3 +270,23 @@ def drought_level() -> str:
     """Niveau de sécheresse (heuristique calendaire). Valeurs = clés ENUM traduites."""
     current_month = local_now().month
     return "vigilance" if 6 <= current_month <= 9 else "normal"
+
+
+def consumption_after(daily: list[DailyConsumption], since: date) -> tuple[float, int]:
+    """Volume consommé (m³) et nombre de journées publiées strictement après `since`.
+
+    La journée `since` elle-même est exclue : c'est le jour du départ, dont la
+    consommation avant de partir ne doit pas déclencher d'alerte.
+    """
+    volume = 0.0
+    published_days = 0
+    for entry in daily:
+        try:
+            day = date.fromisoformat(str(entry.get("date", ""))[:10])
+            value = float(entry.get("consommation_m3") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if day > since:
+            published_days += 1
+            volume += value
+    return round(volume, 3), published_days

@@ -49,13 +49,18 @@ def account_device_info(
     coordinator: DataUpdateCoordinator[EauGrandLyonData],
     entry: EauGrandLyonConfigEntry,
 ) -> DeviceInfo:
-    """DeviceInfo des entités globales — rattachées au device du premier contrat."""
+    """DeviceInfo des entités globales — rattachées au device du premier contrat.
+
+    Les métadonnées complètes (dont le nom) sont fournies, et pas seulement
+    l'identifiant : les plateformes démarrent en parallèle, et si le bouton, le
+    switch ou le calendrier enregistrait le device avant les capteurs, celui-ci
+    n'avait pas encore de nom. Leurs entity_id étaient alors générés sans le
+    préfixe « eau_du_grand_lyon_ » (ex. button.forcer_la_mise_a_jour).
+    """
     contracts = (coordinator.data or {}).get("contracts", {})
     first_ref = next(iter(contracts), None)
     if first_ref:
-        return DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_{first_ref}")},
-        )
+        return contract_device_info(coordinator, entry, first_ref)
     return DeviceInfo(
         identifiers={(DOMAIN, entry.entry_id)},
         name=MANUFACTURER,

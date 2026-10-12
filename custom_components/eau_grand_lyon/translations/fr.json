@@ -111,7 +111,8 @@
           "water_quality_commune": "Commune (qualité de l'eau Hub'Eau)",
           "pfas_enabled": "Activer les données PFAS publiques (expérimental)",
           "vigieau_enabled": "Activer le niveau officiel VigiEau (expérimental)",
-          "subscription_annual": "💶 Part fixe manuelle (€/an)"
+          "subscription_annual": "💶 Part fixe manuelle (€/an)",
+          "leak_multiplier": "Multiplicateur d'alerte fuite"
         },
         "data_description": {
           "tariff_mode": "La dernière facture utilise son montant TTC réel par m³. La grille 2026 applique les tranches officielles et l'abonnement correspondant au diamètre du compteur. Les modes manuel et dynamique préservent les réglages personnalisés.",
@@ -125,7 +126,8 @@
           "vigieau_enabled": "Interroge au maximum une fois par jour l'API publique officielle VigiEau pour la commune configurée.",
           "subscription_annual": "Utilisée uniquement en modes manuel et dynamique. Le mode Grille officielle choisit automatiquement la part fixe selon le calibre. À titre indicatif, un DN15 vaut {subscription_example} € TTC/an dans la grille 2026.",
           "update_interval_hours": "Fréquence à laquelle l'intégration interroge les serveurs Eau du Grand Lyon. Les données étant mises à jour mensuellement, 24h est recommandé pour éviter tout blocage WAF.",
-          "tarif_m3": "Utilisé uniquement en mode Tarif manuel fixe, ou comme repli de l'entité dynamique."
+          "tarif_m3": "Utilisé uniquement en mode Tarif manuel fixe, ou comme repli de l'entité dynamique.",
+          "leak_multiplier": "Seuil des alertes heuristiques : une alerte est levée quand la consommation dépasse ce multiple de la référence (mois précédent ou moyenne 7 jours). Entre 1,5 et 10 ; 2 par défaut."
         }
       }
     }
@@ -246,6 +248,8 @@
         "state": {
           "normal": "Normal",
           "vigilance": "Vigilance",
+          "alerte": "Alerte",
+          "alerte_renforcee": "Alerte renforcée",
           "crise": "Crise"
         }
       },
@@ -320,7 +324,14 @@
         "name": "PFAS — valeur maximale"
       },
       "vigieau": {
-        "name": "Niveau officiel VigiEau"
+        "name": "Niveau officiel VigiEau",
+        "state": {
+          "normal": "Pas de restriction",
+          "vigilance": "Vigilance",
+          "alerte": "Alerte",
+          "alerte_renforcee": "Alerte renforcée",
+          "crise": "Crise"
+        }
       }
     },
     "button": {
@@ -374,6 +385,9 @@
       },
       "pfas_conform": {
         "name": "Eau conforme PFAS"
+      },
+      "vacation_alert": {
+        "name": "Consommation pendant l'absence"
       }
     }
   },

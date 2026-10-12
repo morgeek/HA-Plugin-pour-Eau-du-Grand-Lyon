@@ -196,9 +196,20 @@ def test_global_sensor_behavior_states_and_outage_payloads():
     coordinator.data = {}
     assert health.native_value == "unknown"
 
-    for level, icon in (("normal", "mdi:water-check"), ("crise", "mdi:water-alert"), ("vigilance", "mdi:water-remove")):
+    for level, icon in (
+        ("normal", "mdi:water-check"),
+        ("vigilance", "mdi:water-remove"),
+        ("alerte", "mdi:water-remove"),
+        ("alerte_renforcee", "mdi:water-alert"),
+        ("crise", "mdi:water-alert"),
+    ):
         coordinator.data = {"drought_level": level}
         assert EauGrandLyonDroughtSensor(coordinator, entry).icon == icon
+
+    coordinator.data = {"drought_level": "crise", "drought_source": "vigieau"}
+    assert EauGrandLyonDroughtSensor(coordinator, entry).extra_state_attributes["source"].startswith("VigiEau")
+    coordinator.data = {"drought_level": "vigilance", "drought_source": "heuristique"}
+    assert EauGrandLyonDroughtSensor(coordinator, entry).extra_state_attributes["source"].startswith("Heuristique")
 
     coordinator.data = {"prochaine_coupure": {"date_debut": "invalid"}, "interruptions": []}
     assert EauGrandLyonNextOutageSensor(coordinator, entry).native_value is None

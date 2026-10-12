@@ -207,7 +207,7 @@ class EauGrandLyonAuth:
             raise AuthenticationError("Identifiants incorrects. Verifiez votre email et mot de passe.")
         if login_status == 403:
             raise WafBlockedError(
-                "Le WAF a bloque la requete de login (HTTP 403). " "Attendez quelques minutes avant de reessayer."
+                "Le WAF a bloque la requete de login (HTTP 403). Attendez quelques minutes avant de reessayer."
             )
         if login_status == 404:
             raise ApiError(f"URL de login non trouvee (404): {urls.login_url}")

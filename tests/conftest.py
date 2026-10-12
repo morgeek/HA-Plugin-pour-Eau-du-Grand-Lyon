@@ -26,7 +26,7 @@ def _stub_homeassistant() -> None:
         return
 
     # Base package
-    ha = _make_module("homeassistant")
+    _make_module("homeassistant")
 
     class _HomeAssistantError(Exception):
         """Mock HomeAssistantError (accepte les kwargs de traduction comme le vrai)."""
@@ -92,7 +92,7 @@ def _stub_homeassistant() -> None:
     _make_module("homeassistant.helpers")
     _make_module(
         "homeassistant.helpers.config_validation",
-        config_entry_only_config_schema=lambda domain: (lambda cfg: cfg),
+        config_entry_only_config_schema=lambda domain: lambda cfg: cfg,
     )
     _make_module("homeassistant.helpers.typing", ConfigType=MagicMock)
 
@@ -145,7 +145,7 @@ def _stub_homeassistant() -> None:
         UpdateFailed=Exception,
     )
 
-    sensor_mod = _make_module(
+    _make_module(
         "homeassistant.components.sensor",
         SensorEntity=object,
         SensorEntityDescription=MagicMock,

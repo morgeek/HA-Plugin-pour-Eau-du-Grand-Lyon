@@ -1,0 +1,99 @@
+blueprint:
+  name: "🚱 Eau Grand Lyon — Restriction d'eau officielle (VigiEau)"
+  description: >
+    Envoie une notification quand le niveau officiel de restriction applicable
+    à l'eau potable de votre commune (capteur « Niveau officiel VigiEau »)
+    change vers l'un des niveaux sélectionnés. Contrairement à l'indicateur
+    saisonnier « Niveau de sécheresse », ce niveau provient des arrêtés
+    préfectoraux publiés sur VigiEau.
+
+    Prérequis : dans les options de l'intégration, renseignez la commune et
+    activez VigiEau, puis activez le capteur « Niveau officiel VigiEau »
+    (désactivé par défaut).
+  domain: automation
+  source_url: https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/blob/main/blueprints/automation/eau_grand_lyon/alerte_vigieau.yaml
+  homeassistant:
+    min_version: 2024.11.0
+  input:
+    sensor_vigieau:
+      name: Capteur VigiEau
+      description: >
+        Sélectionnez le sensor « Niveau officiel VigiEau » de l'intégration
+        Eau du Grand Lyon.
+      selector:
+        entity:
+          integration: eau_grand_lyon
+          domain: sensor
+    niveaux_alertes:
+      name: Niveaux déclenchant une notification
+      description: "Une notification est envoyée quand le niveau passe à l'un de ces niveaux."
+      default:
+        - "alerte"
+        - "alerte_renforcee"
+        - "crise"
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: "Vigilance"
+              value: "vigilance"
+            - label: "Alerte"
+              value: "alerte"
+            - label: "Alerte renforcée"
+              value: "alerte_renforcee"
+            - label: "Crise"
+              value: "crise"
+    service_notification:
+      name: Service de notification
+      description: "Nom du service de notification (ex: notify.mobile_app_iphone)"
+      selector:
+        select:
+          custom_value: true
+          options: []
+
+variables:
+  sensor_entity: !input sensor_vigieau
+  niveaux: !input niveaux_alertes
+  niveau_actuel: "{{ states(sensor_entity) }}"
+  libelle: >-
+    {{ {'normal': 'Pas de restriction', 'vigilance': 'Vigilance', 'alerte': 'Alerte',
+        'alerte_renforcee': 'Alerte renforcée', 'crise': 'Crise'}.get(niveau_actuel, niveau_actuel) }}
+  arrete_url: "{{ state_attr(sensor_entity, 'arrete_url') or 'https://vigieau.gouv.fr' }}"
+  arrete_fin: "{{ state_attr(sensor_entity, 'arrete_fin') or 'non précisée' }}"
+
+trigger:
+  - platform: state
+    entity_id: !input sensor_vigieau
+
+condition:
+  # Ignore les démarrages et les indisponibilités de la source : seul un vrai
+  # changement de niveau entre deux valeurs connues déclenche une notification.
+  - condition: template
+    value_template: >-
+      {{ trigger.from_state is not none and trigger.to_state is not none
+         and trigger.from_state.state not in ['unknown', 'unavailable']
+         and trigger.from_state.state != trigger.to_state.state
+         and niveau_actuel in niveaux }}
+
+action:
+  - service: !input service_notification
+    data:
+      title: "🚱 Restriction d'eau — {{ libelle }}"
+      message: >
+        Le niveau officiel de restriction pour l'eau potable de votre commune
+        est désormais **{{ libelle }}** (arrêté valable jusqu'au {{ arrete_fin }}).
+
+        Consultez les usages restreints (arrosage, lavage, remplissage de
+        piscine…) dans l'arrêté ou sur VigiEau.
+      data:
+        tag: eau_grand_lyon_vigieau
+        actions:
+          - action: URI
+            title: "📋 Lire l'arrêté"
+            uri: "{{ arrete_url }}"
+          - action: URI
+            title: "🌐 VigiEau"
+            uri: https://vigieau.gouv.fr
+
+mode: single
+max_exceeded: silent

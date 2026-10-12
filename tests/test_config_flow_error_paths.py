@@ -274,10 +274,13 @@ class TestReauthFlow:
     async def test_reauth_different_email_is_rejected_before_update(self):
         flow, _ = _make_flow()
         flow._abort_if_unique_id_mismatch.side_effect = RuntimeError("unique_id_mismatch")
-        with patch(
-            "custom_components.eau_grand_lyon.config_flow._authenticate_and_handle_errors",
-            new=AsyncMock(return_value={}),
-        ), pytest.raises(RuntimeError, match="unique_id_mismatch"):
+        with (
+            patch(
+                "custom_components.eau_grand_lyon.config_flow._authenticate_and_handle_errors",
+                new=AsyncMock(return_value={}),
+            ),
+            pytest.raises(RuntimeError, match="unique_id_mismatch"),
+        ):
             await flow.async_step_reauth_confirm({CONF_EMAIL: "other@example.com", CONF_PASSWORD: "secret"})
         flow.hass.config_entries.async_update_entry.assert_not_called()
         flow.hass.config_entries.async_reload.assert_not_awaited()
@@ -286,10 +289,13 @@ class TestReauthFlow:
     async def test_reauth_existing_account_conflict_does_not_replace_entry(self):
         flow, _ = _make_flow()
         flow._abort_if_unique_id_mismatch.side_effect = RuntimeError("existing account")
-        with patch(
-            "custom_components.eau_grand_lyon.config_flow._authenticate_and_handle_errors",
-            new=AsyncMock(return_value={}),
-        ), pytest.raises(RuntimeError, match="existing account"):
+        with (
+            patch(
+                "custom_components.eau_grand_lyon.config_flow._authenticate_and_handle_errors",
+                new=AsyncMock(return_value={}),
+            ),
+            pytest.raises(RuntimeError, match="existing account"),
+        ):
             await flow.async_step_reauth_confirm({CONF_EMAIL: "configured@example.com", CONF_PASSWORD: "secret"})
         assert flow._modern_update_calls == []
 
@@ -422,10 +428,13 @@ class TestReconfigureFlow:
     async def test_reconfigure_different_account_is_rejected(self):
         flow, _ = _make_flow()
         flow._abort_if_unique_id_mismatch.side_effect = RuntimeError("unique_id_mismatch")
-        with patch(
-            "custom_components.eau_grand_lyon.config_flow._authenticate_and_handle_errors",
-            new=AsyncMock(return_value={}),
-        ), pytest.raises(RuntimeError, match="unique_id_mismatch"):
+        with (
+            patch(
+                "custom_components.eau_grand_lyon.config_flow._authenticate_and_handle_errors",
+                new=AsyncMock(return_value={}),
+            ),
+            pytest.raises(RuntimeError, match="unique_id_mismatch"),
+        ):
             await flow.async_step_reconfigure({CONF_EMAIL: "other@example.com", CONF_PASSWORD: "secret"})
         flow.hass.config_entries.async_update_entry.assert_not_called()
 
@@ -490,6 +499,35 @@ class TestOptionsFlow:
         # data_description strings; missing them raises formatjs MISSING_VALUE.
         assert placeholders["hardness_lyon_avg"] == "30"
         assert placeholders["subscription_example"] == "50.66"
+
+    @pytest.mark.asyncio
+    async def test_every_option_has_label_and_description_in_all_translations(self, monkeypatch):
+        """Régression : `leak_multiplier` s'affichait sans libellé (clé brute) faute de traduction."""
+        import json
+        from pathlib import Path
+
+        option_keys: list[str] = []
+
+        def spy_optional(key, default=None, **kwargs):
+            option_keys.append(key)
+            return key
+
+        monkeypatch.setattr("custom_components.eau_grand_lyon.config_flow.vol.Optional", spy_optional)
+        flow = EauGrandLyonOptionsFlowHandler()
+        flow.config_entry = MagicMock()
+        flow.config_entry.options = {}
+        flow.config_entry.data = {}
+        flow.async_show_form = MagicMock(side_effect=lambda **kw: {"type": "form", **kw})
+
+        await flow.async_step_init()
+
+        assert option_keys
+        root = Path(__file__).resolve().parent.parent / "custom_components" / "eau_grand_lyon"
+        for name in ("strings.json", "translations/fr.json", "translations/en.json"):
+            step = json.loads((root / name).read_text(encoding="utf-8"))["options"]["step"]["init"]
+            for key in option_keys:
+                assert step["data"].get(key), f"{name}: libellé manquant pour l'option {key!r}"
+                assert step["data_description"].get(key), f"{name}: description manquante pour l'option {key!r}"
 
     @pytest.mark.asyncio
     async def test_invalid_legacy_tariff_mode_falls_back_to_supported_default(self, monkeypatch):

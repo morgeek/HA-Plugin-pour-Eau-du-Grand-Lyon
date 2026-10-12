@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import calendar
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -32,6 +32,7 @@ def _coordinator() -> EauGrandLyonCoordinator:
     coord._cumulative_index_cache = {}
     coord._prev_nb_alertes = 0
     coord.vacation_mode = False
+    coord.vacation_since = None
     coord._persistent_data_loaded = False
     coord._persistent_data_lock = asyncio.Lock()
     coord._store = MagicMock()
@@ -46,7 +47,15 @@ async def test_initialize_and_load_all_persistent_stores_with_timestamp_normaliz
     now = datetime.now(timezone.utc).replace(microsecond=0)
     coord._monthly_history_store.async_load = AsyncMock(return_value={"REF1": [{"annee": 2026}]})
     coord._daily_history_store.async_load = AsyncMock(
-        return_value={"REF1": [{"date": "2026-08-01"}], 12: [], "BROKEN": "not-list"}
+        return_value={
+            "REF1": [
+                {"date": "2026-08-01", "consommation_m3": 0.2},
+                {"date": "2026-08-02"},  # volume absent : ferait planter les agrégats
+                {"date": "pas-une-date", "consommation_m3": 0.1},
+            ],
+            12: [],
+            "BROKEN": "not-list",
+        }
     )
     coord._store.async_load = AsyncMock(
         return_value={
@@ -63,7 +72,7 @@ async def test_initialize_and_load_all_persistent_stores_with_timestamp_normaliz
 
     assert coord._persistent_data_loaded is True
     assert coord._monthly_history == {"REF1": [{"annee": 2026}]}
-    assert coord._daily_history == {"REF1": [{"date": "2026-08-01"}]}
+    assert coord._daily_history == {"REF1": [{"date": "2026-08-01", "consommation_m3": 0.2}]}
     assert coord.data["offline_mode"] is False
     assert coord.data["offline_since"] is None
     assert isinstance(coord.data["last_update_success_time"], datetime)
@@ -136,9 +145,9 @@ async def test_save_clear_and_close_persistence_paths_are_best_effort():
     coord._own_session = MagicMock(closed=False)
     coord._own_session.close = AsyncMock()
     await coord.async_close()
-    coord._own_session.close.assert_awaited_once()
-    coord._own_session.closed = True
-    await coord.async_close()
+    coord.api.async_revoke_token.assert_awaited_once()
+    # Home Assistant détache lui-même la session ; close() est neutralisé par HA.
+    coord._own_session.close.assert_not_awaited()
 
 
 def test_tariff_intelligence_eco_score_and_date_calculation_edge_cases():
@@ -191,8 +200,15 @@ async def test_real_index_vacation_and_statistic_error_branches(monkeypatch):
     assert await coord._get_real_index(cycle, True, "C1", []) is None
 
     coord.vacation_mode = True
+    coord.vacation_since = date(2026, 8, 1)
     assert coord._check_vacation_alert({"REF1": {"consommations_journalieres": []}}) is False
-    assert coord._check_vacation_alert({"REF1": {"consommations_journalieres": [{"consommation_m3": 0.1}]}}) is True
+    # Le jour du départ est ignoré, seules les journées suivantes comptent.
+    departure_day = {"REF1": {"consommations_journalieres": [{"date": "2026-08-01", "consommation_m3": 0.1}]}}
+    assert coord._check_vacation_alert(departure_day) is False
+    next_day = {"REF1": {"consommations_journalieres": [{"date": "2026-08-02", "consommation_m3": 0.1}]}}
+    assert coord._check_vacation_alert(next_day) is True
+    coord.vacation_mode = False
+    assert coord._check_vacation_alert(next_day) is False
 
     with patch.object(stats_module, "StatisticData", new=lambda **kwargs: kwargs):
         series = stats_module.build_monthly_series(

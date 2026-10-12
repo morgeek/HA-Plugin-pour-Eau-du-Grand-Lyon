@@ -23,10 +23,94 @@ Les données apparaissent après la première synchronisation. Celle-ci peut pre
 
 | Compteur | Données disponibles |
 | --- | --- |
-| **Téléo** | Consommation journalière, index journalier, alertes de fuite, signal et fonctions horaires selon le compte |
-| **Standard** | Consommation mensuelle, contrat, factures et indicateurs généraux |
+| **Téléo** (communicant) | Consommation et index journaliers, alertes de fuite ; courbe horaire, estimation de fuite et signal seulement si l'API les expose |
+| **Standard** (relevé manuel) | Consommation mensuelle, contrat, factures et indicateurs généraux |
 
-Le capteur **Compatibilité compteur** permet de vérifier le type détecté. Les capteurs incompatibles restent indisponibles ou sont désactivés par défaut.
+Pour connaître votre type de compteur, activez le capteur **Compatibilité compteur** (désactivé par défaut) dans Paramètres > Appareils et services > Eau du Grand Lyon > Entités : il indique `Téléo` ou `Standard`. Les capteurs incompatibles avec votre compteur restent indisponibles ou sont désactivés par défaut.
+
+## Prérequis
+- Home Assistant (`2024.11.0` ou ultérieure)
+- Un compte valide avec Eau du Grand Lyon (email et mot de passe)
+
+## Installation
+
+> [!CAUTION]
+> **IMPORTANT** : Avant d'installer cette intégration ou toute autre extension personnalisée, effectuez toujours une **sauvegarde complète** de votre configuration Home Assistant. L'auteur ne peut être tenu responsable en cas de perte de données ou d'instabilité de votre instance.
+
+### Option 1 : Installation à l'ancienne
+1. Téléchargez la dernière version depuis le [dépôt GitHub](https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon).
+2. Extrayez **l'intégralité** du dossier `custom_components/eau_grand_lyon/` (y compris le sous-dossier `sensors/`) dans le répertoire `custom_components/` de votre Home Assistant.
+3. Redémarrez Home Assistant.
+
+Arborescence attendue après copie manuelle :
+
+```text
+/config/custom_components/eau_grand_lyon/manifest.json
+/config/custom_components/eau_grand_lyon/__init__.py
+/config/custom_components/eau_grand_lyon/config_flow.py
+...
+```
+
+Ne copiez pas le dépôt complet dans `/config/custom_components/` sinon vous obtiendrez un chemin invalide du type :
+
+```text
+/config/custom_components/eau_grand_lyon_component/custom_components/eau_grand_lyon/
+```
+
+Dans ce cas, Home Assistant ne trouvera pas l'intégration et affichera `Non chargé`.
+
+### Option 2 : HACS (Recommandé)
+1. Assurez-vous d'avoir [HACS](https://hacs.xyz/) installé dans votre instance Home Assistant.
+2. Allez dans **Intégrations** HACS et recherchez "Eau du Grand Lyon".
+3. Cliquez sur **Installer** et redémarrez Home Assistant.
+4. Passez à la configuration ci-dessous.
+
+> **Note** : Si l'intégration n'est pas encore dans HACS, utilisez l'Option 1 ou ajoutez le dépôt personnalisé manuellement dans les paramètres HACS.
+
+## Désinstallation
+
+1. Dans **Paramètres > Appareils et services > Eau du Grand Lyon**, ouvrez le menu ⋮ de l'entrée puis choisissez **Supprimer**. L'intégration révoque son jeton d'accès et efface ses caches locaux (`.storage/eau_grand_lyon_<id>_*` : historique, références de contrat et factures).
+2. Retirez les fichiers : via HACS (**Eau du Grand Lyon > ⋮ > Supprimer**) ou, pour une installation manuelle, en supprimant le dossier `/config/custom_components/eau_grand_lyon/`.
+3. Redémarrez Home Assistant.
+
+Les statistiques long terme déjà injectées (`eau_grand_lyon:*`) restent dans la base du Recorder : retirez la source d'eau correspondante du tableau Énergie. Supprimez aussi les blueprints, automatisations et cartes que vous aviez importés.
+
+## Configuration
+1. Dans Home Assistant, allez dans **Paramètres** > **Appareils et services**.
+2. Cliquez sur **Ajouter une intégration** et recherchez "Eau du Grand Lyon".
+3. Saisissez votre email et mot de passe du compte Eau du Grand Lyon.
+4. Terminez la configuration.
+
+Une fois installée, vous pouvez modifier les options (mode de calcul des coûts, tarif manuel, intervalle de mise à jour, mode expérimental) en retournant dans **Appareils et services** > **Eau du Grand Lyon** > **Configurer**.
+
+Les données sont récupérées toutes les **24 heures** par défaut : les relevés étant généralement mensuels, inutile de solliciter davantage le serveur (voir [Mise à jour des données](#mise-à-jour-des-données)).
+
+### Options disponibles
+
+| Option | Utilisation | Valeur conseillée |
+| --- | --- | --- |
+| Fréquence de mise à jour | Intervalle entre deux synchronisations | 24 heures |
+| Mode de calcul des coûts | Choisit la source de l'estimation | Dernière facture |
+| Tarif au m³ | Repli du mode manuel | Tarif TTC personnalisé |
+| Entité de prix dynamique | Source du mode dynamique | Facultatif |
+| Part fixe annuelle | Utilisée en modes manuel et dynamique | Montant TTC personnalisé, ou `0` |
+| Nombre d'habitants | Éco-Score et conseils personnalisés | Nombre réel du foyer |
+| Dureté de l'eau | Estimation du calcaire | Valeur de votre commune ou de votre facture |
+| Commune qualité de l'eau | Résout la commune et ses réseaux dans Hub'Eau | Nécessaire aux capteurs qualité |
+| Activer PFAS | Lecture publique des PFAS de la commune (expérimental) | Désactivé au départ |
+| Activer VigiEau | Niveau officiel de restriction d'eau de la commune (expérimental) | Selon le besoin |
+| Multiplicateur d'alerte fuite | Seuil des alertes heuristiques (mois et jour) par rapport à la référence | 2 (entre 1,5 et 10) |
+| Nombre de tentatives API | Nombre d'essais avant le mode hors-ligne | Valeur par défaut |
+| Mode expérimental | Courbe horaire et données Téléo étendues | Désactivé au départ |
+
+L'entité de prix dynamique est facultative. Si elle est indisponible, l'intégration utilise le tarif fixe configuré.
+
+### Délais de disponibilité des données
+
+- Les consommations mensuelles suivent généralement le calendrier de publication du fournisseur.
+- Les données Téléo peuvent arriver avec un décalage de plusieurs jours. Le capteur « dernier jour connu » n'est donc pas nécessairement la veille civile.
+- Une correction publiée tardivement remplace automatiquement la journée concernée et recalcule les cumuls suivants.
+- Une réponse vide ou une panne temporaire ne supprime pas les dernières données valides : l'intégration utilise son cache et indique son état dans le capteur de santé.
 
 ## État réel des fonctionnalités
 
@@ -43,8 +127,8 @@ Ce tableau distingue les données fournies par Eau du Grand Lyon des calculs eff
 | Qualité de l'eau | Conditionnel | Analyses réglementaires nationales via Hub'Eau ; une commune exacte est nécessaire |
 | PFAS | Expérimental/opt-in | Valeurs publiques du widget Eau du Grand Lyon, au plus une lecture par jour ; entités désactivées par défaut |
 | Calendrier | Fonctionnel selon les dates fournies | La prochaine facture n'est publiée comme état que si l'API renvoie une date exploitable ; l'estimation locale à échéance + 180 jours reste séparée dans l'attribut `date_estimée` |
-| Mode vacances | Incomplet | Le seuil est calculé et journalisé, mais aucune entité d'alerte ni notification dédiée n'est actuellement exposée |
-| Sécheresse | Indicatif + officiel opt-in | L'heuristique calendaire est conservée ; VigiEau peut fournir séparément le niveau officiel AEP de la commune |
+| Mode vacances | Fonctionnel (Téléo) | Le switch mémorise le jour du départ ; « Consommation pendant l'absence » passe à ON dès qu'un relevé publié pour un jour suivant dépasse 1 litre (relevés publiés avec 1 à 3 jours de décalage) |
+| Sécheresse | Officiel si VigiEau est activé, sinon indicatif | « Niveau de sécheresse » reprend le niveau officiel VigiEau de la commune ; sans VigiEau (ou s'il ne répond pas), il revient à l'heuristique calendaire. L'attribut `source` indique l'origine du niveau |
 | Aide Warsmann | Indicatif | Compare une période aux trois périodes homologues précédentes ; indisponible sans historique complet et désactivée par défaut |
 
 ### Alertes de consommation et de fuite
@@ -64,12 +148,12 @@ Les seuils journalier et mensuel configurés dans l'espace fournisseur sont expo
 ### PFAS, VigiEau et aide Warsmann
 
 - **PFAS** : après activation explicite, l'intégration résout la commune configurée via l'autocomplétion publique puis lit la [page Qualité de mon eau](https://www.eaudugrandlyon.com/mon-eau/eau-chez-moi/qualite-de-mon-eau/). Les valeurs moyenne/maximale et le nombre de prélèvements sont mis en cache 24 h. Une valeur maximale inférieure ou égale à 0,1 µg/L donne l'indication « conforme » ; si le HTML change, les entités deviennent indisponibles.
-- **VigiEau** : après activation explicite, la commune est résolue en code INSEE puis l'[API officielle VigiEau](https://api.vigieau.gouv.fr/swagger/) est interrogée pour le profil `particulier` et l'eau potable (`AEP`). Le capteur officiel complète l'heuristique saisonnière sans la remplacer.
+- **VigiEau** : après activation explicite, la commune est résolue en code INSEE puis l'[API officielle VigiEau](https://api.vigieau.gouv.fr/swagger/) est interrogée pour le profil `particulier` et l'eau potable (`AEP`). Le niveau obtenu alimente aussi « Niveau de sécheresse », qui ne retombe sur l'heuristique saisonnière que si VigiEau est désactivé ou ne répond pas.
 - **Warsmann** : le capteur désactivé par défaut applique le seuil du double de la moyenne sur trois périodes homologues, conformément à [l'article L2224-12-4 du CGCT](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000041410387). Il reste une aide : il ne vérifie ni la nature de la fuite, ni la réparation, ni la notification du fournisseur. Le délai légal actuel est d'un mois après l'information, et aucun compte à rebours automatique n'est créé.
 
 ### Estimations locales indicatives
 
-- La prédiction de fin de mois est une extrapolation linéaire de la consommation connue au dernier jour publié.
+- La prédiction de fin de mois extrapole le cumul des relevés journaliers du mois en cours (date de Lyon) jusqu'au dernier jour du mois. Elle nécessite des données journalières Téléo pour le mois en cours ; sinon elle reste indisponible.
 - L'Eco-Score utilise des seuils internes par personne ; il ne constitue pas un classement officiel.
 - Le coaching est un ensemble de conseils déterministes selon le score, la tendance et l'heuristique de fuite ; il ne fait pas appel à une IA.
 - Le CO₂e applique un facteur fixe de 0,52 kg CO₂e/m³ et le calcaire dépend de la dureté configurée. Ces résultats sont des ordres de grandeur.
@@ -99,9 +183,11 @@ Redémarrez Home Assistant après avoir modifié cette liste.
 
 Si l'API Eau du Grand Lyon est indisponible (coupure réseau, maintenance, blocage WAF), l'intégration bascule automatiquement en **mode hors-ligne** :
 - Les capteurs restent disponibles et affichent les dernières données connues
-- Le capteur **Statut API** affiche `Hors-ligne` (état brut `offline`) avec l'horodatage du début de la panne
+- Le capteur **Santé de l'intégration** (diagnostic, désactivé par défaut) affiche `Hors-ligne` (état brut `offline`) ; ses attributs donnent la dernière erreur et l'horodatage de la panne
 - Le cache est persistant sur disque — il survit à un redémarrage de Home Assistant
 - Dès que l'API répond à nouveau, les données sont rafraîchies et le mode hors-ligne se désactive automatiquement
+
+Une panne partielle ne déclenche pas ce mode : si seule une donnée secondaire échoue (prochaine facture, point de service, seuils de surconsommation, courbe horaire, interventions), les consommations sont tout de même mises à jour et seuls les capteurs concernés restent sans valeur jusqu'au cycle suivant.
 
 Les tentatives intermédiaires restent au niveau `DEBUG`. Une panne persistante produit un seul avertissement lors du passage en mode hors-ligne, puis un seul message d'information au retour du service ; les cycles identiques suivants ne répètent pas le même avertissement.
 
@@ -132,6 +218,8 @@ Si votre compteur est compatible, les capteurs supplémentaires apparaîtront au
 - **Nombre d'habitants** : utilisé pour l'Éco-Score et les conseils personnalisés.
 - **Mode expérimental** : laissez-le désactivé tant que vous n'avez pas besoin des données étendues Téléo.
 - **PFAS / VigiEau** : configurez d'abord une commune exacte, puis activez uniquement la source souhaitée. Chaque source est limitée à une interrogation par 24 heures.
+- **Sécheresse** : activez VigiEau pour que « Niveau de sécheresse » reflète les restrictions réellement en vigueur ; sans VigiEau, ce n'est qu'une heuristique calendaire (vigilance de juin à septembre).
+- **Vacances** : activez le switch « Mode vacances » au moment du départ, puis surveillez « Consommation pendant l'absence » (par exemple avec le blueprint « Alerte fuite/surconsommation »).
 
 ## Mise à jour des données
 
@@ -158,28 +246,27 @@ Les statistic IDs externes suivants sont injectés automatiquement par le coordi
 
 | Statistic ID | Unit | Period | Usage |
 |---|---|---|---|
-| `eau_grand_lyon:water_<ref>` | m³ | Monthly | Historique consommation jusqu'à 36 mois, Energy Dashboard |
+| `eau_grand_lyon:water_<ref>` | m³ | Monthly | Historique consommation jusqu'à 37 mois, Energy Dashboard |
 | `eau_grand_lyon:water_daily_<ref>` | m³ | Daily | Historique journalier reconstruit, corrections tardives incluses |
-| `eau_grand_lyon:cost_<ref>` | EUR | Monthly | Historique coûts jusqu'à 36 mois (si tarif configuré) |
+| `eau_grand_lyon:cost_<ref>` | EUR | Monthly | Historique coûts jusqu'à 37 mois (si tarif configuré) |
 | `eau_grand_lyon:cost_daily_<ref>` | EUR | Daily | Coût variable journalier Téléo (si tarif configuré) |
 
 *`<ref>` = votre numéro de contrat (ex: AB1234567890)*
 
-> **Note sur les capteurs annuels** : Le capteur "Consommation annuelle" affiche les **12 derniers mois glissants** (pas l'année civile). Pour suivre la consommation depuis le 1er janvier, utilisez le capteur "Consommation depuis janvier" (`consommation_cumulee_annee`) ou le capteur de coût cumulé.
+> **Note sur les capteurs annuels** : Le capteur "Consommation annuelle" affiche les **12 derniers mois glissants** (pas l'année civile). Pour suivre la consommation depuis le 1er janvier, utilisez l'attribut `consommation_cumulee_m3` du capteur « Coût cumulé (Année) » (désactivé par défaut).
 
 > **Migration du tableau Énergie** : après la mise à jour, sélectionnez une fois `eau_grand_lyon:water_daily_<ref>` comme statistique historique de la source d'eau. L'ancienne statistique mensuelle reste intacte; cette migration est donc réversible et n'entrepose pas les anciennes valeurs erronées dans la nouvelle série.
 
 > **Abonnement** : les statistiques `cost_<ref>` et `cost_daily_<ref>` contiennent uniquement le coût variable (`consommation × tarif_m3`). L'abonnement annuel configuré est intégré aux capteurs `cout_reel_mois` et `cout_reel_annuel`, mais pas aux statistiques historiques, afin de ne pas dupliquer une charge fixe à chaque journée.
 
-Configuration :
-1. **Vérifier que le capteur de coût est activé** : `sensor.eau_du_grand_lyon_energie_cout`
-2. **Choisir le mode de calcul des coûts** dans Paramètres > Options
-3. **Ajouter une source d'eau** au tableau de bord Énergie :
-   - Téléo : `sensor.eau_du_grand_lyon_index_journalier_energy` (quotidien, haute précision)
-   - Standard : `sensor.eau_du_grand_lyon_index_compteur` (mensuel)
-4. **Ajouter le coût** pour cette source : `sensor.eau_du_grand_lyon_energie_cout`
-5. **Coûts** : `sensor.eau_du_grand_lyon_energie_cout` (auto-calculé si tarif configuré)
-6. **Statistiques** : Utilisez les statistic IDs ci-dessus pour les cartes statistiques.
+Configuration du tableau Énergie (Paramètres > Tableaux de bord > Énergie > Consommation d'eau) :
+1. **Source d'eau** :
+   - Téléo : « Index journalier (Téléo) », par exemple `sensor.eau_du_grand_lyon_index_journalier_teleo` (quotidien)
+   - Standard : « Index compteur », par exemple `sensor.eau_du_grand_lyon_index_compteur` (mensuel)
+2. **Coût** : « Coût (Énergie) », par exemple `sensor.eau_du_grand_lyon_cout_energie` (calculé si un tarif est disponible), ou directement la statistique `eau_grand_lyon:cost_<ref>`.
+3. **Statistiques** : les statistic IDs ci-dessus sont utilisables dans les cartes statistiques.
+
+> **Identifiants d'entités** : les `entity_id` cités dans ce README sont ceux générés pour une installation en français avec un seul contrat. Avec plusieurs contrats, la référence du contrat est insérée dans le nom (`eau_du_grand_lyon_<ref>_…`) ; vérifiez toujours l'identifiant réel dans Paramètres > Appareils et services > Entités.
 
 ### Comprendre les coûts
 
@@ -198,20 +285,138 @@ Les statistiques `cost_<ref>` et `cost_daily_<ref>` restent des approximations v
 - 📊 Statistiques vides ou graphique incomplet ? → Forcer une mise à jour avec le bouton dédié, puis attendre quelques secondes
 - 🔍 Statistic ID inconnu ? → Vérifiez les statistiques dans **Outils de développement > Statistiques** ou utilisez la recherche de statistiques dans l'interface.
 
-## Appareils supportés
+## Utilisation
+Une fois configuré, les capteurs apparaîtront dans votre tableau de bord Home Assistant. Vous pouvez les utiliser dans des automatisations, des tableaux de bord, ou de toute autre manière que vous utilisez les capteurs dans Home Assistant.
 
-L'intégration fonctionne avec deux types de compteurs :
+### Services disponibles
 
-| Type | Nom | Disponibilité des données |
-|------|-----|---------------------------|
-| **Téléo** (communicant) | Compteur communicant Eau du Grand Lyon | Consommation journalière ; courbe horaire, estimation de fuite et signal seulement si l'API les expose |
-| **Standard** | Compteur traditionnel avec relevé manuel | Consommation mensuelle uniquement |
+| Service | Fonction |
+| --- | --- |
+| `eau_grand_lyon.update_now` | Force une synchronisation immédiate |
+| `eau_grand_lyon.clear_cache` | Supprime le cache local et réinitialise l'historique reconstruit |
+| `eau_grand_lyon.export_data` | Exporte les consommations en CSV |
+| `eau_grand_lyon.download_latest_invoice` | Télécharge le dernier duplicata PDF que le portail marque comme disponible |
 
-### Comment savoir quel compteur j'ai ?
+Le dossier `www` réel de l'instance est autorisé automatiquement par Home Assistant pour le téléchargement. L'export et les chemins de facture personnalisés situés ailleurs doivent figurer dans `allowlist_external_dirs`.
 
-- Un capteur **Compatibilité compteur** (désactivé par défaut) indique `Téléo` ou `Standard`
-- Allez dans Paramètres > Appareils et services > Eau du Grand Lyon > Entités
-- Cherchez "Compatibilité compteur" — activez-la si elle est masquée
+## Cas d'usage & Exemples
+
+### Blueprints inclus
+
+Cinq Blueprints d'automatisation sont fournis dans [`blueprints/automation/eau_grand_lyon/`](blueprints/automation/eau_grand_lyon/) :
+
+- [Alerte budget](blueprints/automation/eau_grand_lyon/alerte_budget.yaml) : notifie lorsqu'un capteur de coût franchit un seuil configurable.
+- [Alerte coupure](blueprints/automation/eau_grand_lyon/alerte_coupure.yaml) : notifie lorsqu'une interruption de service est active ou prévue dans les 48 heures et peut lancer des actions de préparation.
+- [Alerte fuite/surconsommation](blueprints/automation/eau_grand_lyon/alerte_fuite.yaml) : surveille l'un des `binary_sensor` d'anomalie, de surconsommation ou de fuite fournis par l'intégration.
+- [Alerte sécheresse](blueprints/automation/eau_grand_lyon/alerte_secheresse.yaml) : notifie quand « Niveau de sécheresse » passe à un niveau choisi. Avec VigiEau activé, il s'agit du niveau officiel ; sinon de l'heuristique saisonnière, qui ne remplace pas les arrêtés préfectoraux.
+- [Restriction d'eau officielle (VigiEau)](blueprints/automation/eau_grand_lyon/alerte_vigieau.yaml) : notifie quand le niveau officiel de restriction de votre commune passe à un niveau choisi (alerte, alerte renforcée, crise…), avec un lien vers l'arrêté. Nécessite l'option VigiEau et le capteur « Niveau officiel VigiEau ».
+
+Ces Blueprints sont inclus dans ce dépôt, mais ne sont pas annoncés comme publiés sur Blueprint Exchange. Pour satisfaire la règle officielle `docs-examples` lors d'une future soumission Home Assistant Core, un ensemble limité devra être publié dans le dépôt documentaire Home Assistant ou sur Blueprint Exchange, puis lié depuis la page officielle de l'intégration.
+
+### Tableaux de bord et exemples YAML
+
+Le dossier [`lovelace/`](lovelace/) fournit des exemples à adapter (vérifiez les `entity_id` de votre installation) :
+
+- [`dashboard.yaml`](lovelace/dashboard.yaml) : tableau de bord complet, uniquement avec des cartes natives.
+- [`energy_dashboard_preset.yaml`](lovelace/energy_dashboard_preset.yaml) et [`monthly_chart_cards.yaml`](lovelace/monthly_chart_cards.yaml) : graphiques avancés nécessitant les cartes HACS `mini-graph-card`, `apexcharts-card` et `button-card`.
+- [`automation_refresh.yaml`](lovelace/automation_refresh.yaml) : rafraîchissement planifié et alertes d'erreur ou de surconsommation.
+- [`ENERGY_DASHBOARD_SETUP.md`](lovelace/ENERGY_DASHBOARD_SETUP.md) : guide de configuration du tableau Énergie et des statistiques injectées.
+
+### Alerte de surconsommation mensuelle
+
+Créez une automation qui vous avertit lorsque l'heuristique mensuelle se déclenche. Remplacez l'`entity_id` par celui de votre installation :
+
+```yaml
+alias: Alerte surconsommation d'eau
+trigger:
+  - platform: state
+    entity_id: binary_sensor.eau_du_grand_lyon_alerte_surconsommation_mensuelle_heuristique
+    to: 'on'
+action:
+  - service: persistent_notification.create
+    data:
+      title: "⚠️ Surconsommation d'eau détectée"
+      message: "L'heuristique mensuelle s'est déclenchée. Vérifiez les consommations avant de conclure à une fuite."
+```
+
+### Notification budget dépassé
+
+Recevez une alerte si votre facture prévisionnelle dépasse un seuil (activez d'abord le capteur « Prédiction coût mois », désactivé par défaut) :
+
+```yaml
+alias: Alerte Budget Eau
+trigger:
+  - platform: numeric_state
+    entity_id: sensor.eau_du_grand_lyon_prediction_cout_mois
+    above: 50  # alerte si la prédiction du mois dépasse 50 €
+action:
+  - service: notify.mobile_app_smartphone
+    data:
+      title: "💰 Budget eau dépassé"
+      message: "Estimation coût du mois : {{ states('sensor.eau_du_grand_lyon_prediction_cout_mois') }}€"
+```
+
+### Dashboard personnalisé
+
+Exemple de carte Lovelace pour afficher votre consommation :
+
+```yaml
+type: vertical-stack
+cards:
+  - type: gauge
+    entity: sensor.eau_du_grand_lyon_consommation_mois_courant
+    min: 0
+    max: 20
+    unit: m³
+    title: Consommation mois courant
+  
+  - type: entities
+    entities:
+      - entity: sensor.eau_du_grand_lyon_consommation_7_derniers_jours
+      - entity: sensor.eau_du_grand_lyon_cout_estime_du_mois_courant
+      - entity: sensor.eau_du_grand_lyon_eco_score_m3_pers_mois
+      - entity: binary_sensor.eau_du_grand_lyon_alerte_surconsommation_mensuelle_heuristique
+```
+
+### Export de données mensuel
+
+Programmez un export automatique de vos données chaque 1er du mois :
+
+```yaml
+alias: Export données eau mensuel
+trigger:
+  - platform: time
+    at: "09:00:00"
+condition:
+  - condition: template
+    value_template: "{{ now().day == 1 }}"
+action:
+  - service: eau_grand_lyon.export_data
+    data:
+      path: /config/www/eau_export_{{ now().strftime('%Y-%m') }}.csv
+```
+
+### Formulations prédictives
+
+Créez un template pour afficher une estimation personnalisée :
+
+```jinja2
+{% set consumption = states('sensor.eau_du_grand_lyon_consommation_mois_courant') | float(0) %}
+{# Ordres de grandeur pour un foyer : environ 4 à 5 m³ par personne et par mois #}
+{% if consumption < 5 %}
+  💚 Très économe ({{ consumption }} m³)
+{% elif consumption < 10 %}
+  🟢 Bon ({{ consumption }} m³)
+{% elif consumption < 15 %}
+  🟡 À optimiser ({{ consumption }} m³)
+{% else %}
+  🔴 À réduire ({{ consumption }} m³)
+{% endif %}
+```
+
+### Plusieurs comptes
+
+Une même instance Home Assistant peut configurer plusieurs comptes Eau du Grand Lyon sous forme de Config Entries séparées, à condition que chaque compte utilise une adresse email distincte. « Multi-utilisateurs » ne désigne donc pas une fonctionnalité future séparée et aucune gestion de profils ou de droits entre utilisateurs Home Assistant n'est promise.
 
 ## Limitations connues
 
@@ -221,10 +426,11 @@ L'intégration fonctionne avec deux types de compteurs :
 - **Compteurs Standard** : Les détails horaires et alertes temps réel ne sont disponibles que sur compteurs Téléo.
 - **Mode hors-ligne** : En cas d'indisponibilité prolongée (>7 jours), une alerte apparaît dans les réparations HA.
 - **Alertes locales** : elles détectent une surconsommation ou une anomalie statistique, pas une fuite certaine. Le capteur local est indisponible sans au moins 24 points horaires ou 7 jours de données.
-- **Mode vacances** : son résultat n'est pas encore exposé sous forme de capteur ou de notification ; le switch seul ne constitue donc pas une alarme opérationnelle.
+- **Mode vacances** : l'alerte dépend des relevés journaliers Téléo, publiés avec 1 à 3 jours de décalage ; elle n'existe pas pour les compteurs Standard et ne remplace pas une détection de fuite en temps réel.
 - **Qualité de l'eau** : renseignez une commune exacte dans les options. Hub'Eau publie mensuellement les analyses du contrôle sanitaire national ; les valeurs dépendent des paramètres réellement analysés et ne sont pas des données temps réel. Une mesure absente reste indisponible et n'est jamais remplacée par zéro.
 - **PFAS et VigiEau** : ces sources publiques optionnelles peuvent changer ou être indisponibles ; leur échec n'affecte jamais le rafraîchissement principal. PFAS dépend du rendu HTML public, VigiEau d'une résolution fiable de la commune.
-- **Indicateurs environnementaux** : Eco-Score, coaching, CO₂e, calcaire et sécheresse sont des calculs locaux indicatifs.
+- **VigiEau sans niveau exploitable** : si l'API ne renvoie aucune zone de restriction pour la commune ou répond par une erreur — par exemple pour une commune découpée en plusieurs zones d'alerte (réponse HTTP 409, observée à Bordeaux ; aucune commune du Grand Lyon testée n'est concernée) —, le capteur « Niveau officiel VigiEau » est indisponible et « Niveau de sécheresse » revient à l'heuristique saisonnière. Ce résultat est conservé 24 heures avant une nouvelle interrogation.
+- **Indicateurs environnementaux** : Eco-Score, coaching, CO₂e et calcaire sont des calculs locaux indicatifs, de même que la sécheresse lorsque VigiEau n'est pas activé.
 
 ## Dépannage
 
@@ -293,92 +499,7 @@ Vérifiez ensuite :
 
 La route est alignée sur l'application web officielle actuelle, mais sa disponibilité reste dépendante du compte et peut changer côté fournisseur.
 
-## Prérequis
-- Home Assistant (`2024.11.0` ou ultérieure)
-- Un compte valide avec Eau du Grand Lyon (email et mot de passe)
-
-## Installation
-
-> [!CAUTION]
-> **IMPORTANT** : Avant d'installer cette intégration ou toute autre extension personnalisée, effectuez toujours une **sauvegarde complète** de votre configuration Home Assistant. L'auteur ne peut être tenu responsable en cas de perte de données ou d'instabilité de votre instance.
-
-### Option 1 : Installation à l'ancienne
-1. Téléchargez la dernière version depuis le [dépôt GitHub](https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon).
-2. Extrayez **l'intégralité** du dossier `custom_components/eau_grand_lyon/` (y compris le sous-dossier `sensors/`) dans le répertoire `custom_components/` de votre Home Assistant.
-3. Redémarrez Home Assistant.
-
-Arborescence attendue après copie manuelle :
-
-```text
-/config/custom_components/eau_grand_lyon/manifest.json
-/config/custom_components/eau_grand_lyon/__init__.py
-/config/custom_components/eau_grand_lyon/config_flow.py
-...
-```
-
-Ne copiez pas le dépôt complet dans `/config/custom_components/` sinon vous obtiendrez un chemin invalide du type :
-
-```text
-/config/custom_components/eau_grand_lyon_component/custom_components/eau_grand_lyon/
-```
-
-Dans ce cas, Home Assistant ne trouvera pas l'intégration et affichera `Non chargé`.
-
-### Option 2 : HACS (Recommandé)
-1. Assurez-vous d'avoir [HACS](https://hacs.xyz/) installé dans votre instance Home Assistant.
-2. Allez dans **Intégrations** HACS et recherchez "Eau du Grand Lyon".
-3. Cliquez sur **Installer** et redémarrez Home Assistant.
-4. Passez à la configuration ci-dessous.
-
-> **Note** : Si l'intégration n'est pas encore dans HACS, utilisez l'Option 1 ou ajoutez le dépôt personnalisé manuellement dans les paramètres HACS.
-
-## Configuration
-1. Dans Home Assistant, allez dans **Paramètres** > **Appareils et services**.
-2. Cliquez sur **Ajouter une intégration** et recherchez "Eau du Grand Lyon".
-3. Saisissez votre email et mot de passe du compte Eau du Grand Lyon.
-4. Terminez la configuration.
-
-Une fois installée, vous pouvez modifier les options (mode de calcul des coûts, tarif manuel, intervalle de mise à jour, mode expérimental) en retournant dans **Appareils et services** > **Eau du Grand Lyon** > **Configurer**.
-
-L'intégration récupérera automatiquement les données toutes les **24 heures** par défaut (car les données eau sont généralement mensuelles). Cet intervalle est modifiable dans les options (6h, 12h, 24h, 48h). Et on ne va pas tabasser leur serveur inutilement.
-
-### Options disponibles
-
-| Option | Utilisation | Valeur conseillée |
-| --- | --- | --- |
-| Fréquence de mise à jour | Intervalle entre deux synchronisations | 24 heures |
-| Mode de calcul des coûts | Choisit la source de l'estimation | Dernière facture |
-| Tarif au m³ | Repli du mode manuel | Tarif TTC personnalisé |
-| Entité de prix dynamique | Source du mode dynamique | Facultatif |
-| Part fixe annuelle | Utilisée en modes manuel et dynamique | Montant TTC personnalisé, ou `0` |
-| Nombre d'habitants | Éco-Score et conseils personnalisés | Nombre réel du foyer |
-| Dureté de l'eau | Estimation du calcaire | Valeur de votre commune ou de votre facture |
-| Commune qualité de l'eau | Résout la commune et ses réseaux dans Hub'Eau | Nécessaire aux capteurs qualité |
-| Nombre de tentatives API | Nombre d'essais avant le mode hors-ligne | Valeur par défaut |
-| Mode expérimental | Courbe horaire et données Téléo étendues | Désactivé au départ |
-
-L'entité de prix dynamique est facultative. Si elle est indisponible, l'intégration utilise le tarif fixe configuré.
-
-### Délais de disponibilité des données
-
-- Les consommations mensuelles suivent généralement le calendrier de publication du fournisseur.
-- Les données Téléo peuvent arriver avec un décalage de plusieurs jours. Le capteur « dernier jour connu » n'est donc pas nécessairement la veille civile.
-- Une correction publiée tardivement remplace automatiquement la journée concernée et recalcule les cumuls suivants.
-- Une réponse vide ou une panne temporaire ne supprime pas les dernières données valides : l'intégration utilise son cache et indique son état dans le capteur de santé.
-
-## Utilisation
-Une fois configuré, les capteurs apparaîtront dans votre tableau de bord Home Assistant. Vous pouvez les utiliser dans des automatisations, des tableaux de bord, ou de toute autre manière que vous utilisez les capteurs dans Home Assistant.
-
-### Services disponibles
-
-| Service | Fonction |
-| --- | --- |
-| `eau_grand_lyon.update_now` | Force une synchronisation immédiate |
-| `eau_grand_lyon.clear_cache` | Supprime le cache local et réinitialise l'historique reconstruit |
-| `eau_grand_lyon.export_data` | Exporte les consommations en CSV |
-| `eau_grand_lyon.download_latest_invoice` | Télécharge le dernier duplicata PDF que le portail marque comme disponible |
-
-Le dossier `www` réel de l'instance est autorisé automatiquement par Home Assistant pour le téléchargement. L'export et les chemins de facture personnalisés situés ailleurs doivent figurer dans `allowlist_external_dirs`.
+### L'intégration affiche « Non chargé » après installation
 
 Checklist de réparation :
 
@@ -397,6 +518,17 @@ En cas de doute, la structure valide est :
   __init__.py
   config_flow.py
   coordinator.py
+  analytics.py
+  billing.py
+  history.py
+  outages.py
+  recorder_statistics.py
+  hubeau.py
+  pfas.py
+  vigieau.py
+  warsmann.py
+  models.py
+  device.py
   sensor.py
   binary_sensor.py
   button.py
@@ -405,18 +537,22 @@ En cas de doute, la structure valide est :
   repairs.py
   diagnostics.py
   const.py
+  icons.json
+  quality_scale.yaml
   strings.json
   services.yaml
   api/
     __init__.py
-    client.py
     auth.py
+    client.py
+    cycle_cache.py
     endpoints.py
   brand/
     icon.png
     logo.png
   sensors/
     __init__.py
+    alerts.py
     base.py
     consumption.py
     contract.py
@@ -426,120 +562,24 @@ En cas de doute, la structure valide est :
     intelligence.py
     quality.py
   translations/
-    fr.json
     en.json
+    fr.json
 ```
 
-## Cas d'usage & Exemples
+## Contributions
+Les contributions sont les bienvenues ! N'hésitez pas à proposer des features ou à [signaler un bug](https://github.com/morgeek/HA-Plugin-pour-Eau-du-Grand-Lyon/issues/new/choose).
 
-### Blueprints inclus
+Avant d'ouvrir une pull request, vérifiez le style puis lancez les deux suites de tests :
 
-Quatre Blueprints d'automatisation sont fournis dans [`blueprints/automation/eau_grand_lyon/`](blueprints/automation/eau_grand_lyon/) :
+```bash
+pip install pytest pytest-asyncio pytest-cov voluptuous ruff==0.16.9
+ruff check custom_components/eau_grand_lyon/ tests/ tests_ha/ scripts/
+ruff format custom_components/eau_grand_lyon/ tests/ tests_ha/ scripts/
+pytest tests                       # tests unitaires (Home Assistant simulé)
 
-- [Alerte budget](blueprints/automation/eau_grand_lyon/alerte_budget.yaml) : notifie lorsqu'un capteur de coût franchit un seuil configurable.
-- [Alerte coupure](blueprints/automation/eau_grand_lyon/alerte_coupure.yaml) : notifie lorsqu'une interruption de service est active ou prévue dans les 48 heures et peut lancer des actions de préparation.
-- [Alerte fuite/surconsommation](blueprints/automation/eau_grand_lyon/alerte_fuite.yaml) : surveille l'un des `binary_sensor` d'anomalie, de surconsommation ou de fuite fournis par l'intégration.
-- [Alerte sécheresse](blueprints/automation/eau_grand_lyon/alerte_secheresse.yaml) : signale le passage de l'heuristique saisonnière au niveau `vigilance`. Cet indicateur ne remplace pas les arrêtés préfectoraux ni [VigiEau](https://vigieau.gouv.fr/).
-
-Ces Blueprints sont inclus dans ce dépôt, mais ne sont pas annoncés comme publiés sur Blueprint Exchange. Pour satisfaire la règle officielle `docs-examples` lors d'une future soumission Home Assistant Core, un ensemble limité devra être publié dans le dépôt documentaire Home Assistant ou sur Blueprint Exchange, puis lié depuis la page officielle de l'intégration.
-
-### Alerte de surconsommation mensuelle
-
-Créez une automation qui vous avertit lorsque l'heuristique mensuelle se déclenche. Remplacez l'`entity_id` par celui de votre installation :
-
-```yaml
-alias: Alerte surconsommation d'eau
-trigger:
-  - platform: state
-    entity_id: binary_sensor.eau_grand_lyon_alerte_surconsommation_mensuelle_heuristique
-    to: 'on'
-action:
-  - service: persistent_notification.create
-    data:
-      title: "⚠️ Surconsommation d'eau détectée"
-      message: "L'heuristique mensuelle s'est déclenchée. Vérifiez les consommations avant de conclure à une fuite."
+pip install pytest-homeassistant-custom-component==0.13.355
+pytest tests_ha                    # intégration dans un vrai Home Assistant 2026.8.1
 ```
-
-### Notification budget dépassé
-
-Recevez une alerte si votre facture prévisionnelle dépasse un seuil :
-
-```yaml
-alias: Alerte Budget Eau
-trigger:
-  - platform: numeric_state
-    entity_id: sensor.eau_grand_lyon_prediction_cout_mois
-    above: 50  # Alert if monthly prediction exceeds €50
-action:
-  - service: notify.mobile_app_smartphone
-    data:
-      title: "💰 Budget eau dépassé"
-      message: "Estimation coût du mois : {{ states('sensor.eau_grand_lyon_prediction_cout_mois') }}€"
-```
-
-### Dashboard personnalisé
-
-Exemple de carte Lovelace pour afficher votre consommation :
-
-```yaml
-type: vertical-stack
-cards:
-  - type: gauge
-    entity: sensor.eau_grand_lyon_conso_courant_m3
-    min: 0
-    max: 100
-    unit: m³
-    title: Consommation mois courant
-  
-  - type: entities
-    entities:
-      - entity: sensor.eau_grand_lyon_conso_7j
-      - entity: sensor.eau_grand_lyon_cout_mois
-      - entity: sensor.eau_grand_lyon_eco_score
-      - entity: binary_sensor.eau_grand_lyon_alerte_surconsommation_mensuelle_heuristique
-```
-
-### Export de données mensuel
-
-Programmez un export automatique de vos données chaque 1er du mois :
-
-```yaml
-alias: Export données eau mensuel
-trigger:
-  - platform: time
-    at: "09:00:00"
-condition:
-  - condition: template
-    value_template: "{{ now().day == 1 }}"
-action:
-  - service: eau_grand_lyon.export_data
-    data:
-      path: /config/www/eau_export_{{ now().strftime('%Y-%m') }}.csv
-```
-
-### Formulations prédictives
-
-Créez un template pour afficher une estimation personnalisée :
-
-```jinja2
-{% set consumption = states('sensor.eau_grand_lyon_conso_courant_m3') | float(0) %}
-{% if consumption < 50 %}
-  💚 Très économe ({{ consumption }} m³)
-{% elif consumption < 100 %}
-  🟢 Bon ({{ consumption }} m³)
-{% elif consumption < 150 %}
-  🟡 À optimiser ({{ consumption }} m³)
-{% else %}
-  🔴 À réduire ({{ consumption }} m³)
-{% endif %}
-```
-
-### Plusieurs comptes
-
-Une même instance Home Assistant peut configurer plusieurs comptes Eau du Grand Lyon sous forme de Config Entries séparées, à condition que chaque compte utilise une adresse email distincte. « Multi-utilisateurs » ne désigne donc pas une fonctionnalité future séparée et aucune gestion de profils ou de droits entre utilisateurs Home Assistant n'est promise.
-
-### Contributions
-Les contributions sont les bienvenues ! N'hésitez pas à proposer des features
 
 ## Licence
 Ce projet est sous licence MIT - voir le fichier LICENSE pour plus de détails.

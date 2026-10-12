@@ -120,3 +120,20 @@ def test_malformed_daily_entries_are_ignored():
     parsed = A._parse_daily_response(resp)
     assert len(parsed) == 1
     assert A.format_daily_consumptions(parsed, "test")[0]["consommation_m3"] == 0.5
+
+
+def test_null_index_of_unpublished_day_is_not_a_zero_index() -> None:
+    """Régression : `"index": null` devenait 0.0 et devenait le dernier index connu,
+    ce qui simulait une remise à zéro du compteur (pic dans le tableau Énergie)."""
+    from custom_components.eau_grand_lyon import analytics
+
+    daily = A.format_daily_consumptions(
+        [
+            {"date": "2026-10-10", "consommation": 0.25, "index": 1234.5},
+            {"date": "2026-10-11", "consommation": 0.2, "index": 1234.7},
+            {"date": "2026-10-12", "consommation": 0.1, "index": None},
+        ]
+    )
+
+    assert "index_m3" not in daily[-1]
+    assert analytics.latest_daily_index(daily) == (1234.7, "2026-10-11")

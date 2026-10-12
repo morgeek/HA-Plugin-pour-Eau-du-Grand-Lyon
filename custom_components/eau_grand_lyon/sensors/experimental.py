@@ -113,8 +113,7 @@ class EauGrandLyonFuiteEstimeeSensor(_EauGrandLyonBase):
             "nb_jours_avec_donnée": len(all_fuite),
             "détail_journalier": detail,
             "note": (
-                "Volume de fuite nocturne estimé par le compteur Téléo. "
-                "Non nul = possible fuite sur circuit intérieur."
+                "Volume de fuite nocturne estimé par le compteur Téléo. Non nul = possible fuite sur circuit intérieur."
             ),
             "source": "expérimental — volumeFuiteEstime dans /rest/produits/contrats/{id}/consommationsJournalieres",
         }

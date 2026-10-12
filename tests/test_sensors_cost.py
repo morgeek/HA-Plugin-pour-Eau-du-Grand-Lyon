@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from custom_components.eau_grand_lyon.sensors.cost import (
     EauGrandLyonCoutCumuleSensor,
     EauGrandLyonEconomieSensor,
@@ -198,6 +196,6 @@ def test_monetary_sensors_never_use_total_increasing():
     assert monetary, "expected at least one monetary sensor"
     for name, cls in monetary:
         state_class = getattr(cls, "_attr_state_class", None)
-        assert (
-            state_class is not SensorStateClass.TOTAL_INCREASING
-        ), f"{name} uses TOTAL_INCREASING with MONETARY device_class"
+        assert state_class is not SensorStateClass.TOTAL_INCREASING, (
+            f"{name} uses TOTAL_INCREASING with MONETARY device_class"
+        )

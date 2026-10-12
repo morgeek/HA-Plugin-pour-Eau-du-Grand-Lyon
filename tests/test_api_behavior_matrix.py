@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.eau_grand_lyon.api import HttpError, NetworkError
+from custom_components.eau_grand_lyon.api import HttpError
 from custom_components.eau_grand_lyon.api.client import (
     EauGrandLyonApi,
     _infer_unit_from_magnitude,

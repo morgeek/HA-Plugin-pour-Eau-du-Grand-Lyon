@@ -7,8 +7,10 @@ import math
 from datetime import datetime
 from typing import cast
 
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
+from .const import DOMAIN
 from .models import DailyConsumption, MonthlyConsumption
 
 _LOGGER = logging.getLogger(__name__)
@@ -17,6 +19,21 @@ _LOGGER = logging.getLogger(__name__)
 # au calcul Warsmann (l'API ne retourne que 12 mois).
 MONTHLY_HISTORY_MAX_MONTHS = 37
 DAILY_HISTORY_MAX_DAYS = 1097
+
+# Caches persistants propres à une config entry (.storage/eau_grand_lyon_<entry_id>_<nom>).
+ENTRY_STORE_NAMES = ("history", "monthly_history", "daily_history")
+
+
+def entry_store_key(entry_id: str, name: str) -> str:
+    """Clé `.storage` d'un cache persistant d'une config entry."""
+    return f"{DOMAIN}_{entry_id}_{name}"
+
+
+async def async_remove_entry_stores(hass: HomeAssistant, entry_id: str) -> None:
+    """Supprime les caches persistants (historique, données hors-ligne) d'une entrée."""
+    for name in ENTRY_STORE_NAMES:
+        store: Store[dict[str, object]] = Store(hass, 1, entry_store_key(entry_id, name))
+        await store.async_remove()
 
 
 class RebuildableStore(Store[dict[str, object]]):

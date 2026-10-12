@@ -1,11 +1,11 @@
 # ═══════════════════════════════════════════════════════════════════
-#  Dashboard "Eau du Grand Lyon" — Lovelace YAML (Version PLATINUM 2.5.0)
+#  Dashboard "Eau du Grand Lyon" — Lovelace YAML (cartes natives uniquement)
 # ═══════════════════════════════════════════════════════════════════
 #
-#  Ce dashboard regroupe toutes les fonctions d'intelligence, d'écologie
-#  et de sécurité de la version 2.5.0 (Hardening & Features Pack).
+#  Regroupe consommation, coûts, alertes, qualité de l'eau et diagnostic.
 #
-#  Note : Les noms d'entités peuvent varier selon votre configuration.
+#  Les entity_id sont ceux d'une installation en français avec un seul
+#  contrat : vérifiez-les dans Paramètres > Appareils et services > Entités.
 # ═══════════════════════════════════════════════════════════════════
 
 title: 💧 Eau du Grand Lyon PLATINUM
@@ -18,11 +18,11 @@ views:
       - type: horizontal-stack
         cards:
           - type: sensor
-            entity: sensor.eau_du_grand_lyon_conso_hier
+            entity: sensor.eau_du_grand_lyon_derniere_conso_journaliere_connue
             name: Hier (L)
             graph: line
           - type: sensor
-            entity: sensor.eau_du_grand_lyon_conso_moyenne_7j
+            entity: sensor.eau_du_grand_lyon_consommation_moyenne_7j
             name: Moyenne (L/j)
             graph: line
 
@@ -34,7 +34,7 @@ views:
             name: Ce mois
             graph: line
           - type: sensor
-            entity: sensor.eau_du_grand_lyon_cout_mois_courant_eur
+            entity: sensor.eau_du_grand_lyon_cout_estime_du_mois_courant
             name: Coût estimé
             graph: line
 
@@ -78,7 +78,7 @@ views:
             name: Calcaire cumulé (est.)
           - entity: binary_sensor.eau_du_grand_lyon_alerte_maintenance_calcaire
             name: État maintenance
-          - entity: sensor.eau_du_grand_lyon_index_journalier_energy
+          - entity: sensor.eau_du_grand_lyon_index_journalier_teleo
             name: Index journalier (Suivi)
 
       # ── SÉCURITÉ & RESTRICTIONS ──────────────────────────────────
@@ -110,19 +110,19 @@ views:
         title: 📄 Facturation & Services
         show_header_toggle: false
         entities:
-          - entity: sensor.eau_du_grand_lyon_derniere_facture
+          - entity: sensor.eau_du_grand_lyon_derniere_facture_reelle_ttc
             name: Date dernière facture
           - entity: button.eau_du_grand_lyon_telecharger_la_derniere_facture
-            name: Télécharger le PDF (v2.5)
+            name: Télécharger le PDF
 
       # ── ALERTES FUITES ───────────────────────────────────────────
       - type: entities
         title: ⚠️ Détection de fuites
         show_header_toggle: false
         entities:
-          - entity: binary_sensor.eau_du_grand_lyon_detection_fuite_teleo
+          - entity: binary_sensor.eau_du_grand_lyon_alerte_fuite_fournisseur_estimation_30_j
             name: Fuite officielle (Téléo)
-          - entity: binary_sensor.eau_du_grand_lyon_alerte_fuite_pattern_local
+          - entity: binary_sensor.eau_du_grand_lyon_alerte_anomalie_locale_heuristique
             name: Analyse locale (Pattern)
           - entity: binary_sensor.eau_du_grand_lyon_interruption_de_service_travaux_coupure
             name: Alerte Coupure / Travaux
@@ -149,7 +149,7 @@ views:
       - type: statistics-graph
         title: Historique 24 mois
         entities:
-          - entity: sensor.eau_du_grand_lyon_index_journalier_energy
+          - entity: sensor.eau_du_grand_lyon_index_journalier_teleo
         stat_types:
           - change
         period: month

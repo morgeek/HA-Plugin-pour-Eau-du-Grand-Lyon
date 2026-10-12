@@ -21,7 +21,7 @@ Ajouter le suivi de la consommation d'eau **ET de son coût** au tableau de bord
 Le capteur de coût doit être **activé par défaut depuis la v2.9.0**, mais vérifiez :
 
 1. Allez à : **Paramètres** → **Appareils et services** → **Eau du Grand Lyon**
-2. Cherchez l'entité `sensor.eau_du_grand_lyon_energie_cout`
+2. Cherchez l'entité `sensor.eau_du_grand_lyon_cout_energie`
 3. Si elle est **inactive** (grisée), cliquez dessus et sélectionnez **Activer l'entité**
 
 **Astuce :** L'entity_id peut varier selon votre configuration. Cherchez "Énergie" ou "energie" dans la liste.
@@ -49,7 +49,7 @@ Le coût ne s'affichera que si vous avez configuré le tarif :
 4. Choisissez la source selon votre type de compteur :
 
    **Pour les compteurs Téléo (communicants) :**
-   - Sélectionnez : `sensor.eau_du_grand_lyon_index_journalier_energy`
+   - Sélectionnez : `sensor.eau_du_grand_lyon_index_journalier_teleo`
    - ✓ Vous aurez des données mises à jour **chaque jour**
 
    **Pour les compteurs Standard (relevé manuel) :**
@@ -68,7 +68,7 @@ Cette étape vous permet de voir les **coûts estimés** dans le tableau de bord
 2. Cliquez sur la boîte **EAU** (votre source d'eau)
 3. Un panneau devrait s'ouvrir avec les détails
 4. Cherchez le bouton **"Ajouter le coût de cette source"**
-5. Sélectionnez : `sensor.eau_du_grand_lyon_energie_cout`
+5. Sélectionnez : `sensor.eau_du_grand_lyon_cout_energie`
 6. Cliquez sur **Enregistrer**
 
 > **Remarque :** Si le bouton n'apparaît pas, vérifiez que l'entité `energie_cout` est **activée** (ÉTAPE 1).
@@ -98,7 +98,7 @@ Après ces 4 étapes, votre tableau de bord Énergie devrait afficher :
 ### "Le bouton 'Ajouter le coût' n'apparaît pas"
 
 **Solution :**
-1. Vérifiez que `sensor.eau_du_grand_lyon_energie_cout` est **activé**
+1. Vérifiez que `sensor.eau_du_grand_lyon_cout_energie` est **activé**
    - Paramètres → Appareils et services → Eau du Grand Lyon
    - Cherchez l'entité et cliquez pour l'activer si grisée
 2. Attendez quelques secondes que HA recharge la page
@@ -126,20 +126,20 @@ Après ces 4 étapes, votre tableau de bord Énergie devrait afficher :
 
 | Type | Entity ID | Mise à jour | Précision |
 |------|-----------|-------------|-----------|
-| **Téléo** (communicant) | `sensor.eau_du_grand_lyon_index_journalier_energy` | Quotidienne | Maximale |
+| **Téléo** (communicant) | `sensor.eau_du_grand_lyon_index_journalier_teleo` | Quotidienne | Maximale |
 | **Standard** (manuel) | `sensor.eau_du_grand_lyon_index_compteur` | Mensuelle | Basique |
 
 ---
 
-## 📌 Statut des capteurs depuis v2.9.0
+## 📌 Capteurs utiles au tableau Énergie
 
 | Capteur | État par défaut | Rôle |
 |---------|-----------------|------|
-| `energie_cout` | **ACTIVÉ** | Coût cumulé pour le tableau de bord Énergie |
-| `conso_hier` | **ACTIVÉ** | Dernière conso journalière connue (2-3 jours de latence Téléo possible) |
-| `conso_7j` | **ACTIVÉ** | Moyenne 7 jours |
-| `conso_30j` | **ACTIVÉ** | Moyenne 30 jours |
-| `conso_moyenne_7j` | **ACTIVÉ** | Moyenne journalière 7j (L/jour) |
+| « Coût (Énergie) » | **ACTIVÉ** | Coût cumulé pour le tableau de bord Énergie |
+| « Dernière conso journalière connue » | **ACTIVÉ** | Dernière journée publiée (2-3 jours de latence Téléo possibles) |
+| « Consommation (7 derniers jours) » | **ACTIVÉ** | Somme des 7 derniers relevés journaliers (m³) |
+| « Consommation (30 derniers jours) » | **ACTIVÉ** | Somme des 30 derniers relevés journaliers (m³) |
+| « Consommation moyenne (7j) » | **ACTIVÉ** | Moyenne journalière sur 7 jours (L/jour) |
 
 ---
 
@@ -147,21 +147,39 @@ Après ces 4 étapes, votre tableau de bord Énergie devrait afficher :
 
 - **Lovelace Cards** — Exemples de cartes personnalisées : `lovelace/monthly_chart_cards.yaml`
 - **Energy Dashboard Preset** — Tableau de bord complet prêt à importer : `lovelace/energy_dashboard_preset.yaml`
-- **Configuration Energy** — Documentation complète : `lovelace/energy_config.yaml`
+- **Dashboard natif** — Sans carte HACS : `lovelace/dashboard.yaml`
+- **Automatisations** — Rafraîchissement planifié et alertes : `lovelace/automation_refresh.yaml`
 
 ---
 
 ## 💡 Astuce avancée : Utiliser les statistiques injectées
 
-Depuis v2.9.0, les statistiques sont **auto-injectées** dans la base de données du recorder :
+Quatre statistiques externes sont **auto-injectées** dans la base de données du
+recorder (`<REF>` = référence du contrat, visible dans Outils de développement >
+Statistiques en recherchant « eau_grand_lyon ») :
 
-1. **`eau_grand_lyon:water_<REF>`** — Consommation mensuelle (m³)
-2. **`eau_grand_lyon:water_daily_<REF>`** — Consommation journalière cumulative (m³)
-3. **`eau_grand_lyon:cost_<REF>`** — Coût estimé mensuel (EUR)
+1. **`eau_grand_lyon:water_<REF>`** — Consommation mensuelle (m³, jusqu'à 37 mois)
+2. **`eau_grand_lyon:water_daily_<REF>`** — Consommation journalière cumulative (m³, compteurs Téléo)
+3. **`eau_grand_lyon:cost_<REF>`** — Coût estimé mensuel (EUR, si un tarif est disponible)
+4. **`eau_grand_lyon:cost_daily_<REF>`** — Coût estimé journalier (EUR, Téléo, si un tarif est disponible)
+
+Les coûts ne contiennent que la part variable (consommation × tarif) : la part
+fixe n'est pas répartie dans l'historique.
 
 La statistique journalière est reconstruite et triée à chaque rafraîchissement sur
-l'historique disponible (jusqu'à 12 mois). Une correction tardive d'une journée
-met donc aussi à jour les cumuls des journées suivantes, sans doublon.
+l'historique accumulé localement (jusqu'à 3 ans). Une correction tardive d'une
+journée met donc aussi à jour les cumuls des journées suivantes, sans doublon.
+
+Dans une carte `statistics-graph`, utilisez l'identifiant tel quel :
+
+```yaml
+type: statistics-graph
+entities:
+  - entity: eau_grand_lyon:cost_AB1234567890
+period: month
+stat_types:
+  - change
+```
 
 ### Migration recommandée du tableau Énergie
 
